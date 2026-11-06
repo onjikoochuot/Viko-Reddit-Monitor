@@ -91,7 +91,7 @@ function pc(p,adm){
  +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
  +(adm&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+(adm?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove piece">&#10005;</button>':'')+'</div></div>'
  +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p)
- +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies'):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit</span>':'')+'</div><div>'+dots(p)+'</div>'
+ +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies'):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit'+(h[h.length-1].m?' ('+esc(h[h.length-1].m)+')':'')+'</span>':'')+'</div><div>'+dots(p)+'</div>'
  :'<div class="row"><input class="lin" id="l_'+p.id+'" placeholder="Paste the published '+p.kind+' link here" style="flex:1;min-width:220px"><button class="p" onclick="done(\''+p.id+'\')">Done</button></div>')+'</div>';
 }
 function cp(id,t){const p=pieceOf(id);copy(t?p.ptitle:p.body,'Copied')}
@@ -113,10 +113,10 @@ async function runCheck(p){
  const now=Date.now(),OFF=[1,30,60,480];let u;
  try{const r=await rcheck(p.url,p.kind),stage=(p.stage||0)+1,pub=+new Date(p.published_at);
   u={status:r.s,stage,hist:(p.hist||[]).concat([{t:now,s:r.s}]).slice(-400),score:r.score==null?p.score:r.score,replies:r.replies==null?p.replies:r.replies,title:r.title||p.title,last_check:new Date(now).toISOString(),next_check:r.s==='removed'?null:new Date(stage<4?pub+OFF[stage]*6e4:now+DAY).toISOString()}}
- catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error'}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
+ catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error',m:'browser: '+String(e&&e.message||e).slice(0,60)}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
  await sb.from('pieces').update(u).eq('id',p.id);
 }
-async function chkP(id){$('who').textContent='Checking...';await runCheck(pieceOf(id));$('who').textContent=me.name;await refresh()}
+async function chkP(id){await sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id);$('who').textContent='Queued: your Reddit checker will do it within a minute';setTimeout(()=>{$('who').textContent=me.name},4000);await refresh()}
 async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
 let due=0;
 async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live']).lte('next_check',new Date().toISOString()).limit(20);
@@ -439,6 +439,6 @@ async function bootClient(tok){
  }catch(e){document.querySelector('header').innerHTML='<span class="logo">Reddit Monitor</span>';$('app').innerHTML='<div class="empty">This link is closed or not valid. Ask your admin for a new one.</div>';return}
  await start();
  setInterval(async()=>{if(me&&!ed()){try{await load();draw(true)}catch(e){}}},30000);
- setInterval(runDue,45000);setTimeout(runDue,3000);
+
 })();
 </script></body></html>
