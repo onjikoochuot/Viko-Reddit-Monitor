@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Reddit Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.45.4/dist/umd/supabase.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root{--tx:#111827;--mu:#6b7280;--ln:#e5e7eb;--bl:#2563eb;--gr:#16a34a;--rd:#dc2626;--am:#d97706}
+*{box-sizing:border-box}
+body{margin:0;font:15px/1.5 "Segoe UI",system-ui,-apple-system,Roboto,sans-serif;color:var(--tx);background:#fff}
+header{display:flex;gap:10px;align-items:center;flex-wrap:wrap;padding:12px 24px;border-bottom:1px solid var(--ln)}
+.logo{font-weight:700;font-size:17px;margin-right:8px}
+nav{display:flex;gap:4px;padding:8px 24px;border-bottom:1px solid var(--ln)}
+nav button{border:0;background:none;padding:6px 12px;border-radius:8px;color:var(--mu)}
+nav button.on{background:#eff6ff;color:var(--bl);font-weight:600}
+main{max-width:900px;margin:0 auto;padding:28px 20px 80px}
+h1{font-size:28px;margin:0 0 4px}h2{font-size:20px;margin:0 0 10px}h3{font-size:16px;margin:24px 0 10px}
+.mu,.s{color:var(--mu)}.s{font-size:13px}.bl{color:var(--bl)}.gr{color:var(--gr)}.rd{color:var(--rd)}.am{color:var(--am)}
+button,select,input,textarea{font:inherit}
+button,.btn{border:1px solid var(--ln);background:#fff;border-radius:8px;padding:6px 12px;cursor:pointer;color:var(--tx);text-decoration:none;display:inline-block}
+button:hover,.btn:hover{background:#f9fafb}
+button.p{background:var(--bl);border-color:var(--bl);color:#fff}
+:focus-visible{outline:2px solid var(--bl);outline-offset:2px}
+select,input,textarea{border:1px solid var(--ln);border-radius:8px;padding:7px 10px;background:#fff;color:var(--tx)}
+textarea{width:100%;min-height:90px}
+.row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin:12px 0}
+.fld{margin:12px 0}.fld>span{display:block;font-size:13px;color:var(--mu);margin-bottom:4px}
+.card,.task{border:1px solid var(--ln);border-radius:12px;padding:14px 16px;margin-bottom:12px}
+.card{cursor:pointer}.card:hover{background:#f9fafb}
+.t{font-weight:600;overflow-wrap:anywhere}
+.a{display:flex;gap:6px;flex-wrap:wrap}.a>*{padding:4px 10px;font-size:13px}
+.pc{border-top:1px solid var(--ln);margin-top:12px;padding-top:12px}
+.dr{white-space:pre-wrap;background:#fafafa;border:1px solid var(--ln);border-radius:8px;padding:10px 12px;font-size:14px;margin:6px 0;max-height:160px;overflow:auto}
+.chip{font-size:12px;font-weight:600;border-radius:99px;padding:1px 9px;background:#eee}
+.chip.todo{background:#fef3c7;color:#92400e}.chip.checking{background:#dbeafe;color:#1e40af}.chip.live,.chip.on{background:#dcfce7;color:#166534}.chip.removed{background:#fee2e2;color:#991b1b}
+.dt{display:inline-block;width:10px;height:10px;border-radius:50%;margin:4px 3px 0 0;background:#d1d5db}.dt.live{background:var(--gr)}.dt.removed{background:var(--rd)}
+.empty{border:1px dashed var(--ln);border-radius:12px;padding:32px;text-align:center;color:var(--mu)}
+.cb{border:1px solid var(--ln);border-radius:12px;padding:14px;margin:12px 0}
+.at{display:inline-flex;align-items:center;gap:6px;text-decoration:none;color:var(--tx);background:#f1f5f9}.at button{border:0;padding:0 4px;background:none}.at img{border-radius:4px}
+.kpi{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:16px 0}
+.kpi>div{border:1px solid var(--ln);border-radius:12px;padding:12px;font-size:13px;color:var(--mu)}.kpi b{display:block;font-size:28px;color:var(--tx);line-height:1.2}
+table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px}
+th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--ln);vertical-align:top;overflow-wrap:anywhere}th{background:#f9fafb}
+.step{display:flex;gap:10px;align-items:center}.num{width:26px;height:26px;border-radius:50%;background:var(--bl);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}.num.ok{background:var(--gr)}
+.auth{max-width:380px;margin:60px auto}.auth input{width:100%;margin:6px 0}
+</style></head><body>
+<header><span class="logo">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button></header>
+<nav id="nv"></nav><main id="app"></main>
+<script>
+const SB_URL='https://fkrgiaeglingmogcsyik.supabase.co',SB_KEY='sb_publishable_A-f9c-pdyCSPwE8wdpzPlg_M6k6ttjf';
+const $=id=>document.getElementById(id),DAY=864e5;
+const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const D=t=>t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-';
+const ST={tab:'brands',bid:null,brands:[],tasks:[],pieces:[],profiles:[],tok:'',obrand:null};
+let sb,me=null,PA=[],CB=[{t:'',l:'',att:[]}];
+const base=()=>location.href.split('#')[0];
+const norm=u=>(u||'').trim().split(/[?#]/)[0].replace(/\/+$/,'').replace(/^https?:\/\/(?:old\.|new\.|np\.|www\.)?reddit\.com/i,'https://www.reddit.com');
+const info=u=>{const m=(u||'').match(/\/r\/([^\/]+)\/comments\/([^\/]+)(?:\/([^\/]*))?(?:\/([^\/]+))?/i);return{sub:m?m[1]:'',type:m&&m[4]?'comment':'post'}};
+const lk=s=>(s||'').split(/\s+/).filter(Boolean);
+const CH={todo:'To do',checking:'Confirming',live:'Live',removed:'Deleted'};
+const chip=s=>'<span class="chip '+s+'">'+CH[s]+'</span>';
+const pieceOf=id=>ST.pieces.find(p=>p.id===id);
+const ed=()=>document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
+async function copy(t,m){try{await navigator.clipboard.writeText(t);alert((m||'Copied')+' to your clipboard.')}catch(e){prompt('Copy this:',t)}}
+
+/* ---------- files ---------- */
+const attHtml=(a,fn)=>a.map((x,i)=>'<span class="chip at">'+(/^image/.test(x.t)?'<img src="'+x.d+'" alt="" height="22"> ':'')+esc(x.n)+(fn?' <button onclick="'+fn.replace('#',i)+'" aria-label="Remove attachment">&#10005;</button>':'')+'</span>').join(' ');
+function rf(f){return new Promise((res,rej)=>{
+ if(/^image\//.test(f.type)){const i=new Image(),u=URL.createObjectURL(f);i.onload=()=>{const k=Math.min(1,1000/Math.max(i.width,i.height)),c=document.createElement('canvas');c.width=Math.round(i.width*k);c.height=Math.round(i.height*k);c.getContext('2d').drawImage(i,0,0,c.width,c.height);URL.revokeObjectURL(u);res({n:f.name,t:'image/jpeg',d:c.toDataURL('image/jpeg',.8)})};i.onerror=()=>rej();i.src=u}
+ else if(f.size>4e5)rej();else{const r=new FileReader();r.onload=()=>res({n:f.name,t:f.type||'file',d:r.result});r.readAsDataURL(f)}})}
+async function addAtt(arr,files,after){for(const f of files){try{arr.push(await rf(f))}catch(e){alert(f.name+' cannot be stored (images are resized, other files must be under 400 KB). Add a Drive or YouTube link instead.')}}after()}
+const media=p=>(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>'<a href="'+esc(l)+'" target="_blank" rel="noopener">'+esc(l)+'</a>').join(' &middot; ')+'</div>':'')+(p.att&&p.att.length?'<div class="row" style="margin:6px 0">'+p.att.map(a=>'<a class="chip at" download="'+esc(a.n)+'" href="'+a.d+'">'+(/^image/.test(a.t)?'<img src="'+a.d+'" alt="" height="48"> ':'')+esc(a.n)+' (download)</a>').join(' ')+'</div>':'');
+
+/* ---------- data ---------- */
+async function load(){
+ if(ST.tok){const{data,error}=await sb.rpc('open_brand',{tok:ST.tok});if(error||!data)throw new Error('closed');ST.obrand=data.brand;ST.tasks=data.tasks;ST.pieces=data.pieces;return}
+ const[b,t,p,pr]=await Promise.all([sb.from('brands').select('*').order('created_at'),sb.from('tasks').select('*').order('created_at'),sb.from('pieces').select('*').order('sort'),sb.from('profiles').select('*').order('created_at')]);
+ ST.brands=b.data||[];ST.tasks=t.data||[];ST.pieces=p.data||[];ST.profiles=pr.data||[];
+}
+const dots=p=>{if(!p.hist||!p.published_at)return'';const pub=+new Date(p.published_at),m={};p.hist.forEach(h=>{m[Math.floor((h.t-pub)/DAY)]=h.s});return Object.keys(m).sort((a,b)=>a-b).slice(-30).map(k=>'<i class="dt '+m[k]+'" title="Day '+(+k+1)+': '+m[k]+'"></i>').join('')};
+const bname=id=>(ST.brands.find(b=>b.id===id)||{}).name||'';
+const pname=id=>{const u=ST.profiles.find(x=>x.id===id);return u?u.name:''};
+const tlabel=t=>t.label||((ST.pieces.find(p=>p.task_id===t.id&&p.ptitle)||{}).ptitle)||t.thread||'Task';
+
+/* ---------- piece card ---------- */
+function pc(p,adm){
+ const h=p.hist||[],err=h.length&&h[h.length-1].s==='error',st=p.status;
+ return '<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(st)+(p.published_at?'<span class="s">published '+D(p.published_at)+'</span>':'')+'<span style="flex:1"></span><div class="a">'
+ +(p.ptitle?'<button onclick="cp(\''+p.id+'\',1)">Copy title</button>':'')+(p.body?'<button onclick="cp(\''+p.id+'\')">Copy '+(p.kind==='post'?'body':'text')+'</button>':'')
+ +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">View</a>':'')
+ +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
+ +(adm?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove piece">&#10005;</button>':'')+'</div></div>'
+ +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p)
+ +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies'):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit</span>':'')+'</div><div>'+dots(p)+'</div>'
+ :'<div class="row"><input class="lin" id="l_'+p.id+'" placeholder="Paste the published '+p.kind+' link here" style="flex:1;min-width:220px"><button class="p" onclick="done(\''+p.id+'\')">Done</button></div>')+'</div>';
+}
+function cp(id,t){const p=pieceOf(id);copy(t?p.ptitle:p.body,'Copied')}
+async function done(id){
+ const v=norm($('l_'+id).value);if(!/reddit\.com\/r\//i.test(v))return alert('Paste the full Reddit link of what you published');
+ const{error}=ST.tok?await sb.rpc('open_submit',{tok:ST.tok,pid:id,u:v}):await sb.rpc('submit_link',{pid:id,u:v});
+ if(error)return alert(error.message);await refresh();
+}
+async function refresh(){await load();draw(true)}
+
+/* ---------- checking (admin page fallback, same schedule as the server) ---------- */
+async function rcheck(url,kind){
+ const r=await fetch(url+'.json?raw_json=1&limit=1');if(r.status===404)return{s:'removed'};if(!r.ok)throw new Error(r.status);
+ const j=await r.json(),po=j[0].data.children[0].data,G=['[removed]','[deleted]'];
+ if(kind==='comment'){const c=j[1].data.children[0];if(!c||c.kind!=='t1')return{s:'removed'};const d=c.data;return{s:G.includes(d.body)||d.author==='[deleted]'?'removed':'live',score:d.score,replies:d.replies&&d.replies.data?d.replies.data.children.filter(x=>x.kind==='t1').length:0,title:po.title}}
+ return{s:po.removed_by_category||G.includes(po.selftext)||po.author==='[deleted]'?'removed':'live',score:po.score,replies:po.num_comments,title:po.title};
+}
+async function runCheck(p){
+ const now=Date.now(),OFF=[1,30,60,480];let u;
+ try{const r=await rcheck(p.url,p.kind),stage=(p.stage||0)+1,pub=+new Date(p.published_at);
+  u={status:r.s,stage,hist:(p.hist||[]).concat([{t:now,s:r.s}]).slice(-400),score:r.score==null?p.score:r.score,replies:r.replies==null?p.replies:r.replies,title:r.title||p.title,last_check:new Date(now).toISOString(),next_check:r.s==='removed'?null:new Date(stage<4?pub+OFF[stage]*6e4:now+DAY).toISOString()}}
+ catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error'}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
+ await sb.from('pieces').update(u).eq('id',p.id);
+}
+async function chkP(id){$('who').textContent='Checking...';await runCheck(pieceOf(id));$('who').textContent=me.name;await refresh()}
+async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
+let due=0;
+async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live']).lte('next_check',new Date().toISOString()).limit(20);
+ for(const p of data||[]){await runCheck(p);await new Promise(r=>setTimeout(r,1200))}if(data&&data.length&&!ed()){await load();draw(true)}}catch(e){}due=0}
+
+/* ---------- excel ---------- */
+function items(bid){const o=[];ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{const ps=ST.pieces.filter(p=>p.task_id===t.id),post=ps.find(p=>p.kind==='post'&&p.url);
+ ps.filter(p=>p.url&&p.status==='live').forEach(p=>o.push({kind:p.kind,at:p.published_at,url:p.url,post_url:p.kind==='post'?p.url:(post?post.url:t.thread||'')}))});return o.sort((a,b)=>new Date(a.at)-new Date(b.at))}
+function xlsx(its,name){
+ const rows=[['Date made','Type','Link to post','Link to comment','Status']];let np=0,nc=0;
+ its.forEach(i=>{i.kind==='post'?np++:nc++;rows.push([D(i.at),i.kind==='post'?'Post':'Comment',i.post_url||'',i.kind==='comment'?i.url:'','Live'])});
+ rows.push([]);rows.push(['Total live posts',np]);rows.push(['Total live comments',nc]);rows.push(['Total live',np+nc]);
+ const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:14},{wch:10},{wch:60},{wch:60},{wch:10}];
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
+ XLSX.writeFile(wb,name.replace(/\W+/g,'-')+'-report-'+new Date().toISOString().slice(0,10)+'.xlsx');
+}
+const dlBrand=id=>xlsx(items(id),bname(id));
+
+/* ---------- add task form (admin) ---------- */
+function rP(){if($('pal'))$('pal').innerHTML=attHtml(PA,'delPA(#)')}
+function delPA(i){PA.splice(i,1);rP()}
+function syncCB(){document.querySelectorAll('.cx').forEach((e,i)=>{CB[i].t=e.value});document.querySelectorAll('.cl').forEach((e,i)=>{CB[i].l=e.value})}
+function rCB(){if(!$('cbs'))return;$('cbs').innerHTML=CB.map((c,i)=>'<div class="cb"><div class="row" style="margin:0 0 6px"><b>Comment '+(i+1)+'</b><span style="flex:1"></span>'+(CB.length>1?'<button onclick="delCB('+i+')">Remove</button>':'')+'</div><textarea class="cx" placeholder="Comment text">'+esc(c.t)+'</textarea><input class="cl" placeholder="Links to include (separate with spaces)" style="width:100%;margin-top:6px" value="'+esc(c.l)+'"><div class="row"><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(CB['+i+'].att,this.files,()=>{syncCB();rCB()})"></label>'+attHtml(c.att,'delCA('+i+',#)')+'</div></div>').join('')}
+function addCB(){syncCB();CB.push({t:'',l:'',att:[]});rCB()}
+function delCB(i){syncCB();CB.splice(i,1);rCB()}
+function delCA(i,j){syncCB();CB[i].att.splice(j,1);rCB()}
+function scn(){const k=$('kd').value;$('fp').style.display=/^(post|postc)$/.test(k)?'':'none';$('fc').style.display=/^(postc|comment)$/.test(k)?'':'none';$('ft').style.display=k==='comment'?'':'none';$('fk').style.display=k==='track'?'':'none';rP();rCB()}
+const formHtml=()=>'<div class="cb"><h3 style="margin-top:0">Add work</h3><div class="fld"><span>What are we doing?</span><select id="kd" onchange="scn()"><option value="post">New post</option><option value="postc">New post with comments</option><option value="comment">Comments on an existing thread</option><option value="track">Track links that are already published</option></select></div>'
+ +'<div class="row"><label><span class="s">Subreddit</span><input id="sb" placeholder="r/devops"></label><label style="flex:1"><span class="s">Task title (optional)</span><input id="lb" style="width:100%"></label></div>'
+ +'<div class="fld" id="ft"><span>Link of the thread to comment on</span><input id="th" style="width:100%" placeholder="https://www.reddit.com/r/..."></div>'
+ +'<div class="cb" id="fp"><b>Post</b><div class="fld"><span>Title</span><input id="pt" style="width:100%"></div><div class="fld"><span>Body (optional)</span><textarea id="pd" style="min-height:130px"></textarea></div><div class="fld"><span>Image, video or file attachments</span><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(PA,this.files,rP)"></label> <span id="pal"></span></div><div class="fld"><span>Links to include (separate with spaces)</span><input id="pl" style="width:100%"></div></div>'
+ +'<div id="fc"><b>Comments</b><div id="cbs"></div><button onclick="addCB()">+ Add another comment</button></div>'
+ +'<div class="fld" id="fk"><span>Published links, one per line</span><textarea id="tk"></textarea></div>'
+ +'<div class="row"><button class="p" onclick="addTask()">Add to this brand</button></div></div>';
+async function addTask(){
+ syncCB();const k=$('kd').value,sub=$('sb').value.trim().replace(/^r\//i,''),th=norm($('th').value);let pcs=[];
+ if(k==='post'||k==='postc'){const ti=$('pt').value.trim();if(!ti)return alert('Add the post title');pcs.push({kind:'post',ptitle:ti,body:$('pd').value.trim(),links:lk($('pl').value),att:PA.slice()})}
+ if(k==='postc'||k==='comment')CB.filter(c=>c.t.trim()||c.att.length).forEach(c=>pcs.push({kind:'comment',body:c.t.trim(),links:lk(c.l),att:c.att.slice()}));
+ if(k==='comment'&&!/reddit\.com\/r\//i.test(th))return alert('Add the link of the thread to comment on');
+ if(k==='track'){const us=$('tk').value.split(/\s+/).filter(x=>/reddit\.com/i.test(x)).map(norm);if(!us.length)return alert('Paste at least one Reddit link');
+  us.forEach(u=>pcs.push({kind:info(u).type,url:u,published_at:new Date().toISOString(),status:'checking',stage:0,next_check:new Date(Date.now()+6e4).toISOString()}))}
+ if(!pcs.length)return alert('Add at least one draft');
+ const{data:t,error}=await sb.from('tasks').insert({brand_id:ST.bid,label:$('lb').value.trim(),sub:sub||info(th||(pcs[0]||{}).url).sub,thread:k==='comment'?th:''}).select().single();
+ if(error)return alert(error.message);
+ const{error:e2}=await sb.from('pieces').insert(pcs.map((p,i)=>Object.assign({task_id:t.id,brand_id:ST.bid,sort:i},p)));
+ if(e2)return alert(e2.message);
+ PA=[];CB=[{t:'',l:'',att:[]}];await load();draw();
+}
+async function addC(tid){const d=prompt('Paste the comment text');if(!d||!d.trim())return;const t=ST.tasks.find(x=>x.id===tid);await sb.from('pieces').insert({task_id:tid,brand_id:t.brand_id,kind:'comment',body:d.trim(),sort:99});await refresh()}
+async function delTask(id){if(confirm('Remove this task and everything in it?')){await sb.from('tasks').delete().eq('id',id);await refresh()}}
+async function delPc(id){if(confirm('Remove this piece?')){await sb.from('pieces').delete().eq('id',id);await refresh()}}
+
+/* ---------- download tasks / import tasks ---------- */
+const MJ='https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js',PJ='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js',PW='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+const lsc=u=>new Promise((res,rej)=>{if(document.querySelector('script[src="'+u+'"]'))return res();const s=document.createElement('script');s.src=u;s.onload=res;s.onerror=()=>rej(new Error('Could not load the file reader. Check your internet connection.'));document.head.appendChild(s)});
+function fsave(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
+const stamp=()=>new Date().toISOString().slice(0,10);
+function exportData(bid,scope){
+ const out=[];
+ ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{
+  let ps=ST.pieces.filter(p=>p.task_id===t.id);if(scope==='todo')ps=ps.filter(p=>p.status==='todo');if(!ps.length)return;
+  const post=ST.pieces.find(p=>p.task_id===t.id&&p.kind==='post'&&p.url);
+  out.push({n:out.length+1,label:tlabel(t),sub:t.sub||'',thread:t.thread||(post?post.url:''),items:ps.map(p=>({kind:p.kind,title:p.ptitle||'',text:p.body||'',links:p.links||[],att:p.att||[],status:p.status,url:p.url||''}))})});
+ return out;
+}
+const HEAD=['Task','Type','Subreddit','Thread link','Title','Text','Links','Attachments','Status','Published link'];
+function toRows(d){const r=[HEAD];d.forEach(t=>t.items.forEach(i=>r.push([t.n,i.kind==='post'?'Post':'Comment','r/'+t.sub,i.kind==='comment'?t.thread:'',i.title,i.text,i.links.join(' '),i.att.map(a=>a.n).join(', '),CH[i.status],i.url])));return r}
+function toText(d){return d.map(t=>['TASK: '+t.label,'SUBREDDIT: r/'+t.sub].concat(t.thread&&!t.items.some(i=>i.kind==='post')?['THREAD: '+t.thread]:[]).concat(t.items.flatMap(i=>(i.kind==='post'?['POST TITLE: '+i.title,'POST BODY: '+i.text]:['COMMENT: '+i.text]).concat(i.links.length?['LINKS: '+i.links.join(' ')]:[]).concat(i.att.length?['ATTACHMENTS: '+i.att.map(a=>a.n).join(', ')]:[]))).concat(['====']).join('\n')).join('\n')}
+function dlTasks(fmt){
+ const b=ST.brands.find(x=>x.id===ST.bid),d=exportData(b.id,$('dsel').value);if(!d.length)return alert('There are no tasks to download for that choice');
+ const nm=b.name.replace(/\W+/g,'-')+'-tasks-'+stamp();
+ if(fmt==='xlsx'){const ws=XLSX.utils.aoa_to_sheet(toRows(d));ws['!cols']=[6,10,16,45,40,70,35,25,12,45].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,nm+'.xlsx')}
+ else if(fmt==='json')fsave(nm+'.json',JSON.stringify({brand:b.name,exported:new Date().toISOString(),tasks:d.map(t=>({task:t.n,label:t.label,subreddit:t.sub,thread_to_comment_on:t.thread,items:t.items.map(i=>({type:i.kind,title:i.title,text:i.text,links:i.links,attachments:i.att.map(a=>({name:a.n,type:a.t,data_url:a.d})),status:i.status,published_link:i.url}))}))},null,2),'application/json');
+ else fsave(nm+'.txt',toText(d),'text/plain');
+}
+const dlHtml=b=>'<h3>Download tasks</h3><p class="s">Get this brand&rsquo;s tasks in a neat, ordered file to feed to your posting tool. Excel gives one row per post or comment, JSON suits automation (attachments included), Text is a plain readable version.</p><div class="row"><select id="dsel"><option value="todo">Only tasks still to publish</option><option value="all">All tasks</option></select><button class="p" onclick="dlTasks(\'xlsx\')">Excel</button><button onclick="dlTasks(\'json\')">JSON</button><button onclick="dlTasks(\'txt\')">Text</button></div>';
+function parseText(s){
+ const tasks=[],MK=/^\s*(TASK|SUBREDDIT|THREAD|POST TITLE|TITLE|POST BODY|BODY|COMMENT|LINKS|ATTACHMENTS)\s*:\s*(.*)$/i;let t=null,cur=null,last=null;
+ const nt=()=>{t={label:'',sub:'',thread:'',pieces:[]};tasks.push(t);cur=null;last=null};
+ const post=()=>{let p=t.pieces.find(x=>x.kind==='post');if(!p){p={kind:'post',ptitle:'',body:'',links:[]};t.pieces.unshift(p)}return p};
+ s.split(/\r?\n/).forEach(line=>{
+  if(/^\s*(={3,}|-{3,})\s*$/.test(line)){t=null;cur=null;last=null;return}
+  const m=line.match(MK);
+  if(m){const k=m[1].toUpperCase(),v=m[2];
+   if(k==='TASK'){nt();t.label=v.trim();return}
+   if(!t)nt();
+   if(k==='SUBREDDIT'){t.sub=v.trim().replace(/^r\//i,'');cur=null}
+   else if(k==='THREAD'){t.thread=norm(v);cur=null}
+   else if(k==='POST TITLE'||k==='TITLE'){const p=post();p.ptitle=v.trim();last=p;cur={o:p,f:'ptitle'}}
+   else if(k==='POST BODY'||k==='BODY'){const p=post();p.body=v;last=p;cur={o:p,f:'body'}}
+   else if(k==='COMMENT'){const p={kind:'comment',body:v,links:[]};t.pieces.push(p);last=p;cur={o:p,f:'body'}}
+   else if(k==='LINKS'){if(last)last.links=last.links.concat(lk(v));cur=null}
+   else cur=null;
+   return}
+  if(cur)cur.o[cur.f]+='\n'+line;
+ });
+ tasks.forEach(x=>x.pieces.forEach(p=>{p.body=(p.body||'').trim();if(p.ptitle!=null)p.ptitle=p.ptitle.trim()}));
+ return tasks;
+}
+function rowsToTasks(rows){
+ const key=(r,n)=>{for(const k of Object.keys(r))if(n.includes(k.trim().toLowerCase()))return String(r[k]).trim();return''};
+ const tasks=[],groups={};let t=null;
+ rows.forEach(r=>{
+  const g=key(r,['task','task id','task #','group']),ty=key(r,['type','kind']).toLowerCase(),sub=key(r,['subreddit','sub']).replace(/^r\//i,''),th=key(r,['thread link','thread','parent post','post link']),ti=key(r,['title','post title']),tx=key(r,['text','body','comment','content','draft']),ln=key(r,['links','link']);
+  if(!ti&&!tx&&!th)return;
+  const kind=ty.includes('comment')?'comment':ty.includes('post')?'post':ti?'post':'comment';let tk;
+  if(g&&groups[g])tk=groups[g];
+  else if(!g&&kind==='comment'&&t&&(!th||t.thread===norm(th)))tk=t;
+  else{tk={label:g&&isNaN(g)?g:'',sub,thread:kind==='comment'?norm(th):'',pieces:[]};tasks.push(tk);if(g)groups[g]=tk}
+  if(!tk.sub)tk.sub=sub;
+  if(kind==='comment'&&th&&!tk.pieces.some(p=>p.kind==='post'))tk.thread=norm(th);
+  tk.pieces.push(kind==='post'?{kind,ptitle:ti,body:tx,links:lk(ln)}:{kind,body:tx,links:lk(ln)});t=tk;
+ });
+ return tasks;
+}
+function vet(tasks){
+ tasks.forEach(t=>{t.err='';t.pieces=t.pieces.filter(p=>p.kind==='post'?(p.ptitle||p.body):p.body);
+  const hp=t.pieces.some(p=>p.kind==='post'),po=t.pieces.find(p=>p.kind==='post');
+  if(!t.pieces.length)t.err='Nothing to post';else if(po&&!po.ptitle)t.err='Post has no title';
+  else if(!hp&&!/reddit\.com\/r\//i.test(t.thread))t.err='Comments need a thread link';
+  if(!t.sub&&t.thread)t.sub=info(t.thread).sub});
+ return tasks.filter(t=>t.pieces.length||t.err);
+}
+async function pdfText(buf){await lsc(PJ);pdfjsLib.GlobalWorkerOptions.workerSrc=PW;const pdf=await pdfjsLib.getDocument({data:buf}).promise;let out='';
+ for(let i=1;i<=pdf.numPages;i++){const c=await(await pdf.getPage(i)).getTextContent();let y=null,line='';c.items.forEach(it=>{const yy=it.transform[5];if(y!==null&&Math.abs(yy-y)>2){out+=line+'\n';line=''}line+=it.str;y=yy});out+=line+'\n'}return out}
+let IMP=[];
+async function onFile(inp){
+ const f=inp.files[0];if(!f)return;inp.value='';const ext=f.name.split('.').pop().toLowerCase();let ts;
+ try{
+  if(['xlsx','xls','csv'].includes(ext)){const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});ts=rowsToTasks(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}))}
+  else if(ext==='docx'){await lsc(MJ);ts=parseText((await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value)}
+  else if(ext==='pdf')ts=parseText(await pdfText(await f.arrayBuffer()));
+  else if(ext==='txt'||ext==='md')ts=parseText(await f.text());
+  else return alert('Please use an Excel, CSV, Word (.docx), PDF or text file');
+ }catch(e){return alert('That file could not be read: '+(e.message||e))}
+ IMP=vet(ts);const ok=IMP.filter(t=>!t.err);
+ $('imp').innerHTML='<div class="cb"><b>'+esc(f.name)+'</b>: found '+IMP.length+' task(s), '+ok.length+' ready to import.'+(IMP.length?'<table><tr><th>Task</th><th>Subreddit</th><th>Post title</th><th>Comments</th><th>Check</th></tr>'+IMP.map(t=>{const po=t.pieces.find(p=>p.kind==='post');return '<tr><td>'+esc(t.label||(po?po.ptitle:'Comments'))+'</td><td>'+(t.sub?'r/'+esc(t.sub):'-')+'</td><td>'+esc(po?po.ptitle:'-')+'</td><td>'+t.pieces.filter(p=>p.kind==='comment').length+'</td><td>'+(t.err?'<span class="rd">'+t.err+' (will be skipped)</span>':'<span class="gr">OK</span>')+'</td></tr>'}).join('')+'</table>':'<p class="s">Nothing was recognized. Download the template below to see the layout.</p>')
+  +'<div class="row">'+(ok.length?'<button class="p" onclick="doImport()">Import '+ok.length+' task(s)</button>':'')+'<button onclick="$(\'imp\').innerHTML=\'\'">Cancel</button></div></div>';
+}
+async function doImport(){
+ const ok=IMP.filter(t=>!t.err);$('imp').innerHTML='<p class="s">Importing...</p>';
+ for(const t of ok){
+  const{data:r,error}=await sb.from('tasks').insert({brand_id:ST.bid,label:t.label,sub:t.sub,thread:t.pieces.some(p=>p.kind==='post')?'':t.thread}).select().single();
+  if(error){alert(error.message);break}
+  const{error:e2}=await sb.from('pieces').insert(t.pieces.map((p,i)=>({task_id:r.id,brand_id:ST.bid,sort:i,kind:p.kind,ptitle:p.ptitle||null,body:p.body||'',links:p.links||[]})));
+  if(e2){alert(e2.message);break}
+ }
+ IMP=[];$('imp').innerHTML='';await load();draw();alert(ok.length+' task(s) imported.');
+}
+function dlTemplate(kind){
+ if(kind==='xlsx'){const r=[HEAD.slice(0,7),[1,'Post','r/devops','','Best CRM for a 10-person team?','Body of the post goes here.','https://example.com'],[1,'Comment','r/devops','','','First comment on that post.',''],[1,'Comment','r/devops','','','Second comment on that post.',''],[2,'Comment','r/saas','https://www.reddit.com/r/saas/comments/abc123/some_thread/','','A comment on an existing thread.','']];
+  const ws=XLSX.utils.aoa_to_sheet(r);ws['!cols']=[6,10,16,50,40,70,35].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,'tasks-template.xlsx')}
+ else fsave('tasks-template.txt','TASK: Example post with two comments\nSUBREDDIT: r/devops\nPOST TITLE: Best CRM for a 10-person team?\nPOST BODY: The body of the post goes here.\nIt can run over several lines.\nLINKS: https://example.com\nCOMMENT: First comment on that post.\nCOMMENT: Second comment on that post.\n====\nTASK: Comment on an existing thread\nSUBREDDIT: r/saas\nTHREAD: https://www.reddit.com/r/saas/comments/abc123/some_thread/\nCOMMENT: Your comment text goes here.\n====\n','text/plain');
+}
+const importHtml=()=>'<div class="cb"><b>Import tasks from a file</b><p class="s">Upload an Excel, CSV, Word (.docx), PDF or text file that follows the template layout. You will see a preview and can confirm before anything is added.</p><div class="row"><label class="btn">Choose file<input type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md" hidden onchange="onFile(this)"></label><button onclick="dlTemplate(\'xlsx\')">Excel template</button><button onclick="dlTemplate(\'txt\')">Text / Word template</button></div><div id="imp"></div></div>';
+
+/* ---------- brands (admin) ---------- */
+async function newBrand(){const n=prompt('Brand name');if(!n||!n.trim())return;const{data,error}=await sb.from('brands').insert({name:n.trim()}).select().single();if(error)return alert(error.message);ST.bid=data.id;await load();draw()}
+async function renBrand(){const b=ST.brands.find(x=>x.id===ST.bid),n=prompt('Brand name',b.name);if(n&&n.trim()){await sb.from('brands').update({name:n.trim()}).eq('id',b.id);await refresh()}}
+async function delBrand(){const b=ST.brands.find(x=>x.id===ST.bid);if(confirm('Delete "'+b.name+'" and all its work? This cannot be undone.')){await sb.from('brands').delete().eq('id',b.id);ST.bid=null;await load();draw()}}
+function accUI(){$('asgw').style.display=$('acc').value==='member'?'':'none'}
+async function goLive(){
+ const acc=$('acc').value,asg=acc==='member'?$('asg').value:null;
+ if(!ST.pieces.some(p=>p.brand_id===ST.bid))return alert('Add some work first (step 2)');
+ if(acc==='member'&&!asg)return alert('Pick a team member. They need to create an account first (Team tab).');
+ const{error}=await sb.from('brands').update({status:'live',access:acc,assignee:asg}).eq('id',ST.bid);if(error)return alert(error.message);await refresh();
+}
+async function pause(){await sb.from('brands').update({status:'draft'}).eq('id',ST.bid);await refresh()}
+function accTxt(b){return b.access==='open'?'Anyone with the work link can publish.':b.access==='member'?'Assigned to '+esc(pname(b.assignee))+'.':'Assigned to you (admin).'}
+function brandPage(){
+ const b=ST.brands.find(x=>x.id===ST.bid);if(!b){ST.bid=null;return brandsView()}
+ const ts=ST.tasks.filter(t=>t.brand_id===b.id),live=b.status==='live';
+ const mem=ST.profiles.map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.email)+')</option>').join('');
+ const oLink=base()+'#open='+b.open_token,cLink=base()+'#client='+b.client_token;
+ return '<button onclick="ST.bid=null;draw()">&larr; All brands</button><div class="row"><h1 style="margin:0">'+esc(b.name)+'</h1><span class="chip '+(live?'live':'todo')+'">'+(live?'Live':'Draft')+'</span><button onclick="renBrand()">Rename</button><button onclick="delBrand()">Delete</button></div>'
+ +'<div class="step"><span class="num ok">1</span><b>Brand name</b><span class="s">done</span></div>'
+ +'<div class="step" style="margin-top:14px"><span class="num '+(ts.length?'ok':'')+'">2</span><b>Add the work</b></div>'+formHtml()+importHtml()
+ +'<div class="step" style="margin-top:14px"><span class="num '+(live?'ok':'')+'">3</span><b>Assign and go live</b></div><div class="cb">'
+ +(live?'<p style="margin-top:0"><b>Live.</b> '+accTxt(b)+'</p>'+(b.access==='open'?'<div class="row"><span class="s">Work link (anyone who has it can publish):</span><button onclick="copy(\''+oLink+'\',\'Work link copied\')">Copy work link</button></div>':'')+'<button onclick="pause()">Pause (back to draft)</button>'
+ :'<div class="row"><label><span class="s">Who does this work?</span><select id="acc" onchange="accUI()"><option value="admin">Me (admin)</option><option value="member">A team member</option><option value="open">Anyone with the link</option></select></label><label id="asgw" style="display:none"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+mem+'</select></label></div><button class="p" onclick="goLive()">Go live</button>')+'</div>'
+ +dlHtml(b)+'<h3>Tracking</h3><div id="bl">'+listHtml(b)+'</div>'
+ +'<h3>Client link</h3><p class="s">A read-only page for your client with a live view of this brand and an Excel download. Only live posts and comments are shown.</p><div class="row"><button onclick="copy(\''+cLink+'\',\'Client link copied\')">Copy client link</button><a class="btn" href="'+cLink+'" target="_blank" rel="noopener">Preview</a></div>';
+}
+function listHtml(b){
+ const ts=ST.tasks.filter(t=>t.brand_id===b.id),its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
+ return '<div class="kpi"><div><b class="gr">'+np+'</b>live posts</div><div><b class="gr">'+nc+'</b>live comments</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='removed').length+'</b>deleted</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='todo').length+'</b>to publish</div></div>'
+ +'<div class="row"><button class="p" onclick="dlBrand(\''+b.id+'\')">Download Excel report</button></div>'
+ +(ts.length?ts.map(t=>'<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">thread</a>':'')+'</div></div><div class="a"><button onclick="addC(\''+t.id+'\')">+ Comment</button><button onclick="delTask(\''+t.id+'\')" aria-label="Remove task">&#10005;</button></div></div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,true)).join('')+'</div>').join(''):'<div class="empty">No work added yet.</div>');
+}
+function brandsView(){
+ return '<div class="row"><h1 style="margin:0;flex:1">Brands</h1><button class="p" onclick="newBrand()">+ New brand</button></div>'
+ +(ST.brands.length?ST.brands.map(b=>{const its=items(b.id);return '<div class="card" onclick="ST.bid=\''+b.id+'\';draw()"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="s">'+its.length+' live</span><span class="chip '+(b.status==='live'?'live':'todo')+'">'+(b.status==='live'?'Live':'Draft')+'</span></div></div>'}).join(''):'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p><button class="p" onclick="newBrand()">Add your first brand</button></div>');
+}
+function teamView(){
+ return '<h1>Team</h1><p class="mu">Team members create their own account on this site (Create account on the sign-in page). They then appear here, and you can assign brands to them.</p>'
+ +'<table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+ST.profiles.map(u=>'<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td><td>'+(u.id===me.id?'<span class="s">you</span>':'<button onclick="setRole(\''+u.id+'\',\''+(u.role==='admin'?'member':'admin')+'\')">Make '+(u.role==='admin'?'member':'admin')+'</button>')+'</td></tr>').join('')+'</table>';
+}
+async function setRole(id,r){await sb.from('profiles').update({role:r}).eq('id',id);await refresh()}
+
+/* ---------- team member / open access ---------- */
+function workView(){
+ const bs=ST.tok?[ST.obrand]:ST.brands;
+ if(!bs.length)return '<div class="empty">No brands are assigned to you yet. When your admin assigns one and goes live, it will appear here.</div>';
+ if(!ST.bid||!bs.some(b=>b.id===ST.bid))ST.bid=bs[0].id;
+ return '<h1>'+(ST.tok?esc(ST.obrand.name):'My work')+'</h1>'+(bs.length>1?'<div class="row"><select onchange="ST.bid=this.value;draw()">'+bs.map(b=>'<option value="'+b.id+'"'+(b.id===ST.bid?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></div>':(ST.tok?'':'<div class="mu">'+esc(bs[0].name)+'</div>'))
+ +'<p class="mu">Copy each draft, publish it on Reddit, paste the link of what you published and press Done. Tracking starts straight away.</p><div id="wl">'+wList()+'</div>';
+}
+function wList(){const ts=ST.tasks.filter(t=>t.brand_id===ST.bid);return ts.length?ts.map(t=>'<div class="task"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this thread</a>':'')+'</div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,false)).join('')+'</div>').join(''):'<div class="empty">Nothing to do.</div>'}
+
+/* ---------- auth + shell ---------- */
+function authView(){
+ $('nv').innerHTML='';$('so').style.display='none';
+ $('app').innerHTML='<div class="auth"><h2>Sign in</h2><input id="em" type="email" placeholder="Email" autocomplete="email"><input id="pw" type="password" placeholder="Password (6+ characters)" autocomplete="current-password"><input id="nm" placeholder="Your name (only when creating an account)"><div class="row"><button class="p" onclick="signIn()">Sign in</button><button onclick="signUp()">Create account</button></div><p class="s">The first account created on a new system becomes the admin.</p></div>';
+}
+async function signIn(){const{error}=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(error)return alert(error.message);await start()}
+async function signUp(){const{data,error}=await sb.auth.signUp({email:$('em').value.trim(),password:$('pw').value,options:{data:{name:$('nm').value.trim()}}});if(error)return alert(error.message);if(!data.session)return alert('Account created. Check your email to confirm it, then sign in.');await start()}
+async function signOut(){await sb.auth.signOut();me=null;authView()}
+async function start(){
+ const{data:{user}}=await sb.auth.getUser();if(!user)return authView();
+ let r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!r.data){await new Promise(x=>setTimeout(x,800));r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()}
+ me=r.data;if(!me)return alert('Your profile was not found. Ask the admin or check the setup guide.');
+ $('who').textContent=me.name+' ('+me.role+')';$('so').style.display='';await load();draw();
+}
+function draw(soft){
+ if(!me&&!ST.tok)return;
+ if(ST.tok){if(!soft||!ed())$('app').innerHTML=workView();return}
+ const adm=me.role==='admin';
+ $('nv').innerHTML=adm?[['brands','Brands'],['team','Team']].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;draw()">'+v[1]+'</button>').join(''):'';
+ if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed())$('bl').innerHTML=listHtml(b)}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed())$('app').innerHTML=adm?(ST.tab==='team'?teamView():ST.bid?brandPage():brandsView()):workView();return}
+ $('app').innerHTML=adm?(ST.tab==='team'?teamView():ST.bid?brandPage():brandsView()):workView();
+ if(adm&&ST.bid&&$('kd'))scn();
+}
+
+/* ---------- client page ---------- */
+async function bootClient(tok){
+ const{data,error}=await sb.rpc('client_report',{tok});
+ document.querySelector('header').innerHTML='<span class="logo">Reddit performance report</span>';
+ if(error||!data){$('app').innerHTML='<div class="empty">This link is not valid. Ask for a new one.</div>';return}
+ const its=data.items||[],np=its.filter(i=>i.kind==='post').length,nc=its.length-np;window.CI=its;window.CN=data.brand;
+ $('app').innerHTML='<h1>'+esc(data.brand)+'</h1><div class="mu">Live posts and comments &middot; updated '+new Date().toLocaleString([],{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'})+'</div>'
+ +'<div class="kpi"><div><b class="gr">'+np+'</b>live posts</div><div><b class="gr">'+nc+'</b>live comments</div><div><b>'+its.length+'</b>total live</div></div>'
+ +'<div class="row"><button class="p" onclick="xlsx(CI,CN)">Download Excel report</button></div>'
+ +(its.length?'<table><tr><th>Date</th><th>Type</th><th>Link to post</th><th>Link to comment</th><th>Points</th><th>Replies</th></tr>'+its.map(i=>'<tr><td>'+D(i.at)+'</td><td>'+(i.kind==='post'?'Post':'Comment')+'</td><td>'+(i.post_url?'<a href="'+esc(i.post_url)+'" target="_blank" rel="noopener">Open post</a>':'')+'</td><td>'+(i.kind==='comment'?'<a href="'+esc(i.url)+'" target="_blank" rel="noopener">Open comment</a>':'')+'</td><td>'+i.score+'</td><td>'+i.replies+'</td></tr>').join('')+'</table>':'<div class="empty">Nothing is live yet.</div>');
+}
+
+/* ---------- boot ---------- */
+(async function(){
+ if(SB_URL.startsWith('PASTE')){$('app').innerHTML='<div class="empty"><h2>Almost there</h2><p>Open index.html in a text editor and replace the two PASTE_YOUR lines at the top of the script with your Supabase URL and anon key. The setup guide shows where to find them.</p></div>';return}
+ sb=supabase.createClient(SB_URL,SB_KEY);const h=location.hash;
+ try{
+  if(h.startsWith('#client=')){await bootClient(h.slice(8));return}
+  if(h.startsWith('#open=')){ST.tok=h.slice(6);document.querySelector('header').innerHTML='<span class="logo">Reddit Monitor</span>';await load();draw();setInterval(async()=>{if(!ed()){try{await load();draw(true)}catch(e){}}},30000);return}
+ }catch(e){document.querySelector('header').innerHTML='<span class="logo">Reddit Monitor</span>';$('app').innerHTML='<div class="empty">This link is closed or not valid. Ask your admin for a new one.</div>';return}
+ await start();
+ setInterval(async()=>{if(me&&!ed()){try{await load();draw(true)}catch(e){}}},30000);
+ setInterval(runDue,45000);setTimeout(runDue,3000);
+})();
+</script></body></html>
