@@ -50,7 +50,7 @@ const SB_URL='https://fkrgiaeglingmogcsyik.supabase.co',SB_KEY='sb_publishable_A
 const $=id=>document.getElementById(id),DAY=864e5;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const D=t=>t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-';
-const ST={tab:'brands',bid:null,brands:[],tasks:[],pieces:[],profiles:[],tok:'',obrand:null};
+const ST={tab:'brands',bid:null,brands:[],tasks:[],pieces:[],profiles:[],clients:[],sugg:[],hold:0,edit:null,tok:'',obrand:null};
 let sb,me=null,PA=[],CB=[{t:'',l:'',att:[]}];
 const base=()=>location.href.split('#')[0];
 const norm=u=>(u||'').trim().split(/[?#]/)[0].replace(/\/+$/,'').replace(/^https?:\/\/(?:old\.|new\.|np\.|www\.)?reddit\.com/i,'https://www.reddit.com');
@@ -73,8 +73,8 @@ const media=p=>(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>
 /* ---------- data ---------- */
 async function load(){
  if(ST.tok){const{data,error}=await sb.rpc('open_brand',{tok:ST.tok});if(error||!data)throw new Error('closed');ST.obrand=data.brand;ST.tasks=data.tasks;ST.pieces=data.pieces;return}
- const[b,t,p,pr]=await Promise.all([sb.from('brands').select('*').order('created_at'),sb.from('tasks').select('*').order('created_at'),sb.from('pieces').select('*').order('sort'),sb.from('profiles').select('*').order('created_at')]);
- ST.brands=b.data||[];ST.tasks=t.data||[];ST.pieces=p.data||[];ST.profiles=pr.data||[];
+ const[b,t,p,pr,cl,sg]=await Promise.all([sb.from('brands').select('*').order('created_at'),sb.from('tasks').select('*').order('created_at'),sb.from('pieces').select('*').order('sort'),sb.from('profiles').select('*').order('created_at'),sb.from('clients').select('*').order('created_at'),sb.from('suggestions').select('*').order('created_at',{ascending:false})]);
+ ST.brands=b.data||[];ST.tasks=t.data||[];ST.pieces=p.data||[];ST.profiles=pr.data||[];ST.clients=cl.data||[];ST.sugg=sg.data||[];
 }
 const dots=p=>{if(!p.hist||!p.published_at)return'';const pub=+new Date(p.published_at),m={};p.hist.forEach(h=>{m[Math.floor((h.t-pub)/DAY)]=h.s});return Object.keys(m).sort((a,b)=>a-b).slice(-30).map(k=>'<i class="dt '+m[k]+'" title="Day '+(+k+1)+': '+m[k]+'"></i>').join('')};
 const bname=id=>(ST.brands.find(b=>b.id===id)||{}).name||'';
@@ -83,12 +83,13 @@ const tlabel=t=>t.label||((ST.pieces.find(p=>p.task_id===t.id&&p.ptitle)||{}).pt
 
 /* ---------- piece card ---------- */
 function pc(p,adm){
+ if(adm&&ST.edit===p.id)return '<div class="pc cb"><b>Edit '+(p.kind==='post'?'post':'comment')+' draft</b>'+(p.kind==='post'?'<div class="fld"><span>Title</span><input id="et" style="width:100%" value="'+esc(p.ptitle||'')+'"></div>':'')+'<div class="fld"><span>Text</span><textarea id="eb" style="min-height:150px">'+esc(p.body||'')+'</textarea></div><div class="row"><button class="p" onclick="saveEd(\''+p.id+'\')">Save</button><button onclick="ST.edit=null;draw(true)">Cancel</button></div></div>';
  const h=p.hist||[],err=h.length&&h[h.length-1].s==='error',st=p.status;
- return '<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(st)+(p.published_at?'<span class="s">published '+D(p.published_at)+'</span>':'')+'<span style="flex:1"></span><div class="a">'
+ return '<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(st)+sgChip(p,adm)+(p.published_at?'<span class="s">published '+D(p.published_at)+'</span>':'')+'<span style="flex:1"></span><div class="a">'
  +(p.ptitle?'<button onclick="cp(\''+p.id+'\',1)">Copy title</button>':'')+(p.body?'<button onclick="cp(\''+p.id+'\')">Copy '+(p.kind==='post'?'body':'text')+'</button>':'')
  +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">View</a>':'')
  +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
- +(adm?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove piece">&#10005;</button>':'')+'</div></div>'
+ +(adm&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+(adm?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove piece">&#10005;</button>':'')+'</div></div>'
  +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p)
  +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies'):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit</span>':'')+'</div><div>'+dots(p)+'</div>'
  :'<div class="row"><input class="lin" id="l_'+p.id+'" placeholder="Paste the published '+p.kind+' link here" style="flex:1;min-width:220px"><button class="p" onclick="done(\''+p.id+'\')">Done</button></div>')+'</div>';
@@ -288,32 +289,60 @@ function accTxt(b){return b.access==='open'?'Anyone with the work link can publi
 function brandPage(){
  const b=ST.brands.find(x=>x.id===ST.bid);if(!b){ST.bid=null;return brandsView()}
  const ts=ST.tasks.filter(t=>t.brand_id===b.id),live=b.status==='live';
- const mem=ST.profiles.map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.email)+')</option>').join('');
+ const mem=actMem().map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.email)+')</option>').join('');
  const oLink=base()+'#open='+b.open_token,cLink=base()+'#client='+b.client_token;
  return '<button onclick="ST.bid=null;draw()">&larr; All brands</button><div class="row"><h1 style="margin:0">'+esc(b.name)+'</h1><span class="chip '+(live?'live':'todo')+'">'+(live?'Live':'Draft')+'</span><button onclick="renBrand()">Rename</button><button onclick="delBrand()">Delete</button></div>'
  +'<div class="step"><span class="num ok">1</span><b>Brand name</b><span class="s">done</span></div>'
  +'<div class="step" style="margin-top:14px"><span class="num '+(ts.length?'ok':'')+'">2</span><b>Add the work</b></div>'+formHtml()+importHtml()
  +'<div class="step" style="margin-top:14px"><span class="num '+(live?'ok':'')+'">3</span><b>Assign and go live</b></div><div class="cb">'
- +(live?'<p style="margin-top:0"><b>Live.</b> '+accTxt(b)+'</p>'+(b.access==='open'?'<div class="row"><span class="s">Work link (anyone who has it can publish):</span><button onclick="copy(\''+oLink+'\',\'Work link copied\')">Copy work link</button></div>':'')+'<button onclick="pause()">Pause (back to draft)</button>'
+ +(live?'<p style="margin-top:0"><b>Live.</b> '+accTxt(b)+'</p>'+(b.access==='open'?'<div class="row"><span class="s">Work link (anyone who has it can publish):</span><button onclick="copy(\''+oLink+'\',\'Work link copied\')">Copy work link</button></div>':'')+'<div class="row"><label><span class="s">Change who does this work</span><select id="acc" onchange="accUI()"><option value="admin"'+(b.access==='admin'?' selected':'')+'>Me (admin)</option><option value="member"'+(b.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(b.access==='open'?' selected':'')+'>Anyone with the link</option></select></label><label id="asgw" style="display:'+(b.access==='member'?'':'none')+'"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+actMem().map(u=>'<option value="'+u.id+'"'+(b.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label><button class="p" onclick="reassign()">Save</button></div><p class="s">You can also assign each task to a different person in the Tracking list below.</p><button onclick="pause()">Pause (back to draft)</button>'
  :'<div class="row"><label><span class="s">Who does this work?</span><select id="acc" onchange="accUI()"><option value="admin">Me (admin)</option><option value="member">A team member</option><option value="open">Anyone with the link</option></select></label><label id="asgw" style="display:none"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+mem+'</select></label></div><button class="p" onclick="goLive()">Go live</button>')+'</div>'
- +dlHtml(b)+'<h3>Tracking</h3><div id="bl">'+listHtml(b)+'</div>'
- +'<h3>Client link</h3><p class="s">A read-only page for your client with a live view of this brand and an Excel download. Only live posts and comments are shown.</p><div class="row"><button onclick="copy(\''+cLink+'\',\'Client link copied\')">Copy client link</button><a class="btn" href="'+cLink+'" target="_blank" rel="noopener">Preview</a></div>';
+ +dlHtml(b)+'<h3>Tracking</h3><div id="bl">'+listHtml(b)+'</div>'+'<h3>Client suggestions</h3><p class="s">Suggestions from your client are kept here, separate from the drafts. Nothing changes until you apply it.</p><div id="sg">'+sugHtml(b)+'</div>'
+ +'<h3>Client</h3><div class="row"><label><span class="s">This brand belongs to</span><select onchange="setClient(this.value)"><option value="">No client</option>'+ST.clients.map(c=>'<option value="'+c.id+'"'+(b.client_id===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+(ST.clients.find(c=>c.id===b.client_id)?'<button class="p" onclick="copy(\''+plink(ST.clients.find(c=>c.id===b.client_id))+'\',\'Client link copied\')">Copy client link (all their brands)</button>':'')+'</div><p class="s">Create clients in the Clients tab. The client link shows live, pending and draft work and lets the client send suggestions.</p><div class="row"><span class="s">Single-brand report link (live items only):</span><button onclick="copy(\''+cLink+'\',\'Link copied\')">Copy</button><a class="btn" href="'+cLink+'" target="_blank" rel="noopener">Preview</a></div>';
 }
 function listHtml(b){
  const ts=ST.tasks.filter(t=>t.brand_id===b.id),its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
  return '<div class="kpi"><div><b class="gr">'+np+'</b>live posts</div><div><b class="gr">'+nc+'</b>live comments</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='removed').length+'</b>deleted</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='todo').length+'</b>to publish</div></div>'
  +'<div class="row"><button class="p" onclick="dlBrand(\''+b.id+'\')">Download Excel report</button></div>'
- +(ts.length?ts.map(t=>'<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">thread</a>':'')+'</div></div><div class="a"><button onclick="addC(\''+t.id+'\')">+ Comment</button><button onclick="delTask(\''+t.id+'\')" aria-label="Remove task">&#10005;</button></div></div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,true)).join('')+'</div>').join(''):'<div class="empty">No work added yet.</div>');
+ +(ts.length?ts.map(t=>'<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">thread</a>':'')+'</div></div><div class="a">'+asgSel(t)+'<button onclick="addC(\''+t.id+'\')">+ Comment</button><button onclick="delTask(\''+t.id+'\')">Delete task</button></div></div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,true)).join('')+'</div>').join(''):'<div class="empty">No work added yet.</div>');
 }
 function brandsView(){
  return '<div class="row"><h1 style="margin:0;flex:1">Brands</h1><button class="p" onclick="newBrand()">+ New brand</button></div>'
- +(ST.brands.length?ST.brands.map(b=>{const its=items(b.id);return '<div class="card" onclick="ST.bid=\''+b.id+'\';draw()"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="s">'+its.length+' live</span><span class="chip '+(b.status==='live'?'live':'todo')+'">'+(b.status==='live'?'Live':'Draft')+'</span></div></div>'}).join(''):'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p><button class="p" onclick="newBrand()">Add your first brand</button></div>');
-}
-function teamView(){
- return '<h1>Team</h1><p class="mu">Team members create their own account on this site (Create account on the sign-in page). They then appear here, and you can assign brands to them.</p>'
- +'<table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+ST.profiles.map(u=>'<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td><td>'+(u.id===me.id?'<span class="s">you</span>':'<button onclick="setRole(\''+u.id+'\',\''+(u.role==='admin'?'member':'admin')+'\')">Make '+(u.role==='admin'?'member':'admin')+'</button>')+'</td></tr>').join('')+'</table>';
+ +(ST.brands.length?ST.brands.map(b=>{const its=items(b.id);return '<div class="card" onclick="ST.bid=\''+b.id+'\';draw()"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="s">'+its.length+' live</span>'+(ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length?'<span class="chip todo">'+ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length+' suggestion(s)</span>':'')+'<span class="chip '+(b.status==='live'?'live':'todo')+'">'+(b.status==='live'?'Live':'Draft')+'</span></div></div>'}).join(''):'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p><button class="p" onclick="newBrand()">Add your first brand</button></div>');
 }
 async function setRole(id,r){await sb.from('profiles').update({role:r}).eq('id',id);await refresh()}
+
+/* ---------- edit drafts, suggestions ---------- */
+const sgChip=(p,adm)=>{if(!adm)return'';const n=ST.sugg.filter(s=>s.piece_id===p.id&&s.status==='new').length;return n?'<span class="chip todo">'+n+' client suggestion'+(n>1?'s':'')+'</span>':''};
+function editPc(id){ST.edit=id;draw(true)}
+async function saveEd(id){const p=pieceOf(id),u={body:$('eb').value.trim()};if(p.kind==='post'){const t=$('et').value.trim();if(!t)return alert('A post needs a title');u.ptitle=t}const{error}=await sb.from('pieces').update(u).eq('id',id);if(error)return alert(error.message);ST.edit=null;await refresh()}
+function sugHtml(b){const l=ST.sugg.filter(s=>s.brand_id===b.id);if(!l.length)return '<div class="s">No suggestions from the client yet.</div>';
+ return l.map(s=>{const p=pieceOf(s.piece_id)||{};return '<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="s">On '+(p.kind==='post'?'post':'comment')+': '+esc((p.ptitle||p.body||'').slice(0,90))+'</div><div style="margin-top:4px">'+esc(s.note)+'</div><div class="s">'+esc(s.who||'Client')+' &middot; '+D(s.created_at)+'</div></div><span class="chip '+(s.status==='new'?'todo':'live')+'">'+({new:'New',done:'Done',dismissed:'Dismissed'}[s.status])+'</span></div><div class="a" style="margin-top:8px">'+(s.status==='new'?'<button onclick="sgSet(\''+s.id+'\',\'done\')">Mark done</button><button onclick="sgSet(\''+s.id+'\',\'dismissed\')">Dismiss</button>':'<button onclick="sgSet(\''+s.id+'\',\'new\')">Reopen</button>')+(p.id&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+'</div></div>'}).join('')}
+async function sgSet(id,s){await sb.from('suggestions').update({status:s}).eq('id',id);await refresh()}
+
+/* ---------- reassign, clients, team approval ---------- */
+const actMem=()=>ST.profiles.filter(u=>u.status==='active');
+function asgSel(t){return '<select onchange="asgTask(\''+t.id+'\',this.value)" aria-label="Assign task"><option value="">Brand default</option>'+(me?'<option value="'+me.id+'"'+(t.assignee===me.id?' selected':'')+'>Me (admin)</option>':'')+actMem().filter(u=>!me||u.id!==me.id).map(u=>'<option value="'+u.id+'"'+(t.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select>'}
+async function asgTask(id,v){const{error}=await sb.from('tasks').update({assignee:v||null}).eq('id',id);if(error)return alert(error.message);await refresh()}
+async function reassign(){const acc=$('acc').value,asg=acc==='member'?$('asg').value:null;if(acc==='member'&&!asg)return alert('Pick a team member');const{error}=await sb.from('brands').update({access:acc,assignee:asg}).eq('id',ST.bid);if(error)return alert(error.message);await refresh();alert('Assignment updated')}
+async function setClient(v){await sb.from('brands').update({client_id:v||null}).eq('id',ST.bid);await refresh()}
+async function newClient(){const n=prompt('Client name');if(!n||!n.trim())return;const{error}=await sb.from('clients').insert({name:n.trim()});if(error)return alert(error.message);await refresh()}
+async function renClient(id){const c=ST.clients.find(x=>x.id===id),n=prompt('Client name',c.name);if(n&&n.trim()){await sb.from('clients').update({name:n.trim()}).eq('id',id);await refresh()}}
+async function delClient(id){if(confirm('Delete this client? Their brands stay, but the client link stops working.')){await sb.from('clients').delete().eq('id',id);await refresh()}}
+const plink=c=>base()+'#portal='+c.token;
+function clientsView(){
+ return '<div class="row"><h1 style="margin:0;flex:1">Clients</h1><button class="p" onclick="newClient()">+ New client</button></div><p class="mu">A client can have several brands. Assign a brand to a client on the brand page. One link then shows the client all of their live brands, with live, pending and draft work.</p>'
+ +(ST.clients.length?ST.clients.map(c=>{const bs=ST.brands.filter(b=>b.client_id===c.id);return '<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(c.name)+'</div><div class="s">'+(bs.length?bs.map(b=>esc(b.name)).join(', '):'No brands assigned yet')+'</div></div><div class="a"><button class="p" onclick="copy(\''+plink(c)+'\',\'Client link copied\')">Copy client link</button><a class="btn" href="'+plink(c)+'" target="_blank" rel="noopener">Preview</a><button onclick="renClient(\''+c.id+'\')">Rename</button><button onclick="delClient(\''+c.id+'\')">Delete</button></div></div></div>'}).join(''):'<div class="empty">No clients yet.</div>');
+}
+async function setStatus(id,s){
+ if(s==='blocked'){await sb.from('tasks').update({assignee:null}).eq('assignee',id);await sb.from('brands').update({access:'admin',assignee:null}).eq('assignee',id)}
+ const{error}=await sb.from('profiles').update({status:s}).eq('id',id);if(error)return alert(error.message);await refresh()}
+function expel(id){const u=ST.profiles.find(x=>x.id===id);if(confirm('Expel '+u.name+'? They lose access immediately and their tasks become unassigned.'))setStatus(id,'blocked')}
+function teamView(){
+ const row=u=>'<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td><td><div class="a">'+(u.id===me.id?'<span class="s">you</span>':u.status==='pending'?'<button class="p" onclick="setStatus(\''+u.id+'\',\'active\')">Approve</button><button onclick="setStatus(\''+u.id+'\',\'blocked\')">Reject</button>':u.status==='blocked'?'<button onclick="setStatus(\''+u.id+'\',\'active\')">Restore</button>':'<button onclick="setRole(\''+u.id+'\',\''+(u.role==='admin'?'member':'admin')+'\')">Make '+(u.role==='admin'?'member':'admin')+'</button><button onclick="expel(\''+u.id+'\')">Expel</button>')+'</div></td></tr>';
+ const sec=(t,s,cl)=>{const l=ST.profiles.filter(u=>u.status===s);return l.length?'<h3 class="'+cl+'">'+t+' ('+l.length+')</h3><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+l.map(row).join('')+'</table>':''};
+ return '<h1>Team</h1><p class="mu">People create their own account on the sign-in page. They cannot do anything until an admin approves them here.</p>'+sec('Waiting for approval','pending','am')+sec('Active','active','gr')+sec('Expelled or rejected','blocked','rd');
+}
 
 /* ---------- team member / open access ---------- */
 function workView(){
@@ -332,22 +361,60 @@ function authView(){
 }
 async function signIn(){const{error}=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(error)return alert(error.message);await start()}
 async function signUp(){const{data,error}=await sb.auth.signUp({email:$('em').value.trim(),password:$('pw').value,options:{data:{name:$('nm').value.trim()}}});if(error)return alert(error.message);if(!data.session)return alert('Account created. Check your email to confirm it, then sign in.');await start()}
-async function signOut(){await sb.auth.signOut();me=null;authView()}
+async function signOut(){await sb.auth.signOut();me=null;ST.hold=0;authView()}
 async function start(){
  const{data:{user}}=await sb.auth.getUser();if(!user)return authView();
  let r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!r.data){await new Promise(x=>setTimeout(x,800));r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()}
  me=r.data;if(!me)return alert('Your profile was not found. Ask the admin or check the setup guide.');
+ ST.hold=me.status!=='active'?1:0;
+ if(ST.hold){$('so').style.display='';$('nv').innerHTML='';$('who').textContent=me.name;$('app').innerHTML='<div class="empty"><h2>'+(me.status==='blocked'?'Your access was removed':'Waiting for approval')+'</h2><p>'+(me.status==='blocked'?'Please contact the admin.':'Your account was created. An admin must approve it before you can use the system.')+'</p><button onclick="start()">Check again</button></div>';return}
  $('who').textContent=me.name+' ('+me.role+')';$('so').style.display='';await load();draw();
 }
+const admView=()=>ST.tab==='team'?teamView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
 function draw(soft){
+ if(ST.hold)return;
  if(!me&&!ST.tok)return;
  if(ST.tok){if(!soft||!ed())$('app').innerHTML=workView();return}
  const adm=me.role==='admin';
- $('nv').innerHTML=adm?[['brands','Brands'],['team','Team']].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;draw()">'+v[1]+'</button>').join(''):'';
- if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed())$('bl').innerHTML=listHtml(b)}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed())$('app').innerHTML=adm?(ST.tab==='team'?teamView():ST.bid?brandPage():brandsView()):workView();return}
- $('app').innerHTML=adm?(ST.tab==='team'?teamView():ST.bid?brandPage():brandsView()):workView();
+ const npend=ST.profiles.filter(u=>u.status==='pending').length;
+ $('nv').innerHTML=adm?[['brands','Brands'],['clients','Clients'],['team','Team'+(npend?' ('+npend+')':'')]].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;draw()">'+v[1]+'</button>').join(''):'';
+ if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed())$('app').innerHTML=adm?admView():workView();return}
+ $('app').innerHTML=adm?admView():workView();
  if(adm&&ST.bid&&$('kd'))scn();
 }
+
+
+/* ---------- client portal (one link, several brands) ---------- */
+let PT={};
+async function bootPortal(tok){PT.tok=tok;document.querySelector('header').innerHTML='<span class="logo">Reddit performance report</span>';
+ const{data,error}=await sb.rpc('client_portal',{tok});if(error||!data){$('app').innerHTML='<div class="empty">This link is not valid. Ask for a new one.</div>';return}PT.d=data;pHome()}
+function pHome(){$('nv').innerHTML='';$('app').innerHTML='<h1>'+esc(PT.d.client)+'</h1><div class="mu">Choose a brand to see its work.</div><div style="margin-top:14px">'+(PT.d.brands.length?PT.d.brands.map(b=>'<div class="card" onclick="pBrand(\''+b.id+'\')"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="chip live">'+b.live+' live</span><span class="chip checking">'+b.pending+' pending</span><span class="chip todo">'+b.todo+' drafts</span></div></div>').join(''):'<div class="empty">No brands are shared yet.</div>')+'</div>'}
+async function pBrand(id,keep){const{data,error}=await sb.rpc('client_brand',{tok:PT.tok,bid:id});if(error||!data)return alert('Could not load this brand');PT.b=data;PT.bid=id;if(!keep)PT.tab='live';pView()}
+const pTab={live:['Live','live'],pending:['Pending','checking'],drafts:['Drafts to be posted','todo']};
+function pView(){
+ const ps=PT.b.pieces,by=s=>ps.filter(p=>p.status===s),sel=by(pTab[PT.tab][1]);
+ $('nv').innerHTML='';
+ $('app').innerHTML='<button onclick="pHome()">&larr; All brands</button><h1 style="margin-top:12px">'+esc(PT.b.brand)+'</h1><div class="mu">'+esc(PT.b.client)+'</div>'
+ +'<div class="kpi"><div><b class="gr">'+by('live').filter(p=>p.kind==='post').length+'</b>live posts</div><div><b class="gr">'+by('live').filter(p=>p.kind==='comment').length+'</b>live comments</div><div><b>'+by('checking').length+'</b>pending</div><div><b>'+by('todo').length+'</b>drafts to be posted</div></div>'
+ +'<div class="row"><button class="p" onclick="pXlsx()">Download Excel report</button></div>'
+ +'<div class="row">'+Object.keys(pTab).map(k=>'<button class="'+(PT.tab===k?'p':'')+'" onclick="PT.tab=\''+k+'\';pView()">'+pTab[k][0]+' ('+by(pTab[k][1]).length+')</button>').join('')+'</div>'
+ +(sel.length?sel.map(pPiece).join(''):'<div class="empty">Nothing here yet.</div>');
+}
+function pPiece(p){
+ const head=p.ptitle||p.task||(p.body||'').slice(0,60)||'Item';
+ return '<div class="task"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(p.status==='checking'?'checking':p.status)+(p.at?'<span class="s">published '+D(p.at)+'</span>':'')+'<span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">Open on Reddit</a>':'')+'</div>'
+ +(p.sub?'<div class="s">r/'+esc(p.sub)+(p.kind==='comment'&&p.post_url?' &middot; <a href="'+esc(p.post_url)+'" target="_blank" rel="noopener">on this post</a>':'')+'</div>':'')
+ +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')
+ +(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>'<a href="'+esc(l)+'" target="_blank" rel="noopener">'+esc(l)+'</a>').join(' &middot; ')+'</div>':'')
+ +(p.att&&p.att.length?'<div class="s">Attachments: '+p.att.map(a=>esc(a.n)).join(', ')+'</div>':'')
+ +(p.url?'<div class="s">'+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies')+'</div>':'')
+ +(p.sugg&&p.sugg.length?'<div style="margin-top:8px">'+p.sugg.map(s=>'<div class="s">Your suggestion ('+D(s.at)+'): '+esc(s.note)+' <span class="chip '+(s.status==='new'?'todo':'live')+'">'+({new:'Sent',done:'Done',dismissed:'Reviewed'}[s.status])+'</span></div>').join('')+'</div>':'')
+ +'<div style="margin-top:8px"><button onclick="pSugg(\''+p.id+'\')">Suggest a change</button></div><div id="sb_'+p.id+'" style="display:none" class="cb"><div class="fld"><span>Your name (optional)</span><input id="pw_'+p.id+'" style="width:100%"></div><div class="fld"><span>What would you like changed?</span><textarea id="pn_'+p.id+'" placeholder="Describe the change or paste your suggested wording"></textarea></div><div class="row"><button class="p" onclick="pSend(\''+p.id+'\')">Send suggestion</button><button onclick="pSugg(\''+p.id+'\')">Cancel</button></div></div></div>';
+}
+function pSugg(id){const e=$('sb_'+id);e.style.display=e.style.display==='none'?'':'none'}
+async function pSend(id){const note=$('pn_'+id).value.trim();if(!note)return alert('Please write your suggestion first');
+ const{error}=await sb.rpc('client_suggest',{tok:PT.tok,pid:id,note,who:$('pw_'+id).value.trim()});if(error)return alert('Could not send: '+error.message);alert('Thank you. Your suggestion was sent.');await pBrand(PT.bid,1)}
+function pXlsx(){xlsx(PT.b.pieces.filter(p=>p.status==='live').map(p=>({kind:p.kind,at:p.at,url:p.url,post_url:p.post_url})),PT.b.brand)}
 
 /* ---------- client page ---------- */
 async function bootClient(tok){
@@ -366,6 +433,7 @@ async function bootClient(tok){
  if(SB_URL.startsWith('PASTE')){$('app').innerHTML='<div class="empty"><h2>Almost there</h2><p>Open index.html in a text editor and replace the two PASTE_YOUR lines at the top of the script with your Supabase URL and anon key. The setup guide shows where to find them.</p></div>';return}
  sb=supabase.createClient(SB_URL,SB_KEY);const h=location.hash;
  try{
+  if(h.startsWith('#portal=')){await bootPortal(h.slice(8));return}
   if(h.startsWith('#client=')){await bootClient(h.slice(8));return}
   if(h.startsWith('#open=')){ST.tok=h.slice(6);document.querySelector('header').innerHTML='<span class="logo">Reddit Monitor</span>';await load();draw();setInterval(async()=>{if(!ed()){try{await load();draw(true)}catch(e){}}},30000);return}
  }catch(e){document.querySelector('header').innerHTML='<span class="logo">Reddit Monitor</span>';$('app').innerHTML='<div class="empty">This link is closed or not valid. Ask your admin for a new one.</div>';return}
