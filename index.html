@@ -42,6 +42,17 @@ table{width:100%;border-collapse:collapse;font-size:13px;margin:8px 0 16px}
 th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--ln);vertical-align:top;overflow-wrap:anywhere}th{background:#f9fafb}
 .step{display:flex;gap:10px;align-items:center}.num{width:26px;height:26px;border-radius:50%;background:var(--bl);color:#fff;display:inline-flex;align-items:center;justify-content:center;font-weight:700;font-size:13px}.num.ok{background:var(--gr)}
 .auth{max-width:380px;margin:60px auto}.auth input{width:100%;margin:6px 0}
+.warn{background:#fffbeb;border:1px solid #fde68a;color:#92400e;border-radius:10px;padding:10px 14px;margin:12px 0;font-size:14px}
+.strip{display:flex;gap:12px;align-items:flex-end;flex-wrap:wrap}
+.tb.on{background:#eff6ff;border-color:var(--bl);color:var(--bl);font-weight:600}
+.bar{height:8px;background:#e5e7eb;border-radius:99px;overflow:hidden;min-width:120px}.bar>i{display:block;height:100%;background:var(--gr)}
+.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin:12px 0}.grid3>div{font-size:12px;color:var(--mu)}.grid3 b{display:block;font-size:14px;color:var(--tx);font-weight:600}
+.cat{font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--mu);margin:22px 0 8px}
+.od{display:inline-block;width:9px;height:9px;border-radius:50%;background:#d1d5db;margin-right:6px}.od.y{background:var(--gr)}
+details>summary{cursor:pointer;color:var(--bl);font-size:13px;margin:6px 0}
+.num2{display:inline-block;font-size:12px;font-weight:700;background:#eff6ff;color:var(--bl);border-radius:6px;padding:1px 8px;margin-right:6px}
+#toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%);background:#111827;color:#fff;padding:9px 16px;border-radius:99px;font-size:14px;opacity:0;pointer-events:none;transition:opacity .2s;z-index:50}#toast.show{opacity:1}
+@media(max-width:600px){header,nav{padding:10px 14px}main{padding:18px 14px 60px}h1{font-size:23px}}
 </style></head><body>
 <header><span class="logo">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -50,7 +61,7 @@ const SB_URL='https://fkrgiaeglingmogcsyik.supabase.co',SB_KEY='sb_publishable_A
 const $=id=>document.getElementById(id),DAY=864e5;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const D=t=>t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-';
-const ST={tab:'brands',bid:null,brands:[],tasks:[],pieces:[],profiles:[],clients:[],sugg:[],hold:0,edit:null,tok:'',obrand:null};
+const ST={tab:'brands',bid:null,brands:[],tasks:[],pieces:[],profiles:[],clients:[],sugg:[],sessions:[],sessErr:0,panel:'',tf:'all',hold:0,edit:null,tok:'',obrand:null};
 let sb,me=null,PA=[],CB=[{t:'',l:'',att:[]}];
 const base=()=>location.href.split('#')[0];
 const norm=u=>(u||'').trim().split(/[?#]/)[0].replace(/\/+$/,'').replace(/^https?:\/\/(?:old\.|new\.|np\.|www\.)?reddit\.com/i,'https://www.reddit.com');
@@ -60,7 +71,8 @@ const CH={todo:'To do',checking:'Confirming',live:'Live',removed:'Deleted'};
 const chip=s=>'<span class="chip '+s+'">'+CH[s]+'</span>';
 const pieceOf=id=>ST.pieces.find(p=>p.id===id);
 const ed=()=>document.activeElement&&/INPUT|TEXTAREA|SELECT/.test(document.activeElement.tagName);
-async function copy(t,m){try{await navigator.clipboard.writeText(t);alert((m||'Copied')+' to your clipboard.')}catch(e){prompt('Copy this:',t)}}
+function toast(m){let e=$('toast');if(!e){e=document.createElement('div');e.id='toast';document.body.appendChild(e)}e.textContent=m;e.className='show';clearTimeout(toast.t);toast.t=setTimeout(()=>{e.className=''},2200)}
+async function copy(t,m){try{await navigator.clipboard.writeText(t);toast((m||'Copied')+' to your clipboard')}catch(e){prompt('Copy this:',t)}}
 
 /* ---------- files ---------- */
 const attHtml=(a,fn)=>a.map((x,i)=>'<span class="chip at">'+(/^image/.test(x.t)?'<img src="'+x.d+'" alt="" height="22"> ':'')+esc(x.n)+(fn?' <button onclick="'+fn.replace('#',i)+'" aria-label="Remove attachment">&#10005;</button>':'')+'</span>').join(' ');
@@ -73,15 +85,24 @@ const media=p=>(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>
 /* ---------- data ---------- */
 async function load(){
  if(ST.tok){const{data,error}=await sb.rpc('open_brand',{tok:ST.tok});if(error||!data)throw new Error('closed');ST.obrand=data.brand;ST.tasks=data.tasks;ST.pieces=data.pieces;return}
- const[b,t,p,pr,cl,sg]=await Promise.all([sb.from('brands').select('*').order('created_at'),sb.from('tasks').select('*').order('created_at'),sb.from('pieces').select('*').order('sort'),sb.from('profiles').select('*').order('created_at'),sb.from('clients').select('*').order('created_at'),sb.from('suggestions').select('*').order('created_at',{ascending:false})]);
- ST.brands=b.data||[];ST.tasks=t.data||[];ST.pieces=p.data||[];ST.profiles=pr.data||[];ST.clients=cl.data||[];ST.sugg=sg.data||[];
+ const[b,t,p,pr,cl,sg,se]=await Promise.all([sb.from('brands').select('*').order('created_at'),sb.from('tasks').select('*').order('created_at'),sb.from('pieces').select('*').order('sort'),sb.from('profiles').select('*').order('created_at'),sb.from('clients').select('*').order('created_at'),sb.from('suggestions').select('*').order('created_at',{ascending:false}),(me&&me.role==='admin'?sb.from('sessions').select('*').order('started_at',{ascending:false}).limit(1500):Promise.resolve({data:[]}))]);
+ ST.brands=b.data||[];ST.tasks=t.data||[];ST.pieces=p.data||[];ST.profiles=pr.data||[];ST.clients=cl.data||[];ST.sugg=sg.data||[];ST.sessions=se.data||[];ST.sessErr=se.error?1:0;
 }
 const dots=p=>{if(!p.hist||!p.published_at)return'';const pub=+new Date(p.published_at),m={};p.hist.forEach(h=>{m[Math.floor((h.t-pub)/DAY)]=h.s});return Object.keys(m).sort((a,b)=>a-b).slice(-30).map(k=>'<i class="dt '+m[k]+'" title="Day '+(+k+1)+': '+m[k]+'"></i>').join('')};
 const bname=id=>(ST.brands.find(b=>b.id===id)||{}).name||'';
 const pname=id=>{const u=ST.profiles.find(x=>x.id===id);return u?u.name:''};
-const tlabel=t=>t.label||((ST.pieces.find(p=>p.task_id===t.id&&p.ptitle)||{}).ptitle)||t.thread||'Task';
+const tlabel=t=>t.label||((ST.pieces.find(p=>p.task_id===t.id&&p.ptitle)||{}).ptitle)||(t.sub?'Thread in r/'+t.sub:'Task');
+/* categories and numbering: every task is numbered inside its category */
+const CATS=[['post','New posts','Post'],['comment','Comments on existing threads','Comment']];
+const catOf=t=>ST.pieces.some(p=>p.task_id===t.id&&p.kind==='post')?'post':'comment';
+function numbered(bid){const c={post:0,comment:0},m={};ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{const k=catOf(t);c[k]++;m[t.id]={k,n:c[k]}});return m}
+const tnum=(t,m)=>{const x=m[t.id];return x?CATS.find(c=>c[0]===x.k)[2]+' '+x.n:''};
+const catName=k=>CATS.find(c=>c[0]===k)[1];
+function overdueN(){const t=Date.now()-5*6e4;return ST.pieces.filter(p=>p.url&&(p.status==='checking'||p.status==='live')&&p.next_check&&+new Date(p.next_check)<t).length}
+const banner=()=>{const n=overdueN();return n?'<div class="warn"><b>'+n+' check'+(n>1?'s are':' is')+' overdue.</b> Your Reddit checker is probably not running. Open a logged-in <b>www.reddit.com</b> tab in Brave (with the Viko Reddit Checker script on). It will catch up by itself.</div>':''};
 
 /* ---------- piece card ---------- */
+const DV=p=>(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p);
 function pc(p,adm){
  if(adm&&ST.edit===p.id)return '<div class="pc cb"><b>Edit '+(p.kind==='post'?'post':'comment')+' draft</b>'+(p.kind==='post'?'<div class="fld"><span>Title</span><input id="et" style="width:100%" value="'+esc(p.ptitle||'')+'"></div>':'')+'<div class="fld"><span>Text</span><textarea id="eb" style="min-height:150px">'+esc(p.body||'')+'</textarea></div><div class="row"><button class="p" onclick="saveEd(\''+p.id+'\')">Save</button><button onclick="ST.edit=null;draw(true)">Cancel</button></div></div>';
  const h=p.hist||[],err=h.length&&h[h.length-1].s==='error',st=p.status;
@@ -90,7 +111,7 @@ function pc(p,adm){
  +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">View</a>':'')
  +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
  +(adm&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+(adm?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove piece">&#10005;</button>':'')+'</div></div>'
- +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p)
+ +(p.url?'<details><summary>Show what was published</summary>'+DV(p)+'</details>':DV(p))
  +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies'):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit'+(h[h.length-1].m?' ('+esc(h[h.length-1].m)+')':'')+'</span>':'')+'</div><div>'+dots(p)+'</div>'
  :'<div class="row"><input class="lin" id="l_'+p.id+'" placeholder="Paste the published '+p.kind+' link here" style="flex:1;min-width:220px"><button class="p" onclick="done(\''+p.id+'\')">Done</button></div>')+'</div>';
 }
@@ -128,17 +149,19 @@ async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{da
  for(const p of data||[]){await runCheck(p);await new Promise(r=>setTimeout(r,1200))}if(data&&data.length&&!ed()){await load();draw(true)}}catch(e){}due=0}
 
 /* ---------- excel ---------- */
-function items(bid){const o=[];ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{const ps=ST.pieces.filter(p=>p.task_id===t.id),post=ps.find(p=>p.kind==='post'&&p.url);
- ps.filter(p=>p.url&&p.status==='live').forEach(p=>o.push({kind:p.kind,at:p.published_at,url:p.url,post_url:p.kind==='post'?p.url:(post?post.url:t.thread||'')}))});return o.sort((a,b)=>new Date(a.at)-new Date(b.at))}
-function xlsx(its,name){
- const rows=[['Date made','Type','Link to post','Link to comment','Status']];let np=0,nc=0;
- its.forEach(i=>{i.kind==='post'?np++:nc++;rows.push([D(i.at),i.kind==='post'?'Post':'Comment',i.post_url||'',i.kind==='comment'?i.url:'','Live'])});
- rows.push([]);rows.push(['Total live posts',np]);rows.push(['Total live comments',nc]);rows.push(['Total live',np+nc]);
- const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:14},{wch:10},{wch:60},{wch:60},{wch:10}];
- const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Report');
- XLSX.writeFile(wb,name.replace(/\W+/g,'-')+'-report-'+new Date().toISOString().slice(0,10)+'.xlsx');
+function items(bid,all){const o=[];ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{const ps=ST.pieces.filter(p=>p.task_id===t.id),post=ps.find(p=>p.kind==='post'&&p.url);
+ ps.filter(p=>p.url&&(all?p.status!=='todo':p.status==='live')).forEach(p=>o.push({kind:p.kind,at:p.published_at,url:p.url,status:p.status,sub:t.sub||'',score:p.score,replies:p.replies,post_url:p.kind==='post'?p.url:(post?post.url:t.thread||'')}))});return o.sort((a,b)=>new Date(a.at)-new Date(b.at))}
+const SL={live:'Live',removed:'Deleted',checking:'Confirming'};
+function xlsx(its,name,full){
+ const rows=[['Date made','Type','Link to post','Link to comment','Status','Subreddit','Points','Replies']];const c={live:{post:0,comment:0},removed:{post:0,comment:0},checking:{post:0,comment:0}};
+ its.forEach(i=>{const st=i.status||'live';(c[st]||c.live)[i.kind]++;rows.push([D(i.at),i.kind==='post'?'Post':'Comment',i.post_url||'',i.kind==='comment'?i.url:'',SL[st]||'Live',i.sub?'r/'+i.sub:'',i.score==null?'':i.score,i.replies==null?'':i.replies])});
+ rows.push([]);rows.push(['Total live posts',c.live.post]);rows.push(['Total live comments',c.live.comment]);rows.push(['Total live',c.live.post+c.live.comment]);
+ if(full){rows.push(['Total deleted',c.removed.post+c.removed.comment]);rows.push(['Still being confirmed',c.checking.post+c.checking.comment])}
+ const ws=XLSX.utils.aoa_to_sheet(rows);ws['!cols']=[{wch:14},{wch:10},{wch:60},{wch:60},{wch:12},{wch:20},{wch:8},{wch:8}];
+ const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,full?'Full overview':'Report');
+ XLSX.writeFile(wb,name.replace(/\W+/g,'-')+(full?'-full-overview-':'-report-')+new Date().toISOString().slice(0,10)+'.xlsx');
 }
-const dlBrand=id=>xlsx(items(id),bname(id));
+const dlBrand=(id,full)=>xlsx(items(id,full),bname(id),full);
 
 /* ---------- add task form (admin) ---------- */
 function rP(){if($('pal'))$('pal').innerHTML=attHtml(PA,'delPA(#)')}
@@ -149,7 +172,7 @@ function addCB(){syncCB();CB.push({t:'',l:'',att:[]});rCB()}
 function delCB(i){syncCB();CB.splice(i,1);rCB()}
 function delCA(i,j){syncCB();CB[i].att.splice(j,1);rCB()}
 function scn(){const k=$('kd').value;$('fp').style.display=/^(post|postc)$/.test(k)?'':'none';$('fc').style.display=/^(postc|comment)$/.test(k)?'':'none';$('ft').style.display=k==='comment'?'':'none';$('fk').style.display=k==='track'?'':'none';rP();rCB()}
-const formHtml=()=>'<div class="cb"><h3 style="margin-top:0">Add work</h3><div class="fld"><span>What are we doing?</span><select id="kd" onchange="scn()"><option value="post">New post</option><option value="postc">New post with comments</option><option value="comment">Comments on an existing thread</option><option value="track">Track links that are already published</option></select></div>'
+const formHtml=()=>'<div class="cb"><div class="row" style="margin:0"><h3 style="margin:0">Add work</h3><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><div class="fld"><span>What are we doing?</span><select id="kd" onchange="scn()"><option value="post">New post</option><option value="postc">New post with comments</option><option value="comment">Comments on an existing thread</option><option value="track">Track links that are already published</option></select></div>'
  +'<div class="row"><label><span class="s">Subreddit</span><input id="sb" placeholder="r/devops"></label><label style="flex:1"><span class="s">Task title (optional)</span><input id="lb" style="width:100%"></label></div>'
  +'<div class="fld" id="ft"><span>Link of the thread to comment on</span><input id="th" style="width:100%" placeholder="https://www.reddit.com/r/..."></div>'
  +'<div class="cb" id="fp"><b>Post</b><div class="fld"><span>Title</span><input id="pt" style="width:100%"></div><div class="fld"><span>Body (optional)</span><textarea id="pd" style="min-height:130px"></textarea></div><div class="fld"><span>Image, video or file attachments</span><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(PA,this.files,rP)"></label> <span id="pal"></span></div><div class="fld"><span>Links to include (separate with spaces)</span><input id="pl" style="width:100%"></div></div>'
@@ -168,7 +191,7 @@ async function addTask(){
  if(error)return alert(error.message);
  const{error:e2}=await sb.from('pieces').insert(pcs.map((p,i)=>Object.assign({task_id:t.id,brand_id:ST.bid,sort:i},p)));
  if(e2)return alert(e2.message);
- PA=[];CB=[{t:'',l:'',att:[]}];await load();draw();
+ PA=[];CB=[{t:'',l:'',att:[]}];await load();draw();toast('Task added. You can add another.');
 }
 async function addC(tid){const d=prompt('Paste the comment text');if(!d||!d.trim())return;const t=ST.tasks.find(x=>x.id===tid);await sb.from('pieces').insert({task_id:tid,brand_id:t.brand_id,kind:'comment',body:d.trim(),sort:99});await refresh()}
 async function delTask(id){if(confirm('Remove this task and everything in it?')){await sb.from('tasks').delete().eq('id',id);await refresh()}}
@@ -180,26 +203,45 @@ const lsc=u=>new Promise((res,rej)=>{if(document.querySelector('script[src="'+u+
 function fsave(name,data,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([data],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),500)}
 const stamp=()=>new Date().toISOString().slice(0,10);
 function exportData(bid,scope){
- const out=[];
+ const out=[],m=numbered(bid);
  ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{
-  let ps=ST.pieces.filter(p=>p.task_id===t.id);if(scope==='todo')ps=ps.filter(p=>p.status==='todo');if(!ps.length)return;
-  const post=ST.pieces.find(p=>p.task_id===t.id&&p.kind==='post'&&p.url);
-  out.push({n:out.length+1,label:tlabel(t),sub:t.sub||'',thread:t.thread||(post?post.url:''),items:ps.map(p=>({kind:p.kind,title:p.ptitle||'',text:p.body||'',links:p.links||[],att:p.att||[],status:p.status,url:p.url||''}))})});
+  const all=ST.pieces.filter(p=>p.task_id===t.id);let ps=all;if(scope==='todo')ps=all.filter(p=>p.status==='todo');if(!ps.length)return;
+  const post=all.find(p=>p.kind==='post'),x=m[t.id],r=t.sub?'r/'+t.sub:'the subreddit';
+  out.push({n:out.length+1,tn:tnum(t,m),cat:catName(x.k),label:t.label||'',sub:t.sub||'',items:ps.map(p=>{
+   const b={step:all.indexOf(p)+1,of:all.length,kind:p.kind,links:p.links||[],att:p.att||[],status:p.status,statusTxt:CH[p.status],url:p.url||'',text:p.body||''};
+   if(p.kind==='post')return Object.assign(b,{what:'PUBLISH A NEW POST in '+r+'. Use the post title and post body below.',title:p.ptitle||'',under:'',own:false});
+   if(post)return Object.assign(b,{what:'WRITE A COMMENT under the post you publish in this task'+(post.url?'.':' (step 1). After you publish that post, use its link.'),title:'',under:post.url||'',own:!post.url});
+   return Object.assign(b,{what:'WRITE A COMMENT under the existing post whose link is given. Do NOT create a new post. Copy the comment text exactly.',title:'',under:t.thread||'',own:false});
+  })})});
  return out;
 }
-const HEAD=['Task','Type','Subreddit','Thread link','Title','Text','Links','Attachments','Status','Published link'];
-function toRows(d){const r=[HEAD];d.forEach(t=>t.items.forEach(i=>r.push([t.n,i.kind==='post'?'Post':'Comment','r/'+t.sub,i.kind==='comment'?t.thread:'',i.title,i.text,i.links.join(' '),i.att.map(a=>a.n).join(', '),CH[i.status],i.url])));return r}
-function toText(d){return d.map(t=>['TASK: '+t.label,'SUBREDDIT: r/'+t.sub].concat(t.thread&&!t.items.some(i=>i.kind==='post')?['THREAD: '+t.thread]:[]).concat(t.items.flatMap(i=>(i.kind==='post'?['POST TITLE: '+i.title,'POST BODY: '+i.text]:['COMMENT: '+i.text]).concat(i.links.length?['LINKS: '+i.links.join(' ')]:[]).concat(i.att.length?['ATTACHMENTS: '+i.att.map(a=>a.n).join(', ')]:[]))).concat(['====']).join('\n')).join('\n')}
+const HEAD2=['Task no.','Task','Category','Step','Type','What to do','Subreddit','Post title (new posts only)','Text to publish (post body or comment)','Comment goes under this post (link)','Links to include','Files to attach','Status','Published link'];
+const UNDER_OWN='(the post you publish in step 1 of this task)';
+function toRows(d){const r=[HEAD2];d.forEach(t=>t.items.forEach(i=>r.push([t.n,t.tn+(t.label&&t.label!==t.tn?' - '+t.label:''),t.cat,i.step+' of '+i.of,i.kind==='post'?'New post':'Comment',i.what,t.sub?'r/'+t.sub:'',i.kind==='post'?i.title:'',i.text,i.kind==='comment'?(i.under||UNDER_OWN):'',i.links.join(' '),i.att.map(a=>a.n).join(', '),i.statusTxt,i.url])));return r}
+const READ_ME=['HOW TO READ THIS FILE','Every row is ONE thing to publish on Reddit. Rows with the same Task no. belong together: do them in Step order.','Type = New post: publish a brand-new post using "Post title" and "Text to publish" (the post body).','Type = Comment: open the link in "Comment goes under this post", then write "Text to publish" as a reply under that post. A comment has NO title.','Copy the text exactly as written. If "Links to include" has links, add them. "Files to attach" lists images or files to upload with it.','When you have published something, copy the link of what you published and paste it into the Reddit Monitor app, then press Done.'];
+function toText(d,b){
+ const head=['REDDIT WORK ORDER FOR: '+b.name,'Created '+new Date().toLocaleString()+' | Tasks in this file: '+d.length,''].concat(READ_ME.map((l,i)=>i?'- '+l:l)).concat(['','====','']);
+ const body=d.map(t=>{const l=['TASK: '+t.tn+(t.label&&t.label!==t.tn?' - '+t.label:''),'TASK NUMBER: '+t.n,'CATEGORY: '+t.cat,'SUBREDDIT: '+(t.sub?'r/'+t.sub:'')];
+  t.items.forEach(i=>{l.push('','STEP: '+i.step+' of '+i.of,'WHAT TO DO: '+i.what);
+   if(i.kind==='post'){l.push('POST TITLE: '+i.title,'POST BODY: '+i.text)}
+   else{l.push('POST TO COMMENT UNDER: '+(i.under||UNDER_OWN),'COMMENT TEXT: '+i.text)}
+   if(i.links.length)l.push('LINKS: '+i.links.join(' '));if(i.att.length)l.push('ATTACHMENTS: '+i.att.map(a=>a.n).join(', '));
+   l.push('STATUS: '+i.statusTxt);if(i.url)l.push('PUBLISHED LINK: '+i.url)});
+  return l.concat(['','====','']).join('\n')});
+ return head.join('\n')+'\n'+body.join('\n');
+}
 function dlTasks(fmt){
  const b=ST.brands.find(x=>x.id===ST.bid),d=exportData(b.id,$('dsel').value);if(!d.length)return alert('There are no tasks to download for that choice');
  const nm=b.name.replace(/\W+/g,'-')+'-tasks-'+stamp();
- if(fmt==='xlsx'){const ws=XLSX.utils.aoa_to_sheet(toRows(d));ws['!cols']=[6,10,16,45,40,70,35,25,12,45].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,nm+'.xlsx')}
- else if(fmt==='json')fsave(nm+'.json',JSON.stringify({brand:b.name,exported:new Date().toISOString(),tasks:d.map(t=>({task:t.n,label:t.label,subreddit:t.sub,thread_to_comment_on:t.thread,items:t.items.map(i=>({type:i.kind,title:i.title,text:i.text,links:i.links,attachments:i.att.map(a=>({name:a.n,type:a.t,data_url:a.d})),status:i.status,published_link:i.url}))}))},null,2),'application/json');
- else fsave(nm+'.txt',toText(d),'text/plain');
+ if(fmt==='xlsx'){const ws=XLSX.utils.aoa_to_sheet(toRows(d));ws['!cols']=[8,26,26,9,11,52,18,40,70,52,30,24,12,45].map(w=>({wch:w}));const rd=XLSX.utils.aoa_to_sheet(READ_ME.map(x=>[x]));rd['!cols']=[{wch:140}];const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.utils.book_append_sheet(wb,rd,'How to read');XLSX.writeFile(wb,nm+'.xlsx')}
+ else if(fmt==='json')fsave(nm+'.json',JSON.stringify({brand:b.name,created:new Date().toISOString(),how_to_read:READ_ME,tasks:d.map(t=>({task_number:t.n,task:t.tn+(t.label&&t.label!==t.tn?' - '+t.label:''),category:t.cat,subreddit:t.sub?'r/'+t.sub:'',steps:t.items.map(i=>{const o={step:i.step+' of '+i.of,type:i.kind==='post'?'new_post':'comment',what_to_do:i.what};
+  if(i.kind==='post'){o.post_title=i.title;o.post_body=i.text}else{o.comment_goes_under_post=i.under||UNDER_OWN;o.comment_text=i.text}
+  o.links_to_include=i.links;o.files_to_attach=i.att.map(a=>({name:a.n,type:a.t,data_url:a.d}));o.status=i.statusTxt;o.published_link=i.url;return o})}))},null,2),'application/json');
+ else fsave(nm+'.txt',toText(d,b),'text/plain');
 }
-const dlHtml=b=>'<h3>Download tasks</h3><p class="s">Get this brand&rsquo;s tasks in a neat, ordered file to feed to your posting tool. Excel gives one row per post or comment, JSON suits automation (attachments included), Text is a plain readable version.</p><div class="row"><select id="dsel"><option value="todo">Only tasks still to publish</option><option value="all">All tasks</option></select><button class="p" onclick="dlTasks(\'xlsx\')">Excel</button><button onclick="dlTasks(\'json\')">JSON</button><button onclick="dlTasks(\'txt\')">Text</button></div>';
+const dlHtml=b=>'<div class="cb"><div class="row" style="margin:0"><b>Download tasks</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">A clear work order for whoever publishes (a person or your posting tool). Every step says exactly what to do. <b>New posts</b> show the post title and post body. <b>Comments</b> show the link of the post to comment under and the comment text, with no title. Excel also has a &ldquo;How to read&rdquo; sheet.</p><div class="row"><select id="dsel"><option value="todo">Only tasks still to publish</option><option value="all">All tasks (including published)</option></select><button class="p" onclick="dlTasks(\'xlsx\')">Excel</button><button onclick="dlTasks(\'json\')">JSON</button><button onclick="dlTasks(\'txt\')">Text</button></div></div>';
 function parseText(s){
- const tasks=[],MK=/^\s*(TASK|SUBREDDIT|THREAD|POST TITLE|TITLE|POST BODY|BODY|COMMENT|LINKS|ATTACHMENTS)\s*:\s*(.*)$/i;let t=null,cur=null,last=null;
+ const tasks=[],MK=/^\s*(TASK NUMBER|TASK|CATEGORY|STEP|WHAT TO DO|SUBREDDIT|THREAD|POST TO COMMENT UNDER|POST TITLE|TITLE|POST BODY|BODY|COMMENT TEXT|COMMENT|LINKS|ATTACHMENTS|STATUS|PUBLISHED LINK)\s*:\s*(.*)$/i;let t=null,cur=null,last=null;
  const nt=()=>{t={label:'',sub:'',thread:'',pieces:[]};tasks.push(t);cur=null;last=null};
  const post=()=>{let p=t.pieces.find(x=>x.kind==='post');if(!p){p={kind:'post',ptitle:'',body:'',links:[]};t.pieces.unshift(p)}return p};
  s.split(/\r?\n/).forEach(line=>{
@@ -209,10 +251,10 @@ function parseText(s){
    if(k==='TASK'){nt();t.label=v.trim();return}
    if(!t)nt();
    if(k==='SUBREDDIT'){t.sub=v.trim().replace(/^r\//i,'');cur=null}
-   else if(k==='THREAD'){t.thread=norm(v);cur=null}
+   else if(k==='THREAD'||k==='POST TO COMMENT UNDER'){if(/reddit\.com\/r\//i.test(v))t.thread=norm(v);cur=null}
    else if(k==='POST TITLE'||k==='TITLE'){const p=post();p.ptitle=v.trim();last=p;cur={o:p,f:'ptitle'}}
    else if(k==='POST BODY'||k==='BODY'){const p=post();p.body=v;last=p;cur={o:p,f:'body'}}
-   else if(k==='COMMENT'){const p={kind:'comment',body:v,links:[]};t.pieces.push(p);last=p;cur={o:p,f:'body'}}
+   else if(k==='COMMENT'||k==='COMMENT TEXT'){const p={kind:'comment',body:v,links:[]};t.pieces.push(p);last=p;cur={o:p,f:'body'}}
    else if(k==='LINKS'){if(last)last.links=last.links.concat(lk(v));cur=null}
    else cur=null;
    return}
@@ -225,14 +267,14 @@ function rowsToTasks(rows){
  const key=(r,n)=>{for(const k of Object.keys(r))if(n.includes(k.trim().toLowerCase()))return String(r[k]).trim();return''};
  const tasks=[],groups={};let t=null;
  rows.forEach(r=>{
-  const g=key(r,['task','task id','task #','group']),ty=key(r,['type','kind']).toLowerCase(),sub=key(r,['subreddit','sub']).replace(/^r\//i,''),th=key(r,['thread link','thread','parent post','post link']),ti=key(r,['title','post title']),tx=key(r,['text','body','comment','content','draft']),ln=key(r,['links','link']);
+  const g=key(r,['task no.','task','task id','task #','group']),ty=key(r,['type','kind']).toLowerCase(),sub=key(r,['subreddit','sub']).replace(/^r\//i,''),th=key(r,['comment goes under this post (link)','thread link','thread','parent post','post link']),ti=key(r,['title','post title','post title (new posts only)']),tx=key(r,['text to publish (post body or comment)','text','body','comment','content','draft']),ln=key(r,['links to include','links','link']);
   if(!ti&&!tx&&!th)return;
   const kind=ty.includes('comment')?'comment':ty.includes('post')?'post':ti?'post':'comment';let tk;
   if(g&&groups[g])tk=groups[g];
-  else if(!g&&kind==='comment'&&t&&(!th||t.thread===norm(th)))tk=t;
-  else{tk={label:g&&isNaN(g)?g:'',sub,thread:kind==='comment'?norm(th):'',pieces:[]};tasks.push(tk);if(g)groups[g]=tk}
+  else if(!g&&kind==='comment'&&t&&(!/reddit\.com/i.test(th)||t.thread===norm(th)))tk=t;
+  else{tk={label:g&&isNaN(g)?g:'',sub,thread:kind==='comment'&&/reddit\.com/i.test(th)?norm(th):'',pieces:[]};tasks.push(tk);if(g)groups[g]=tk}
   if(!tk.sub)tk.sub=sub;
-  if(kind==='comment'&&th&&!tk.pieces.some(p=>p.kind==='post'))tk.thread=norm(th);
+  if(kind==='comment'&&/reddit\.com/i.test(th)&&!tk.pieces.some(p=>p.kind==='post'))tk.thread=norm(th);
   tk.pieces.push(kind==='post'?{kind,ptitle:ti,body:tx,links:lk(ln)}:{kind,body:tx,links:lk(ln)});t=tk;
  });
  return tasks;
@@ -272,11 +314,15 @@ async function doImport(){
  IMP=[];$('imp').innerHTML='';await load();draw();alert(ok.length+' task(s) imported.');
 }
 function dlTemplate(kind){
- if(kind==='xlsx'){const r=[HEAD.slice(0,7),[1,'Post','r/devops','','Best CRM for a 10-person team?','Body of the post goes here.','https://example.com'],[1,'Comment','r/devops','','','First comment on that post.',''],[1,'Comment','r/devops','','','Second comment on that post.',''],[2,'Comment','r/saas','https://www.reddit.com/r/saas/comments/abc123/some_thread/','','A comment on an existing thread.','']];
-  const ws=XLSX.utils.aoa_to_sheet(r);ws['!cols']=[6,10,16,50,40,70,35].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,'tasks-template.xlsx')}
- else fsave('tasks-template.txt','TASK: Example post with two comments\nSUBREDDIT: r/devops\nPOST TITLE: Best CRM for a 10-person team?\nPOST BODY: The body of the post goes here.\nIt can run over several lines.\nLINKS: https://example.com\nCOMMENT: First comment on that post.\nCOMMENT: Second comment on that post.\n====\nTASK: Comment on an existing thread\nSUBREDDIT: r/saas\nTHREAD: https://www.reddit.com/r/saas/comments/abc123/some_thread/\nCOMMENT: Your comment text goes here.\n====\n','text/plain');
+ if(kind==='xlsx'){const r=[HEAD2,
+  [1,'Post 1','New posts','1 of 3','New post','PUBLISH A NEW POST in r/devops. Use the post title and post body below.','r/devops','Best CRM for a 10-person team?','Body of the post goes here.','','https://example.com','','To do',''],
+  [1,'Post 1','New posts','2 of 3','Comment','WRITE A COMMENT under the post you publish in this task.','r/devops','','First comment on that post.',UNDER_OWN,'','','To do',''],
+  [1,'Post 1','New posts','3 of 3','Comment','WRITE A COMMENT under the post you publish in this task.','r/devops','','Second comment on that post.',UNDER_OWN,'','','To do',''],
+  [2,'Comment 1','Comments on existing threads','1 of 1','Comment','WRITE A COMMENT under the existing post whose link is given.','r/saas','','A comment on an existing thread.','https://www.reddit.com/r/saas/comments/abc123/some_thread/','','','To do','']];
+  const ws=XLSX.utils.aoa_to_sheet(r);ws['!cols']=[8,26,26,9,11,52,18,40,70,52,30,24,12,45].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,'tasks-template.xlsx')}
+ else fsave('tasks-template.txt','TASK: Post with two comments\nSUBREDDIT: r/devops\nPOST TITLE: Best CRM for a 10-person team?\nPOST BODY: The body of the post goes here.\nIt can run over several lines.\nLINKS: https://example.com\nCOMMENT TEXT: First comment on that post.\nCOMMENT TEXT: Second comment on that post.\n====\nTASK: Comment on an existing post\nSUBREDDIT: r/saas\nPOST TO COMMENT UNDER: https://www.reddit.com/r/saas/comments/abc123/some_thread/\nCOMMENT TEXT: Your comment text goes here.\n====\n','text/plain');
 }
-const importHtml=()=>'<div class="cb"><b>Import tasks from a file</b><p class="s">Upload an Excel, CSV, Word (.docx), PDF or text file that follows the template layout. You will see a preview and can confirm before anything is added.</p><div class="row"><label class="btn">Choose file<input type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md" hidden onchange="onFile(this)"></label><button onclick="dlTemplate(\'xlsx\')">Excel template</button><button onclick="dlTemplate(\'txt\')">Text / Word template</button></div><div id="imp"></div></div>';
+const importHtml=()=>'<div class="cb"><div class="row" style="margin:0"><b>Import tasks from a file</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Upload an Excel, CSV, Word (.docx), PDF or text file that follows the template layout. You will see a preview and can confirm before anything is added.</p><div class="row"><label class="btn">Choose file<input type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md" hidden onchange="onFile(this)"></label><button onclick="dlTemplate(\'xlsx\')">Excel template</button><button onclick="dlTemplate(\'txt\')">Text / Word template</button></div><div id="imp"></div></div>';
 
 /* ---------- brands (admin) ---------- */
 async function newBrand(){const n=prompt('Brand name');if(!n||!n.trim())return;const{data,error}=await sb.from('brands').insert({name:n.trim()}).select().single();if(error)return alert(error.message);ST.bid=data.id;await load();draw()}
@@ -287,33 +333,53 @@ async function goLive(){
  const acc=$('acc').value,asg=acc==='member'?$('asg').value:null;
  if(!ST.pieces.some(p=>p.brand_id===ST.bid))return alert('Add some work first (step 2)');
  if(acc==='member'&&!asg)return alert('Pick a team member. They need to create an account first (Team tab).');
- const{error}=await sb.from('brands').update({status:'live',access:acc,assignee:asg}).eq('id',ST.bid);if(error)return alert(error.message);await refresh();
+ const{error}=await sb.from('brands').update({status:'live',access:acc,assignee:asg}).eq('id',ST.bid);if(error)return alert(error.message);ST.panel='';await refresh();toast('Brand is live');
 }
 async function pause(){await sb.from('brands').update({status:'draft'}).eq('id',ST.bid);await refresh()}
 function accTxt(b){return b.access==='open'?'Anyone with the work link can publish.':b.access==='member'?'Assigned to '+esc(pname(b.assignee))+'.':'Assigned to you (admin).'}
+function assignHtml(b){
+ const live=b.status==='live',oLink=base()+'#open='+b.open_token;
+ const mem=actMem().map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.email)+')</option>').join('');
+ const head='<div class="row" style="margin:0"><b>'+(live?'Who does this work':'Assign and go live')+'</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div>';
+ return '<div class="cb">'+head+(live?'<p><b>Live.</b> '+accTxt(b)+'</p>'+(b.access==='open'?'<div class="row"><span class="s">Work link (anyone who has it can publish):</span><button onclick="copy(\''+oLink+'\',\'Work link copied\')">Copy work link</button></div>':'')+'<div class="row"><label><span class="s">Change who does this work</span><select id="acc" onchange="accUI()"><option value="admin"'+(b.access==='admin'?' selected':'')+'>Me (admin)</option><option value="member"'+(b.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(b.access==='open'?' selected':'')+'>Anyone with the link</option></select></label><label id="asgw" style="display:'+(b.access==='member'?'':'none')+'"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+actMem().map(u=>'<option value="'+u.id+'"'+(b.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label><button class="p" onclick="reassign()">Save</button></div><p class="s">You can also assign each task to a different person in the Drafts list.</p><button onclick="pause()">Pause (back to draft)</button>'
+ :'<div class="row"><label><span class="s">Who does this work?</span><select id="acc" onchange="accUI()"><option value="admin">Me (admin)</option><option value="member">A team member</option><option value="open">Anyone with the link</option></select></label><label id="asgw" style="display:none"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+mem+'</select></label></div><button class="p" onclick="goLive()">Go live</button>')+'</div>';
+}
+const pn=x=>{ST.panel=ST.panel===x?'':x;draw()};
+function panelHtml(b){const k=ST.panel;
+ return k==='add'?formHtml():k==='import'?importHtml():k==='download'?dlHtml(b):k==='assign'?assignHtml(b):k==='sugg'?'<div class="cb"><div class="row" style="margin:0"><b>Client suggestions</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Suggestions from your client are kept here, separate from the drafts. Nothing changes until you apply it.</p><div id="sg">'+sugHtml(b)+'</div></div>':''}
 function brandPage(){
  const b=ST.brands.find(x=>x.id===ST.bid);if(!b){ST.bid=null;return brandsView()}
- const ts=ST.tasks.filter(t=>t.brand_id===b.id),live=b.status==='live';
- const mem=actMem().map(u=>'<option value="'+u.id+'">'+esc(u.name)+' ('+esc(u.email)+')</option>').join('');
- const oLink=base()+'#open='+b.open_token,cLink=base()+'#client='+b.client_token;
- return '<button onclick="ST.bid=null;draw()">&larr; All brands</button><div class="row"><h1 style="margin:0">'+esc(b.name)+'</h1><span class="chip '+(live?'live':'todo')+'">'+(live?'Live':'Draft')+'</span><button onclick="renBrand()">Rename</button><button onclick="delBrand()">Delete</button></div>'
- +'<div class="step"><span class="num ok">1</span><b>Brand name</b><span class="s">done</span></div>'
- +'<div class="step" style="margin-top:14px"><span class="num '+(ts.length?'ok':'')+'">2</span><b>Add the work</b></div>'+formHtml()+importHtml()
- +'<div class="step" style="margin-top:14px"><span class="num '+(live?'ok':'')+'">3</span><b>Assign and go live</b></div><div class="cb">'
- +(live?'<p style="margin-top:0"><b>Live.</b> '+accTxt(b)+'</p>'+(b.access==='open'?'<div class="row"><span class="s">Work link (anyone who has it can publish):</span><button onclick="copy(\''+oLink+'\',\'Work link copied\')">Copy work link</button></div>':'')+'<div class="row"><label><span class="s">Change who does this work</span><select id="acc" onchange="accUI()"><option value="admin"'+(b.access==='admin'?' selected':'')+'>Me (admin)</option><option value="member"'+(b.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(b.access==='open'?' selected':'')+'>Anyone with the link</option></select></label><label id="asgw" style="display:'+(b.access==='member'?'':'none')+'"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+actMem().map(u=>'<option value="'+u.id+'"'+(b.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label><button class="p" onclick="reassign()">Save</button></div><p class="s">You can also assign each task to a different person in the Tracking list below.</p><button onclick="pause()">Pause (back to draft)</button>'
- :'<div class="row"><label><span class="s">Who does this work?</span><select id="acc" onchange="accUI()"><option value="admin">Me (admin)</option><option value="member">A team member</option><option value="open">Anyone with the link</option></select></label><label id="asgw" style="display:none"><span class="s">Team member</span><select id="asg"><option value="">Choose...</option>'+mem+'</select></label></div><button class="p" onclick="goLive()">Go live</button>')+'</div>'
- +dlHtml(b)+'<h3>Tracking</h3><div id="bl">'+listHtml(b)+'</div>'+'<h3>Client suggestions</h3><p class="s">Suggestions from your client are kept here, separate from the drafts. Nothing changes until you apply it.</p><div id="sg">'+sugHtml(b)+'</div>'
- +'<h3>Client</h3><div class="row"><label><span class="s">This brand belongs to</span><select onchange="setClient(this.value)"><option value="">No client</option>'+ST.clients.map(c=>'<option value="'+c.id+'"'+(b.client_id===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+(ST.clients.find(c=>c.id===b.client_id)?'<button class="p" onclick="copy(\''+plink(ST.clients.find(c=>c.id===b.client_id))+'\',\'Client link copied\')">Copy client link (all their brands)</button>':'')+'</div><p class="s">Create clients in the Clients tab. The client link shows live, pending and draft work and lets the client send suggestions.</p><div class="row"><span class="s">Single-brand report link (live items only):</span><button onclick="copy(\''+cLink+'\',\'Link copied\')">Copy</button><a class="btn" href="'+cLink+'" target="_blank" rel="noopener">Preview</a></div>';
+ const live=b.status==='live',cl=ST.clients.find(c=>c.id===b.client_id),cLink=base()+'#client='+b.client_token;
+ const nd=ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='todo').length,nsg=ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length;
+ const tb=(k,l)=>'<button class="tb'+(ST.panel===k?' on':'')+'" onclick="pn(\''+k+'\')">'+l+'</button>';
+ return '<button onclick="ST.bid=null;ST.panel=\'\';draw()">&larr; All brands</button><div class="row"><h1 style="margin:0">'+esc(b.name)+'</h1><span class="chip '+(live?'live':'todo')+'">'+(live?'Live':'Draft')+'</span><span class="s">'+accTxt(b)+'</span><span style="flex:1"></span><button onclick="renBrand()">Rename</button><button onclick="delBrand()">Delete</button></div>'
+ +'<div class="cb strip"><label><span class="s">This brand belongs to</span><select onchange="setClient(this.value)"><option value="">No client</option>'+ST.clients.map(c=>'<option value="'+c.id+'"'+(b.client_id===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'
+ +(cl?'<button class="p" onclick="copy(\''+plink(cl)+'\',\'Client link copied\')">Copy client link (all their brands)</button><a class="btn" href="'+plink(cl)+'" target="_blank" rel="noopener">Preview client page</a>':'<span class="s">No client chosen yet. Create clients in the Clients tab.</span>')
+ +'<span style="flex:1"></span><button title="Live items only" onclick="copy(\''+cLink+'\',\'Report link copied\')">Copy single-brand report link</button></div>'
+ +(live?'':'<div class="warn">This brand is a <b>draft</b>, so nobody can publish yet. Add the work, then press <b>Assign &amp; go live</b>.</div>')
+ +'<div class="row"><button class="p tb'+(ST.panel==='add'?' on':'')+'" onclick="pn(\'add\')">+ Add work</button>'+tb('drafts','Drafts ('+nd+')')+tb('import','Import tasks')+tb('download','Download tasks')+tb('assign',live?'Assignment':'Assign &amp; go live')+tb('sugg','Client suggestions'+(nsg?' ('+nsg+')':''))+'</div>'
+ +panelHtml(b)+'<div id="bl">'+listHtml(b)+'</div>';
+}
+function taskCard(t,mode,m){
+ const ps=ST.pieces.filter(p=>p.task_id===t.id),drf=mode==='drafts',shown=drf?ps.filter(p=>!p.url):ps.filter(p=>p.url&&(ST.tf==='all'||p.status===ST.tf));
+ if(!shown.length)return '';
+ return '<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t"><span class="num2">'+esc(tnum(t,m))+'</span>'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment under <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this post</a>':'')+(t.assignee?' &middot; assigned to '+esc(pname(t.assignee)):'')+'</div></div><div class="a">'+(drf?asgSel(t)+'<button onclick="addC(\''+t.id+'\')">+ Comment</button>':'')+'<button onclick="delTask(\''+t.id+'\')">Delete task</button></div></div>'+shown.map(p=>pc(p,true)).join('')+'</div>';
 }
 function listHtml(b){
- const ts=ST.tasks.filter(t=>t.brand_id===b.id),its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
- return '<div class="kpi"><div><b class="gr">'+np+'</b>live posts</div><div><b class="gr">'+nc+'</b>live comments</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='removed').length+'</b>deleted</div><div><b>'+ST.pieces.filter(p=>p.brand_id===b.id&&p.status==='todo').length+'</b>to publish</div></div>'
- +'<div class="row"><button class="p" onclick="dlBrand(\''+b.id+'\')">Download Excel report</button></div>'
- +(ts.length?ts.map(t=>'<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">thread</a>':'')+'</div></div><div class="a">'+asgSel(t)+'<button onclick="addC(\''+t.id+'\')">+ Comment</button><button onclick="delTask(\''+t.id+'\')">Delete task</button></div></div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,true)).join('')+'</div>').join(''):'<div class="empty">No work added yet.</div>');
+ const m=numbered(b.id),ps=ST.pieces.filter(p=>p.brand_id===b.id),n=s=>ps.filter(p=>p.status===s).length,its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
+ const kp='<div class="kpi"><div><b class="gr">'+np+'</b>live posts</div><div><b class="gr">'+nc+'</b>live comments</div><div><b class="bl">'+n('checking')+'</b>confirming</div><div><b class="rd">'+n('removed')+'</b>deleted</div><div><b class="am">'+n('todo')+'</b>drafts to publish</div></div>';
+ const rp='<div class="row"><button class="p" onclick="dlBrand(\''+b.id+'\')">Download report (live only)</button><button onclick="dlBrand(\''+b.id+'\',1)">Full overview (with deleted)</button></div>';
+ const groups=mode=>CATS.map(c=>{const cards=ST.tasks.filter(t=>t.brand_id===b.id&&m[t.id]&&m[t.id].k===c[0]).map(t=>taskCard(t,mode,m)).join('');return cards?'<div class="cat">'+c[1]+'</div>'+cards:''}).join('');
+ const drafts=ST.panel==='drafts'?'<div class="cb"><div class="row" style="margin:0"><b>Drafts waiting to be published ('+n('todo')+')</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div>'+(groups('drafts')||'<div class="empty" style="margin-top:12px">No drafts waiting. Use <b>+ Add work</b> to add some.</div>')+'</div>':'';
+ const chips=[['all','All'],['live','Live'],['checking','Confirming'],['removed','Deleted']].map(f=>'<button class="tb'+(ST.tf===f[0]?' on':'')+'" onclick="ST.tf=\''+f[0]+'\';draw(true)">'+f[1]+' ('+(f[0]==='all'?ps.filter(p=>p.url).length:n(f[0]))+')</button>').join('');
+ const trk=groups('track');
+ return banner()+kp+rp+drafts+'<h3>Tracking</h3><div class="row" style="margin-top:0">'+chips+'</div>'+(trk||'<div class="empty">Nothing here yet. When a link is published it appears here and is checked automatically.</div>');
 }
 function brandsView(){
- return '<div class="row"><h1 style="margin:0;flex:1">Brands</h1><button class="p" onclick="newBrand()">+ New brand</button></div>'
- +(ST.brands.length?ST.brands.map(b=>{const its=items(b.id);return '<div class="card" onclick="ST.bid=\''+b.id+'\';draw()"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="s">'+its.length+' live</span>'+(ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length?'<span class="chip todo">'+ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length+' suggestion(s)</span>':'')+'<span class="chip '+(b.status==='live'?'live':'todo')+'">'+(b.status==='live'?'Live':'Draft')+'</span></div></div>'}).join(''):'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p><button class="p" onclick="newBrand()">Add your first brand</button></div>');
+ return banner()+'<div class="row"><h1 style="margin:0;flex:1">Brands</h1><button class="p" onclick="newBrand()">+ New brand</button></div>'
+ +(ST.brands.length?ST.brands.map(b=>{const ps=ST.pieces.filter(p=>p.brand_id===b.id),n=s=>ps.filter(p=>p.status===s).length,cl=ST.clients.find(c=>c.id===b.client_id),ns=ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length;
+  return '<div class="card" onclick="ST.bid=\''+b.id+'\';ST.panel=\'\';ST.tf=\'all\';draw()"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+esc(b.name)+'</div><div class="s">'+(cl?'Client: '+esc(cl.name):'No client yet')+' &middot; '+n('live')+' live &middot; '+n('checking')+' confirming &middot; '+n('removed')+' deleted &middot; '+n('todo')+' drafts</div></div>'+(ns?'<span class="chip todo">'+ns+' suggestion(s)</span>':'')+'<span class="chip '+(b.status==='live'?'live':'todo')+'">'+(b.status==='live'?'Live':'Draft')+'</span></div></div>'}).join('')
+ :'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p><button class="p" onclick="newBrand()">Add your first brand</button></div>');
 }
 async function setRole(id,r){await sb.from('profiles').update({role:r}).eq('id',id);await refresh()}
 
@@ -343,10 +409,37 @@ async function setStatus(id,s){
  if(s==='blocked'){await sb.from('tasks').update({assignee:null}).eq('assignee',id);await sb.from('brands').update({access:'admin',assignee:null}).eq('assignee',id)}
  const{error}=await sb.from('profiles').update({status:s}).eq('id',id);if(error)return alert(error.message);await refresh()}
 function expel(id){const u=ST.profiles.find(x=>x.id===id);if(confirm('Expel '+u.name+'? They lose access immediately and their tasks become unassigned.'))setStatus(id,'blocked')}
+const fmtD=x=>{x=Math.round(x||0);if(x<60)return x+' sec';const m=Math.floor(x/60);return m<60?m+' min':Math.floor(m/60)+' h '+(m%60)+' min'};
+const TT=t=>t?new Date(t).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'never';
+function actOf(u){
+ const ss=ST.sessions.filter(x=>x.profile_id===u.id),now=Date.now(),sod=new Date();sod.setHours(0,0,0,0);
+ const sum=f=>ss.filter(x=>+new Date(x.started_at)>=f).reduce((a,x)=>a+(x.active_seconds||0),0),l=ss[0];
+ return{n:ss.length,l,lastIn:l&&l.started_at,online:!!l&&!l.ended_at&&now-+new Date(l.last_seen)<3*6e4,today:sum(+sod),week:sum(now-7*DAY),total:sum(0)}
+}
+function workOf(u){
+ const ts=ST.tasks.filter(t=>{const b=ST.brands.find(x=>x.id===t.brand_id);return b&&b.status==='live'&&(t.assignee===u.id||(!t.assignee&&((b.access==='member'&&b.assignee===u.id)||(b.access==='admin'&&me&&u.id===me.id))))});
+ const ids=new Set(ts.map(t=>t.id)),ps=ST.pieces.filter(p=>ids.has(p.task_id)),c=x=>ps.filter(p=>p.status===x).length,by=ST.pieces.filter(p=>p.submitted_by===u.id).sort((a,b)=>new Date(b.published_at)-new Date(a.published_at));
+ return{ts,ps,total:ps.length,todo:c('todo'),conf:c('checking'),live:c('live'),del:c('removed'),pub:ps.length-c('todo'),by:by.length,lastPub:by[0]&&by[0].published_at}
+}
+function memberCard(u){
+ const a=actOf(u),w=workOf(u),pct=w.total?Math.round(w.pub/w.total*100):0;
+ const btns=u.id===me.id?'<span class="s">you</span>':'<button onclick="setRole(\''+u.id+'\',\''+(u.role==='admin'?'member':'admin')+'\')">Make '+(u.role==='admin'?'member':'admin')+'</button><button onclick="expel(\''+u.id+'\')">Expel</button>';
+ const out=!a.l?'-':a.online?'still signed in':a.l.ended_at?TT(a.l.ended_at):'closed without signing out. Last seen '+TT(a.l.last_seen);
+ const rows=ST.brands.map(b=>{const ids=new Set(w.ts.filter(t=>t.brand_id===b.id).map(t=>t.id));if(!ids.size)return'';const pp=w.ps.filter(p=>ids.has(p.task_id));return '<tr><td>'+esc(b.name)+'</td><td>'+ids.size+'</td><td>'+pp.filter(p=>p.url).length+' of '+pp.length+'</td><td>'+pp.filter(p=>p.status==='todo').length+'</td><td>'+pp.filter(p=>p.status==='live').length+'</td><td>'+pp.filter(p=>p.status==='removed').length+'</td></tr>'}).join('');
+ return '<div class="task"><div class="row" style="margin:0"><div style="flex:1"><div class="t"><span class="od'+(a.online?' y':'')+'"></span>'+esc(u.name)+(a.online?' <span class="chip live">online now</span>':'')+'</div><div class="s">'+esc(u.email)+' &middot; '+u.role+'</div></div><div class="a">'+btns+'</div></div>'
+ +'<div class="row"><div class="bar" style="flex:1"><i style="width:'+pct+'%"></i></div><span class="s">'+w.pub+' of '+w.total+' published ('+pct+'%)</span></div>'
+ +'<div class="grid3"><div>Last login<b>'+TT(a.lastIn)+'</b></div><div>Last sign-out<b>'+out+'</b></div><div>Active today<b>'+fmtD(a.today)+'</b></div><div>Active, last 7 days<b>'+fmtD(a.week)+'</b></div><div>Active, all time<b>'+fmtD(a.total)+'</b></div><div>Times logged in<b>'+a.n+'</b></div></div>'
+ +'<div class="grid3"><div>Work assigned<b>'+w.total+' items in '+w.ts.length+' tasks</b></div><div>Still to publish<b>'+w.todo+'</b></div><div>Confirming<b>'+w.conf+'</b></div><div>Live<b>'+w.live+'</b></div><div>Deleted<b>'+w.del+'</b></div><div>Published by them<b>'+w.by+(w.lastPub?' (last '+TT(w.lastPub)+')':'')+'</b></div></div>'
+ +(rows?'<details><summary>Work by brand</summary><table><tr><th>Brand</th><th>Tasks</th><th>Published</th><th>To publish</th><th>Live</th><th>Deleted</th></tr>'+rows+'</table></details>':'<div class="s">No work assigned to this person right now.</div>')+'</div>';
+}
 function teamView(){
- const row=u=>'<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td><td><div class="a">'+(u.id===me.id?'<span class="s">you</span>':u.status==='pending'?'<button class="p" onclick="setStatus(\''+u.id+'\',\'active\')">Approve</button><button onclick="setStatus(\''+u.id+'\',\'blocked\')">Reject</button>':u.status==='blocked'?'<button onclick="setStatus(\''+u.id+'\',\'active\')">Restore</button>':'<button onclick="setRole(\''+u.id+'\',\''+(u.role==='admin'?'member':'admin')+'\')">Make '+(u.role==='admin'?'member':'admin')+'</button><button onclick="expel(\''+u.id+'\')">Expel</button>')+'</div></td></tr>';
- const sec=(t,s,cl)=>{const l=ST.profiles.filter(u=>u.status===s);return l.length?'<h3 class="'+cl+'">'+t+' ('+l.length+')</h3><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+l.map(row).join('')+'</table>':''};
- return '<h1>Team</h1><p class="mu">People create their own account on the sign-in page. They cannot do anything until an admin approves them here.</p>'+sec('Waiting for approval','pending','am')+sec('Active','active','gr')+sec('Expelled or rejected','blocked','rd');
+ const row=u=>'<tr><td>'+esc(u.name)+'</td><td>'+esc(u.email)+'</td><td>'+u.role+'</td><td><div class="a">'+(u.status==='pending'?'<button class="p" onclick="setStatus(\''+u.id+'\',\'active\')">Approve</button><button onclick="setStatus(\''+u.id+'\',\'blocked\')">Reject</button>':'<button onclick="setStatus(\''+u.id+'\',\'active\')">Restore</button>')+'</div></td></tr>';
+ const sec=(t,st,cl)=>{const l=ST.profiles.filter(u=>u.status===st);return l.length?'<h3 class="'+cl+'">'+t+' ('+l.length+')</h3><table><tr><th>Name</th><th>Email</th><th>Role</th><th></th></tr>'+l.map(row).join('')+'</table>':''};
+ const act=ST.profiles.filter(u=>u.status==='active');
+ return '<h1>Team</h1><p class="mu">People create their own account on the sign-in page. They cannot do anything until you approve them here.</p>'+sec('Waiting for approval','pending','am')
+ +'<h3 class="gr">Members: progress and activity ('+act.length+')</h3><p class="s">Active time only counts while the page is open, in view, and being used (mouse or keyboard in the last 2 minutes).</p>'
+ +(ST.sessErr?'<div class="warn">Login times are not available yet. Run <b>supabase_update_3.sql</b> in Supabase (SQL Editor), then reload.</div>':'')
+ +(act.map(memberCard).join('')||'<div class="empty">No active members yet.</div>')+sec('Expelled or rejected','blocked','rd');
 }
 
 /* ---------- team member / open access ---------- */
@@ -357,7 +450,9 @@ function workView(){
  return '<h1>'+(ST.tok?esc(ST.obrand.name):'My work')+'</h1>'+(bs.length>1?'<div class="row"><select onchange="ST.bid=this.value;draw()">'+bs.map(b=>'<option value="'+b.id+'"'+(b.id===ST.bid?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></div>':(ST.tok?'':'<div class="mu">'+esc(bs[0].name)+'</div>'))
  +'<p class="mu">Copy each draft, publish it on Reddit, paste the link of what you published and press Done. Tracking starts straight away.</p><div id="wl">'+wList()+'</div>';
 }
-function wList(){const ts=ST.tasks.filter(t=>t.brand_id===ST.bid);return ts.length?ts.map(t=>'<div class="task"><div class="t">'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment on <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this thread</a>':'')+'</div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,false)).join('')+'</div>').join(''):'<div class="empty">Nothing to do.</div>'}
+function wList(){const m=numbered(ST.bid);
+ const out=CATS.map(c=>{const cards=ST.tasks.filter(t=>t.brand_id===ST.bid&&m[t.id]&&m[t.id].k===c[0]).map(t=>'<div class="task"><div class="t"><span class="num2">'+esc(tnum(t,m))+'</span>'+esc(tlabel(t))+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment under <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this post</a>':'')+'</div>'+ST.pieces.filter(p=>p.task_id===t.id).map(p=>pc(p,false)).join('')+'</div>').join('');return cards?'<div class="cat">'+c[1]+'</div>'+cards:''}).join('');
+ return out||'<div class="empty">Nothing to do.</div>'}
 
 /* ---------- auth + shell ---------- */
 function authView(){
@@ -366,14 +461,19 @@ function authView(){
 }
 async function signIn(){const{error}=await sb.auth.signInWithPassword({email:$('em').value.trim(),password:$('pw').value});if(error)return alert(error.message);await start()}
 async function signUp(){const{data,error}=await sb.auth.signUp({email:$('em').value.trim(),password:$('pw').value,options:{data:{name:$('nm').value.trim()}}});if(error)return alert(error.message);if(!data.session)return alert('Account created. Check your email to confirm it, then sign in.');await start()}
-async function signOut(){await sb.auth.signOut();me=null;ST.hold=0;authView()}
+let SID=null,LA=Date.now(),HB=null;
+['mousemove','keydown','click','scroll','touchstart'].forEach(e=>addEventListener(e,()=>{LA=Date.now()},{passive:true}));
+async function sessStart(){if(SID)return;try{const{data}=await sb.rpc('session_start');SID=data||null}catch(e){}
+ clearInterval(HB);HB=setInterval(async()=>{if(!SID)return;if(document.visibilityState==='visible'&&Date.now()-LA<12e4){try{await sb.rpc('session_ping',{sid:SID,secs:60})}catch(e){}}},6e4)}
+async function sessEnd(){clearInterval(HB);if(SID){try{await sb.rpc('session_end',{sid:SID})}catch(e){}SID=null}}
+async function signOut(){await sessEnd();await sb.auth.signOut();me=null;ST.hold=0;authView()}
 async function start(){
  const{data:{user}}=await sb.auth.getUser();if(!user)return authView();
  let r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle();if(!r.data){await new Promise(x=>setTimeout(x,800));r=await sb.from('profiles').select('*').eq('id',user.id).maybeSingle()}
  me=r.data;if(!me)return alert('Your profile was not found. Ask the admin or check the setup guide.');
  ST.hold=me.status!=='active'?1:0;
  if(ST.hold){$('so').style.display='';$('nv').innerHTML='';$('who').textContent=me.name;$('app').innerHTML='<div class="empty"><h2>'+(me.status==='blocked'?'Your access was removed':'Waiting for approval')+'</h2><p>'+(me.status==='blocked'?'Please contact the admin.':'Your account was created. An admin must approve it before you can use the system.')+'</p><button onclick="start()">Check again</button></div>';return}
- $('who').textContent=me.name+' ('+me.role+')';$('so').style.display='';await load();draw();
+ $('who').textContent=me.name+' ('+me.role+')';$('so').style.display='';await load();draw();sessStart();
 }
 const admView=()=>ST.tab==='team'?teamView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
 function draw(soft){
@@ -393,16 +493,17 @@ function draw(soft){
 let PT={};
 async function bootPortal(tok){PT.tok=tok;document.querySelector('header').innerHTML='<span class="logo">Reddit performance report</span>';
  const{data,error}=await sb.rpc('client_portal',{tok});if(error||!data){$('app').innerHTML='<div class="empty">This link is not valid. Ask for a new one.</div>';return}PT.d=data;pHome()}
-function pHome(){$('nv').innerHTML='';$('app').innerHTML='<h1>'+esc(PT.d.client)+'</h1><div class="mu">Choose a brand to see its work.</div><div style="margin-top:14px">'+(PT.d.brands.length?PT.d.brands.map(b=>'<div class="card" onclick="pBrand(\''+b.id+'\')"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="chip live">'+b.live+' live</span><span class="chip checking">'+b.pending+' pending</span><span class="chip todo">'+b.todo+' drafts</span></div></div>').join(''):'<div class="empty">No brands are shared yet.</div>')+'</div>'}
+function pHome(){$('nv').innerHTML='';$('app').innerHTML='<h1>'+esc(PT.d.client)+'</h1><div class="mu">Choose a brand to see its work.</div><div style="margin-top:14px">'+(PT.d.brands.length?PT.d.brands.map(b=>'<div class="card" onclick="pBrand(\''+b.id+'\')"><div class="row" style="margin:0"><div class="t" style="flex:1">'+esc(b.name)+'</div><span class="chip live">'+b.live+' live</span><span class="chip checking">'+b.pending+' pending</span><span class="chip todo">'+b.todo+' drafts</span><span class="chip removed">'+(b.removed||0)+' deleted</span></div></div>').join(''):'<div class="empty">No brands are shared yet.</div>')+'</div>'}
 async function pBrand(id,keep){const{data,error}=await sb.rpc('client_brand',{tok:PT.tok,bid:id});if(error||!data)return alert('Could not load this brand');PT.b=data;PT.bid=id;if(!keep)PT.tab='live';pView()}
-const pTab={live:['Live','live'],pending:['Pending','checking'],drafts:['Drafts to be posted','todo']};
+const pTab={all:['Everything','all'],live:['Live','live'],pending:['Pending','checking'],drafts:['Drafts to be posted','todo'],deleted:['Deleted','removed']};
 function pView(){
- const ps=PT.b.pieces,by=s=>ps.filter(p=>p.status===s),sel=by(pTab[PT.tab][1]);
+ const ps=PT.b.pieces,by=s=>s==='all'?ps:ps.filter(p=>p.status===s),sel=by(pTab[PT.tab][1]);
  $('nv').innerHTML='';
  $('app').innerHTML='<button onclick="pHome()">&larr; All brands</button><h1 style="margin-top:12px">'+esc(PT.b.brand)+'</h1><div class="mu">'+esc(PT.b.client)+'</div>'
- +'<div class="kpi"><div><b class="gr">'+by('live').filter(p=>p.kind==='post').length+'</b>live posts</div><div><b class="gr">'+by('live').filter(p=>p.kind==='comment').length+'</b>live comments</div><div><b>'+by('checking').length+'</b>pending</div><div><b>'+by('todo').length+'</b>drafts to be posted</div></div>'
- +'<div class="row"><button class="p" onclick="pXlsx()">Download Excel report</button></div>'
+ +'<div class="kpi"><div><b class="gr">'+by('live').filter(p=>p.kind==='post').length+'</b>live posts</div><div><b class="gr">'+by('live').filter(p=>p.kind==='comment').length+'</b>live comments</div><div><b>'+by('checking').length+'</b>pending</div><div><b>'+by('todo').length+'</b>drafts to be posted</div><div><b class="rd">'+by('removed').length+'</b>deleted</div></div>'
+ +'<div class="row"><button class="p" onclick="pXlsx()">Download Excel report (live)</button><button onclick="pXlsx(1)">Full overview (with deleted)</button></div>'
  +'<div class="row">'+Object.keys(pTab).map(k=>'<button class="'+(PT.tab===k?'p':'')+'" onclick="PT.tab=\''+k+'\';pView()">'+pTab[k][0]+' ('+by(pTab[k][1]).length+')</button>').join('')+'</div>'
+ +(PT.tab==='deleted'?'<p class="s">These items were published but are no longer visible on Reddit (removed by moderators or deleted). They are kept here so you have a complete record. They are not counted as live.</p>':'')
  +(sel.length?sel.map(pPiece).join(''):'<div class="empty">Nothing here yet.</div>');
 }
 function pPiece(p){
@@ -414,12 +515,12 @@ function pPiece(p){
  +(p.att&&p.att.length?'<div class="s">Attachments: '+p.att.map(a=>esc(a.n)).join(', ')+'</div>':'')
  +(p.url?'<div class="s">'+p.score+' points &middot; '+p.replies+(p.kind==='post'?' comments':' replies')+'</div>':'')
  +(p.sugg&&p.sugg.length?'<div style="margin-top:8px">'+p.sugg.map(s=>'<div class="s">Your suggestion ('+D(s.at)+'): '+esc(s.note)+' <span class="chip '+(s.status==='new'?'todo':'live')+'">'+({new:'Sent',done:'Done',dismissed:'Reviewed'}[s.status])+'</span></div>').join('')+'</div>':'')
- +'<div style="margin-top:8px"><button onclick="pSugg(\''+p.id+'\')">Suggest a change</button></div><div id="sb_'+p.id+'" style="display:none" class="cb"><div class="fld"><span>Your name (optional)</span><input id="pw_'+p.id+'" style="width:100%"></div><div class="fld"><span>What would you like changed?</span><textarea id="pn_'+p.id+'" placeholder="Describe the change or paste your suggested wording"></textarea></div><div class="row"><button class="p" onclick="pSend(\''+p.id+'\')">Send suggestion</button><button onclick="pSugg(\''+p.id+'\')">Cancel</button></div></div></div>';
+ +(p.status==='removed'?'':'<div style="margin-top:8px"><button onclick="pSugg(\''+p.id+'\')">Suggest a change</button></div>')+'<div id="sb_'+p.id+'" style="display:none" class="cb"><div class="fld"><span>Your name (optional)</span><input id="pw_'+p.id+'" style="width:100%"></div><div class="fld"><span>What would you like changed?</span><textarea id="pn_'+p.id+'" placeholder="Describe the change or paste your suggested wording"></textarea></div><div class="row"><button class="p" onclick="pSend(\''+p.id+'\')">Send suggestion</button><button onclick="pSugg(\''+p.id+'\')">Cancel</button></div></div></div>';
 }
 function pSugg(id){const e=$('sb_'+id);e.style.display=e.style.display==='none'?'':'none'}
 async function pSend(id){const note=$('pn_'+id).value.trim();if(!note)return alert('Please write your suggestion first');
  const{error}=await sb.rpc('client_suggest',{tok:PT.tok,pid:id,note,who:$('pw_'+id).value.trim()});if(error)return alert('Could not send: '+error.message);alert('Thank you. Your suggestion was sent.');await pBrand(PT.bid,1)}
-function pXlsx(){xlsx(PT.b.pieces.filter(p=>p.status==='live').map(p=>({kind:p.kind,at:p.at,url:p.url,post_url:p.post_url})),PT.b.brand)}
+function pXlsx(full){xlsx(PT.b.pieces.filter(p=>full?p.url&&p.status!=='todo':p.status==='live').map(p=>({kind:p.kind,at:p.at,url:p.url,post_url:p.post_url,status:p.status,sub:p.sub,score:p.score,replies:p.replies})),PT.b.brand,full)}
 
 /* ---------- client page ---------- */
 async function bootClient(tok){
