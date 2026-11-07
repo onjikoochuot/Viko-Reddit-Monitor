@@ -294,6 +294,9 @@ details.adv summary{cursor:pointer;font-weight:600}
 .pvt{font-size:13px;color:var(--n600);margin-top:8px}
 .pc .lvp{margin:6px 0 4px}.lvp.gone{opacity:.65;border-left-color:var(--n300)}
 .lvs a{color:#14663F;font-weight:500}
+
+/*rq*/.rd{color:var(--red,#C0392B)}.chip.ok{background:#E2F6EA;color:#12713B;border-color:#BCE8CD}.chip.bad{background:#FDE7E7;color:#A02020;border-color:#F5C2C2}.chip.mut{background:#EEF1FA;color:#53608A;border-color:#D8DEF0}.chip.warn{background:#FFF4DD;color:#8A5A00;border-color:#F3DDA8}
+#rq_main label{display:flex;flex-direction:column;gap:5px;align-items:flex-start}#rq_main label input,#rq_main label select{max-width:100#rq_main label{display:flex;flex-direction:column;gap:5px;align-items:flex-start}#rq_main label input,#rq_main label select{max-width:100%}#rq_main .et a,#rq_jobs .et a{color:var(--bl2);text-decoration:none;font-weight:600}#rq_main .et a:hover{text-decoration:underline}#rq_main .row{gap:10px;flex-wrap:wrap}
 </style></head><body>
 <header><span class="logo">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -1683,15 +1686,150 @@ async function start(){
  if(ST.hold){$('so').style.display='';$('nv').innerHTML='';$('who').textContent=me.name;$('app').innerHTML='<div class="empty"><h2>'+(me.status==='blocked'?'Your access was removed':me.status==='paused'?'Your access is paused':'Waiting for approval')+'</h2><p>'+(me.status==='blocked'?'Please contact the admin.':me.status==='paused'?'The admin has paused your access for now. You can come back when it is resumed.':'Your account was created. An admin must approve it before you can use the system.')+'</p><button onclick="start()">Check again</button></div>';return}
  $('who').textContent=me.name+' ('+me.role+')';$('so').style.display='';await load();draw();sessStart();
 }
-const admView=()=>ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
+
+/* ---- Make reports (admin only): screenshots of live posts and comments, built into a PDF by the GitHub worker ---- */
+const RP_PRESETS=[['today','Today'],['week','This week'],['two','Past two weeks'],['month','This month'],['custom','Custom dates']];
+const RQ=()=>ST.rq||(ST.rq={src:'brand',bid:'',preset:'week',from:'',to:'',kw:'',kwDone:false,title:'',titleDone:false,layout:'modern',rows:[],msg:'',jobs:null,jerr:'',timer:0,parsing:false});
+const RQ_LIBS={zip:'https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js',pdf:'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js'};
+const rqLib=k=>new Promise((res,rej)=>{if(k==='zip'&&window.JSZip||k==='pdf'&&window.pdfjsLib)return res();const s=document.createElement('script');s.src=RQ_LIBS[k];s.onload=()=>{if(k==='pdf')pdfjsLib.GlobalWorkerOptions.workerSrc='https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';res()};s.onerror=()=>rej(new Error('Could not load the '+(k==='pdf'?'PDF':'Word')+' reader. Check your internet connection and try again.'));document.head.appendChild(s)});
+/* ---- link reading ---- */
+const RURL=/https?:\/\/(?:www\.|old\.|np\.|new\.|m\.)?reddit\.com\/[^\s<>"'“”)\]]+/gi;
+const rqClean=u=>u.replace(/[.,;:!?]+$/,'').replace(/&amp;/g,'&');
+const rqIsCom=u=>/\/comments\/[a-z0-9]+\/[^\/?#]*\/[a-z0-9]{4,10}(?:[\/?#]|$)/i.test(u)||/\/comments\/[a-z0-9]+\/comment\/[a-z0-9]+/i.test(u);
+const rqIsPost=u=>/\/comments\/[a-z0-9]+(?:\/[^\/?#]*)?\/?(?:[?#]|$)/i.test(u)&&!rqIsCom(u);
+const rqPostOf=u=>{const m=String(u).match(/^(https?:\/\/[^\/]+\/r\/[^\/]+\/comments\/[a-z0-9]+)/i);return m?m[1]+'/':''};
+const rqPid=u=>{const m=String(u).match(/\/comments\/([a-z0-9]+)/i);return m?m[1].toLowerCase():''};
+const rqSub=u=>{const m=String(u).match(/\/r\/([^\/]+)/i);return m?m[1]:''};
+const rqKey=u=>String(u).toLowerCase().replace(/^https?:\/\/(?:www\.|old\.|np\.|new\.|m\.)?/,'').replace(/[?#].*$/,'').replace(/\/+$/,'');
+function rqKind(it){if(rqIsCom(it.u))return 'comment';if(rqIsPost(it.u))return 'post';return it.h||'post'} /* short share links (/r/Sub/s/xxxx) follow the label next to them, otherwise count as the post */
+/* items [{u,h}] in reading order -> rows. A comment link on its own is enough: its post is worked out from it. */
+function rqPair(items){const out=[];let pend='';
+ const orphan=()=>{if(pend){out.push({post:pend,comment:'',sub:rqSub(pend),on:false,why:'No comment link next to this post link',locked:true});pend=''}};
+ items.forEach(it=>{const k=rqKind(it);
+  if(k==='post'){orphan();pend=it.u;return}
+  let post=rqPostOf(it.u);
+  if(pend){const a=rqPid(pend),b=rqPid(it.u);if(!a||!b||a===b)post=pend;else orphan();pend=''}
+  out.push({post,comment:it.u,sub:rqSub(it.u)||rqSub(post),on:true,why:'',locked:false})});
+ orphan();return out}
+function rqFromText(text){const items=[];let m;RURL.lastIndex=0;let prev=0;
+ while((m=RURL.exec(text))){const before=text.slice(Math.max(prev,m.index-40),m.index);let h='';
+  if(/(?:comment|reply)[^a-z\n]{0,4}$/i.test(before))h='comment';else if(/(?:post|thread|original)[^a-z\n]{0,4}$/i.test(before))h='post';
+  items.push({u:rqClean(m[0]),h});prev=m.index+m[0].length}
+ return rqPair(items)}
+async function rqFromSheet(buf){const wb=XLSX.read(buf,{type:'array'}),rows=[];
+ wb.SheetNames.forEach(n=>{const ws=wb.Sheets[n];if(!ws||!ws['!ref'])return;const R=XLSX.utils.decode_range(ws['!ref']);const hint={};
+  for(let r=R.s.r;r<=Math.min(R.s.r+2,R.e.r);r++)for(let c=R.s.c;c<=R.e.c;c++){const x=ws[XLSX.utils.encode_cell({r,c})];const v=x&&String(x.v||'').trim();if(v&&!/reddit\.com/i.test(v)){if(/comment|reply/i.test(v))hint[c]='comment';else if(/post|thread/i.test(v))hint[c]='post'}}
+  for(let r=R.s.r;r<=R.e.r;r++){const items=[];
+   for(let c=R.s.c;c<=R.e.c;c++){const x=ws[XLSX.utils.encode_cell({r,c})];if(!x)continue;const found=[];
+    if(x.l&&x.l.Target&&/reddit\.com/i.test(x.l.Target))found.push(x.l.Target);
+    const t=String(x.w!=null?x.w:x.v||'');let m;RURL.lastIndex=0;while((m=RURL.exec(t)))found.push(m[0]);
+    Array.from(new Set(found.map(rqClean))).forEach(u=>items.push({u,h:hint[c]||''}))}
+   if(items.length)rows.push.apply(rows,rqPair(items))}});
+ return rows}
+async function rqFromDocx(buf){await rqLib('zip');const z=await JSZip.loadAsync(buf),doc=z.file('word/document.xml');if(!doc)throw new Error('This does not look like a Word (.docx) file.');
+ const xml=await doc.async('string'),relx=z.file('word/_rels/document.xml.rels'),rels={};
+ if(relx){const rd=new DOMParser().parseFromString(await relx.async('string'),'application/xml');Array.from(rd.getElementsByTagName('Relationship')).forEach(e=>{rels[e.getAttribute('Id')]=e.getAttribute('Target')})}
+ const d=new DOMParser().parseFromString(xml,'application/xml'),lines=[];
+ Array.from(d.getElementsByTagName('w:p')).forEach(p=>{let s='';
+  const walk=n=>{Array.from(n.childNodes).forEach(c=>{const nm=c.nodeName;
+   if(nm==='w:hyperlink'){const id=c.getAttribute('r:id'),t=id&&rels[id],txt=Array.from(c.getElementsByTagName('w:t')).map(x=>x.textContent).join('');s+=(t&&/reddit\.com/i.test(t))?' '+t+' ':txt}
+   else if(nm==='w:t')s+=c.textContent;else if(nm==='w:tab'||nm==='w:br')s+=' ';else if(c.childNodes&&c.childNodes.length)walk(c)})};
+  walk(p);if(s.trim())lines.push(s)});
+ return rqFromText(lines.join('\n'))}
+async function rqFromPdf(buf){await rqLib('pdf');const pdf=await pdfjsLib.getDocument({data:buf}).promise;let text='';const ann=[];
+ for(let i=1;i<=pdf.numPages;i++){const pg=await pdf.getPage(i),tc=await pg.getTextContent();tc.items.forEach(x=>{text+=x.str+(x.hasEOL?'\n':' ')});text+='\n';
+  try{(await pg.getAnnotations()).forEach(a=>{if(a.url&&/reddit\.com/i.test(a.url))ann.push(a.url)})}catch(e){}}
+ let rows=rqFromText(text);const alt=ann.length?rqPair(Array.from(new Set(ann.map(rqClean))).map(u=>({u,h:''}))):[];if(alt.filter(r=>r.comment).length>rows.filter(r=>r.comment).length)rows=alt;return rows}
+async function rqRead(file){const n=file.name.toLowerCase(),buf=await file.arrayBuffer();
+ if(/\.(xlsx|xls|csv|ods)$/.test(n))return rqFromSheet(buf);
+ if(/\.docx$/.test(n))return rqFromDocx(buf);
+ if(/\.pdf$/.test(n))return rqFromPdf(buf);
+ if(/\.doc$/.test(n))throw new Error(file.name+': older .doc files cannot be read. Open it in Word and save as .docx, then try again.');
+ throw new Error(file.name+': use an Excel, CSV, Word (.docx) or PDF file.')}
+async function rqFiles(list){const q=RQ();q.parsing=true;q.msg='Reading...';rqDraw();const all=[],notes=[];
+ for(const f of Array.from(list||[])){try{const r=await rqRead(f);notes.push(f.name+': '+r.filter(x=>x.comment).length+' engagement'+(r.filter(x=>x.comment).length==1?'':'s'));all.push.apply(all,r)}catch(e){notes.push(e.message||String(e))}}
+ const seen=new Set();q.rows=all.filter(r=>{const k=r.comment?rqKey(r.comment):'p'+rqKey(r.post);if(seen.has(k))return false;seen.add(k);return true});
+ q.parsing=false;q.msg=notes.join(' | ')+(q.rows.length?'':'. No Reddit links were found. Check that the file has the post link and the comment link.');rqDraw()}
+/* ---- from a brand and dates ---- */
+function rqRange(){const q=RQ(),t=todayS();let a=t,z=t;
+ if(q.preset==='week'){const d=new Date(t+'T00:00:00');a=ymd(new Date(d.getFullYear(),d.getMonth(),d.getDate()-((d.getDay()+6)%7)))}
+ else if(q.preset==='two')a=addD(t,-13);else if(q.preset==='month')a=t.slice(0,8)+'01';else if(q.preset==='custom'){a=q.from||'';z=q.to||t}
+ return[a,z]}
+const rqRangeTxt=()=>{const q=RQ(),r=rqRange();return (RP_PRESETS.find(p=>p[0]===q.preset)||[0,''])[1]+(q.preset==='custom'||q.preset==='today'?'':' ('+D_(r[0])+' to '+D_(r[1])+')').replace(/^ \(/,' (')};
+function rqBrandRows(){const q=RQ();if(!q.bid)return[];const[a,z]=rqRange(),tk={};(ST.allT||[]).forEach(t=>{tk[t.id]=t});
+ const ps=(ST.allP||[]).filter(p=>p.brand_id===q.bid&&!(tk[p.task_id]||{}).trashed_at),rows=[];
+ ps.filter(p=>p.kind==='comment'&&p.url&&p.status==='live'&&p.published_at).forEach(c=>{const d=ymd(c.published_at);if((a&&d<a)||(z&&d>z))return;
+  const t=tk[c.task_id]||{},post=ps.find(p=>p.task_id===c.task_id&&p.kind==='post'&&p.url),purl=post?post.url:(t.thread||'');let why='';
+  if(post&&post.status!=='live')why='The post is not live';else if(!purl)why='No post link on this task. Add the thread link to the task.';
+  rows.push({post:purl,comment:c.url,sub:t.sub||rqSub(c.url),date:d,on:!why,why,locked:!!why})});
+ return rows.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0)}
+function rqSetBrand(id){const q=RQ(),b=ST.allB.find(x=>x.id===id);q.bid=id;if(b){if(!q.kwDone)q.kw=b.name;if(!q.titleDone)q.title=b.name+' Reddit Engagement Report'}q.rows=rqBrandRows();rqDraw()}
+function rqPreset(p){const q=RQ();q.preset=p;q.rows=rqBrandRows();rqDraw()}
+function rqDates(k,v){const q=RQ();q[k]=v;q.rows=rqBrandRows();rqDraw(1)}
+const rqSrc=s=>{const q=RQ();q.src=s;q.rows=s==='brand'?rqBrandRows():[];q.msg='';rqDraw()};
+const rqTog=(i,on)=>{const r=RQ().rows[i];if(r&&!r.locked){r.on=on;rqDraw(1)}};
+const rqAll=on=>{RQ().rows.forEach(r=>{if(!r.locked)r.on=on});rqDraw()};
+/* ---- making the request ---- */
+const needV14=()=>{if(ST.rq&&ST.rq.jerr==='v14'){alert('Run supabase_update_14.sql in Supabase first (SQL Editor), then reload this page.');return true}return false};
+async function rqGo(){if(needV14())return;const q=RQ(),use=q.rows.filter(r=>r.on&&r.comment);
+ if(!use.length)return alert('Nothing to include yet. Choose a brand and dates, or upload a file with post and comment links.');
+ if(!q.kw.trim()&&!confirm('No highlight word is set, so nothing will be highlighted in yellow. Make the report anyway?'))return;
+ const b=q.src==='brand'?ST.allB.find(x=>x.id===q.bid):null;
+ const row={created_by:me&&me.id||null,title:(q.title||'Reddit Engagement Report').trim(),brand_name:b?b.name:null,keyword:q.kw.trim(),source:q.src,range_label:q.src==='brand'?rqRangeTxt():'Uploaded file',layout:q.layout,pairs:use.map(r=>({post:r.post||'',comment:r.comment,sub:r.sub||''})),total:use.length};
+ const{error}=await sb.from('report_jobs').insert(row);if(!noErr(error))return;
+ q.msg='Report requested. It starts within about 5 minutes and shows below when it is ready.';await rqJobs();rqDraw()}
+/* ---- history ---- */
+async function rqJobs(){const q=RQ();const{data,error}=await sb.from('report_jobs').select('id,created_at,title,brand_name,status,total,progress,included,skipped,note,file_path,range_label,source,finished_at').order('created_at',{ascending:false}).limit(25);
+ if(error){q.jerr=/report_jobs|schema cache|relation/i.test(error.message||'')?'v14':(error.message||'error')}else{q.jerr='';q.jobs=data||[]}
+ const e=$('rq_jobs');if(e)e.innerHTML=rqJobsHtml();rqPoll()}
+function rqPoll(){const q=RQ();clearTimeout(q.timer);if(ST.tab!=='reports')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running'))q.timer=setTimeout(rqJobs,8000)}
+const rqFile=j=>(j.title||'report').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_'+ymd(j.created_at)+'.pdf';
+async function rqDl(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!j.file_path)return;const{data,error}=await sb.storage.from('reports').createSignedUrl(j.file_path,300,{download:rqFile(j)});
+ if(error||!data)return alert('Could not open the file: '+((error&&error.message)||'try again'));const a=document.createElement('a');a.href=data.signedUrl;a.download=rqFile(j);document.body.appendChild(a);a.click();a.remove()}
+async function rqDel(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!confirm('Delete this report'+(j.file_path?' and its PDF':'')+'?'))return;
+ if(j.file_path)await sb.storage.from('reports').remove([j.file_path]);const{error}=await sb.from('report_jobs').delete().eq('id',id);if(!noErr(error))return;await rqJobs()}
+function rqJobsHtml(){const q=RQ();if(q.jerr==='v14')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_14.sql</b> and press Run, then reload this page.</div>';
+ if(q.jerr)return '<div class="warn">Could not load your reports: '+esc(q.jerr)+'</div>';if(q.jobs==null)return '<div class="s">Loading...</div>';
+ if(!q.jobs.length)return '<div class="empty">No reports yet. Make your first one above.</div>';
+ const st=j=>j.status==='done'?'<span class="chip ok">Ready</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Working: '+(j.progress||0)+' of '+(j.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
+ return q.jobs.map(j=>{const sk=Array.isArray(j.skipped)?j.skipped:[];return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.title)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.brand_name||'Uploaded file')+(j.range_label?' &middot; '+esc(j.range_label):'')+' &middot; '+(j.status==='done'?(j.included||0)+' of '+j.total+' included':j.total+' requested')+'</div></div>'+st(j)
+  +'<div class="a">'+(j.status==='done'&&j.file_path?'<button class="p sm" onclick="rqDl(\''+j.id+'\')">Download PDF</button>':'')+'<button class="sm dng" onclick="rqDel(\''+j.id+'\')">Delete</button></div></div>'
+  +(j.status==='running'&&j.total?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/j.total*100)+'%"></i></div>':'')
+  +(j.note&&j.status!=='done'?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
+  +(sk.length?'<details style="margin-top:8px"><summary>Not included ('+sk.length+')</summary><table class="et"><tr><th>Link</th><th>Why</th></tr>'+sk.map(s=>'<tr><td><a href="'+esc(s.comment||s.post||'#')+'" target="_blank" rel="noopener">'+esc(clip(s.comment||s.post||'',70))+'</a></td><td>'+esc(s.reason||'')+'</td></tr>').join('')+'</table></details>':'')+'</div>'}).join('')}
+/* ---- page ---- */
+function rqRowsHtml(){const q=RQ(),R=q.rows;if(!R.length)return q.src==='brand'?(q.bid?'<div class="empty">No live comments for this brand in this period.</div>':'<div class="s">Choose a brand to see its live comments.</div>'):(q.parsing?'':'<div class="s">Nothing loaded yet.</div>');
+ const n=R.filter(r=>r.on&&r.comment).length;
+ return '<div class="row" style="margin:10px 0 6px"><b>'+n+' engagement'+(n==1?'':'s')+' will be in the report</b><span style="flex:1"></span><button class="sm" onclick="rqAll(1)">Select all</button><button class="sm" onclick="rqAll(0)">Clear</button></div><div class="scrollx"><table class="et"><tr><th></th><th>#</th><th>Community</th><th>Post</th><th>Comment</th></tr>'
+ +R.map((r,i)=>'<tr'+(r.on?'':' style="opacity:.55"')+'><td><input type="checkbox" '+(r.on?'checked':'')+(r.locked?' disabled':'')+' onchange="rqTog('+i+',this.checked)" aria-label="Include"></td><td>'+(i+1)+'</td><td>'+(r.sub?'r/'+esc(r.sub):'')+'</td><td>'+(r.post?'<a href="'+esc(r.post)+'" target="_blank" rel="noopener">'+esc(clip(r.post.replace(/^https?:\/\/(www\.)?reddit\.com/,''),44))+'</a>':'<span class="s">found when the report is made</span>')+'</td><td>'+(r.comment?'<a href="'+esc(r.comment)+'" target="_blank" rel="noopener">'+esc(clip(r.comment.replace(/^https?:\/\/(www\.)?reddit\.com/,''),44))+'</a>':'')+(r.why?'<div class="s rd">'+esc(r.why)+'</div>':'')+'</td></tr>').join('')+'</table></div>'}
+function rqDraw(soft){const e=$('rq_main');if(e){const keep=document.activeElement&&document.activeElement.id;const x=$('rq_rows');if(soft&&x){x.innerHTML=rqRowsHtml();return}
+  e.innerHTML=rqMain();if(keep&&$(keep)&&$(keep).tagName==='INPUT'){const el=$(keep);el.focus();try{el.setSelectionRange(el.value.length,el.value.length)}catch(_){}}}}
+function rqMain(){const q=RQ(),brandSrc=q.src==='brand';
+ const pills=RP_PRESETS.map(p=>'<button class="tb'+(q.preset===p[0]?' on':'')+'" onclick="rqPreset(\''+p[0]+'\')">'+p[1]+'</button>').join('');
+ const src='<div class="row" style="margin:0 0 12px"><button class="tb'+(brandSrc?' on':'')+'" onclick="rqSrc(\'brand\')">From a brand and dates</button><button class="tb'+(!brandSrc?' on':'')+'" onclick="rqSrc(\'upload\')">From a file (Excel, PDF or Word)</button></div>';
+ const body=brandSrc?'<div class="row" style="align-items:flex-end;margin:0"><label><span class="s">Brand</span><select id="rq_b" onchange="rqSetBrand(this.value)"><option value="">Choose a brand...</option>'+ST.brands.slice().sort((a,b)=>a.name.localeCompare(b.name)).map(b=>'<option value="'+b.id+'"'+(q.bid===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label></div><div class="row" style="margin:12px 0 0">'+pills+'</div>'
+   +(q.preset==='custom'?'<div class="row" style="margin:10px 0 0"><label><span class="s">Start date</span><input type="date" value="'+esc(q.from)+'" onchange="rqDates(\'from\',this.value)"></label><label><span class="s">End date</span><input type="date" value="'+esc(q.to)+'" onchange="rqDates(\'to\',this.value)"></label></div>':'')
+   +'<p class="s" style="margin:10px 0 0">Only comments that are live are listed, together with their post. Both are checked again on Reddit when the report is made, and anything no longer live is left out.</p>'
+  :'<div class="row" style="margin:0;align-items:center"><input id="rq_f" type="file" multiple accept=".xlsx,.xls,.csv,.pdf,.docx" onchange="rqFiles(this.files)"></div><p class="s" style="margin:10px 0 0">Excel, CSV, Word (.docx) or PDF. The file needs the <b>comment link</b> for each engagement. A post link next to it is used if it is there. If it is not, the post is worked out from the comment link. Labels like "Post:" and "Comment:" or columns named Post and Comment help.</p>'+(q.parsing?'<div class="hint">Reading the file...</div>':'');
+ return '<div class="cb">'+src+body+'</div>'
+  +'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Report title</span><input id="rq_t" style="width:100%" value="'+esc(q.title)+'" placeholder="Brand Reddit Engagement Report" oninput="RQ().title=this.value;RQ().titleDone=true"></label>'
+  +'<label style="flex:1;min-width:200px"><span class="s">Word to highlight in yellow (separate several with commas)</span><input id="rq_k" style="width:100%" value="'+esc(q.kw)+'" placeholder="for example Dripify" oninput="RQ().kw=this.value;RQ().kwDone=true"></label>'
+  +'<label><span class="s">Reddit look</span><select onchange="RQ().layout=this.value"><option value="modern"'+(q.layout==='modern'?' selected':'')+'>Modern Reddit</option><option value="classic"'+(q.layout==='classic'?' selected':'')+'>Classic Reddit (most reliable)</option></select></label></div></div>'
+  +(q.msg?'<div class="hint">'+esc(q.msg)+'</div>':'')
+  +'<div class="cb"><div id="rq_rows">'+rqRowsHtml()+'</div><div class="row" style="margin-top:14px"><button class="p" onclick="rqGo()">Generate report</button><span class="s">It is made in the background (usually 5 to 15 minutes) and appears under Your reports.</span></div></div>'}
+function reportsView(){const q=RQ();if(q.jobs==null&&!q.jerr)setTimeout(rqJobs,30);else rqPoll();
+ if(q.src==='brand'&&q.bid&&!q.rows.length)q.rows=rqBrandRows();
+ return '<div class="row pagehead"><h1 style="margin:0;flex:1">Make reports</h1></div><p class="mu" style="margin-top:6px">Turn live Reddit posts and comments into a PDF report with a full screenshot of each post, a screenshot of your comment, your brand name highlighted, and links to both. Only admins see this page.</p><div id="rq_main">'+rqMain()+'</div><h3>Your reports</h3><div id="rq_jobs">'+rqJobsHtml()+'</div>'}
+
+const admView=()=>ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='reports'?reportsView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
 function draw(soft){
  if(ST.hold)return;
  if(!me&&!ST.tok)return;
  if(ST.tok){if(!soft||!ed())$('app').innerHTML=workView();return}
  const adm=me.role==='admin';
  const npend=ST.profiles.filter(u=>u.status==='pending').length;
- $('nv').innerHTML=adm?[['overview','Overview'],['brands','Brands'],['clients','Clients'],['team','Team'+(npend?' ('+npend+')':'')],['earn','Earnings'],['set','Settings']].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;draw()">'+v[1]+'</button>').join(''):'';
- if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.bp||(ST.tab==='earn'&&(ST.ep||ST.pw))))$('app').innerHTML=adm?admView():workView();return}
+ $('nv').innerHTML=adm?[['overview','Overview'],['brands','Brands'],['clients','Clients'],['team','Team'+(npend?' ('+npend+')':'')],['earn','Earnings'],['reports','Make reports'],['set','Settings']].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;draw()">'+v[1]+'</button>').join(''):'';
+ if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.bp||ST.tab==='reports'||(ST.tab==='earn'&&(ST.ep||ST.pw))))$('app').innerHTML=adm?admView():workView();return}
  $('app').innerHTML=adm?admView()+pricePanel():workView();
  if(adm&&ST.bid&&$('kd'))scn();
 }
