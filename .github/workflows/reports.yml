@@ -58,3 +58,12 @@ jobs:
           ROTATE_URL: ${{ secrets.ROTATE_URL }}
           REDDIT_COOKIE: ${{ secrets.REDDIT_COOKIE }}
         run: node report.mjs
+
+      - name: Save pictures of what the browser saw
+        if: always() && steps.peek.outputs.go == 'yes'
+        uses: actions/upload-artifact@v4
+        with:
+          name: report-debug
+          path: reports/debug
+          retention-days: 3
+          if-no-files-found: ignore
