@@ -4,6 +4,7 @@
 // No secrets live in this file: they come from GitHub Secrets.
 import { execFile } from 'node:child_process';
 import net from 'node:net';
+import fs from 'node:fs';
 import { chromium } from 'playwright';
 
 const SB = process.env.SB_URL || 'https://fkrgiaeglingmogcsyik.supabase.co';
@@ -208,17 +209,49 @@ function highlightFn(el, words) {
   walk(el); if (el.shadowRoot) walk(el.shadowRoot);
   return n;
 }
+const DEBUG_DIR = process.env.DEBUG_DIR || 'debug';
+const BLOCKED = /blocked by network security|you['’]ve been blocked|whoa there|verify you are (?:a )?human|are you a human|captcha|too many requests|access denied|log in to continue|sign in to continue|please wait for verification/i;
 const LAYOUTS = {
-  modern: { base: () => BASE, post: 'shreddit-post', comment: (cid) => `shreddit-comment[thingid="t1_${cid}"]` },
-  classic: { base: () => OLD, post: '#siteTable .thing.link', comment: (cid) => `.thing.comment[data-fullname="t1_${cid}"] > .entry, .thing.comment[data-fullname="t1_${cid}"]` },
+  modern: {
+    base: () => BASE,
+    post: ['shreddit-post', '[data-testid="post-container"]', 'article'],
+    comment: (cid) => [`shreddit-comment[thingid="t1_${cid}"]`, `shreddit-comment[thingid*="${cid}"]`, `shreddit-comment[permalink*="${cid}"]`, 'shreddit-comment'],
+  },
+  classic: {
+    base: () => OLD,
+    post: ['#siteTable .thing.link', '.thing.link'],
+    comment: (cid) => [`.thing.comment[data-fullname="t1_${cid}"] > .entry`, `.thing.comment[data-fullname="t1_${cid}"]`, '.commentarea .thing.comment > .entry'],
+  },
 };
-async function shoot(page, pair, words, layout) {
+async function pick(page, sels, ms) { // wait for any of the selectors, then use the most specific one that exists
+  await page.locator(sels.join(',')).first().waitFor({ state: 'attached', timeout: ms });
+  for (const sel of sels) if (await page.locator(sel).count()) return page.locator(sel).first();
+  throw new Error('nothing matched');
+}
+async function diag(page, tag) { // what did the browser actually see? kept as short text + a picture saved for you
+  const d = { url: page.url(), title: '', text: '' };
+  try { d.title = (await page.title()).slice(0, 80); d.text = (await page.evaluate(() => document.body ? document.body.innerText : '')).replace(/\s+/g, ' ').trim().slice(0, 200); } catch {}
+  try { fs.mkdirSync(DEBUG_DIR, { recursive: true }); await page.screenshot({ path: DEBUG_DIR + '/' + tag + '.png', timeout: 8000 }); fs.writeFileSync(DEBUG_DIR + '/' + tag + '.txt', d.url + '\n' + d.title + '\n\n' + (await page.content().catch(() => '')).slice(0, 150000)); } catch {}
+  return d;
+}
+async function shoot(page, pair, words, layout, tag) {
   const L = LAYOUTS[layout], cid = commentId(pair.comment);
   const url = toBase(pair.comment, L.base()) + (layout === 'classic' ? '?context=0' : '');
-  await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 45000 });
-  const comEl = page.locator(L.comment(cid)).first(), postEl = page.locator(L.post).first();
-  await comEl.waitFor({ state: 'attached', timeout: 15000 });
-  await postEl.waitFor({ state: 'attached', timeout: 10000 });
+  const go = async () => { await page.goto(url, { waitUntil: 'domcontentloaded', timeout: 60000 }); };
+  try { await go(); } catch (e) { log('page was slow, trying once more'); await go(); }
+  await page.waitForTimeout(1500);
+  if (layout === 'classic') { // 18+ gate on old Reddit
+    await page.locator('button[value="yes"], input[value="yes"]').first().click({ timeout: 1500 }).catch(() => {});
+  }
+  const snap = await page.evaluate(() => (document.title + ' ' + (document.body ? document.body.innerText.slice(0, 400) : ''))).catch(() => '');
+  if (BLOCKED.test(snap) && !/shreddit-comment|thing comment/.test(await page.content().catch(() => ''))) {
+    const d = await diag(page, tag); const e = new Error('Reddit blocked the browser (' + (d.title || d.text).slice(0, 90) + ')'); e.diag = d; throw e;
+  }
+  let comEl, postEl;
+  try {
+    comEl = await pick(page, L.comment(cid), 45000);
+    postEl = await pick(page, L.post, 15000);
+  } catch (e) { const d = await diag(page, tag); e.diag = d; e.message = 'comment not found on the page; page says: "' + (d.title + ' | ' + d.text).slice(0, 140) + '"'; throw e; }
   await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
   await prep(page);
   await page.waitForTimeout(600);
@@ -284,13 +317,16 @@ async function runJob(job) {
   try {
     if (PROXY) { relay = await startRelay(PROXY); log('proxy relay on port', relay.port); }
     try { const r = await curl('https://api.ipify.org', { json: false }); log('exit IP seen by the internet:', r.body.trim(), PROXY ? '(through proxy)' : '(NO proxy set)'); } catch (e) { log('IP test failed:', e.message); }
-    browser = await chromium.launch({ args: relay ? ['--proxy-server=socks5://127.0.0.1:' + relay.port] : [] });
+    const largs = ['--disable-blink-features=AutomationControlled', '--disable-background-networking'].concat(relay ? ['--proxy-server=socks5://127.0.0.1:' + relay.port] : []);
+    try { browser = await chromium.launch({ channel: 'chromium', args: largs }); } catch (e) { log('using the standard browser build'); browser = await chromium.launch({ args: largs }); }
     const ctx = await browser.newContext({ viewport: { width: 1100, height: 1400 }, deviceScaleFactor: 1.6, locale: 'en-US', userAgent: UA_WEB });
     if (COOKIE) {
       const host = new URL(BASE).hostname.replace(/^www\./, '');
       await ctx.addCookies(COOKIE.split(';').map((c) => c.trim()).filter(Boolean).map((c) => { const i = c.indexOf('='); return { name: c.slice(0, i), value: c.slice(i + 1), domain: host, path: '/' }; })).catch(() => {});
     }
+    await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
     const page = await ctx.newPage();
+    page.setDefaultNavigationTimeout(60000);
     let n = 0;
     for (const raw of pairs) {
       n++;
@@ -307,11 +343,11 @@ async function runJob(job) {
         if (!lc.unknown && !lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
         const lp = await lookSoft(pair.post, 'post'); await sleep(GAP_MS);
         if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
-        let shot = null, err = null;
+        let shot = null; const errs = [];
         for (const layout of (job.layout === 'classic' ? ['classic'] : ['modern', 'classic'])) {
-          try { shot = await shoot(page, pair, kws, layout); break; } catch (e) { err = e; log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
+          try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
-        if (!shot) { skip('Could not capture the page (' + String((err && err.message) || 'unknown').split('\n')[0].slice(0, 120) + ')'); continue; }
+        if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330)); continue; }
         if (lc.unknown && (!shot.comText.trim() || GONE_TXT.test(shot.comText.slice(0, 300)))) { skip('Comment is no longer live (checked on the page)'); continue; }
         if (lp.unknown && !shot.postText.trim()) { skip('Post is no longer live (checked on the page)'); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
