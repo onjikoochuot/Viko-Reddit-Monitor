@@ -15,6 +15,7 @@ const POLL_MS = (+process.env.POLL_SECONDS || 30) * 1000;
 const GAP_MS = +process.env.GAP_MS || 1500;
 const UA = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const GONE = ['[removed]', '[deleted]'];
+const snipOf = (t) => { t = String(t || '').replace(/\s+/g, ' ').trim(); return !t || GONE.includes(t) ? null : t.slice(0, 300); };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 
@@ -76,10 +77,10 @@ async function look(url, kind) {
     if (!c || c.kind !== 't1') return { s: 'removed' };
     const d = c.data;
     const rep = d.replies && d.replies.data ? d.replies.data.children.filter((x) => x.kind === 't1').length : 0;
-    return { s: GONE.includes(d.body) || d.author === '[deleted]' ? 'removed' : 'live', sc: d.score, rp: rep, t: po.title };
+    return { s: GONE.includes(d.body) || d.author === '[deleted]' ? 'removed' : 'live', sc: d.score, rp: rep, t: po.title, n: snipOf(d.body) };
   }
   const gone = !!po.removed_by_category || GONE.includes(po.selftext) || po.author === '[deleted]';
-  return { s: gone ? 'removed' : 'live', sc: po.score, rp: po.num_comments, t: po.title };
+  return { s: gone ? 'removed' : 'live', sc: po.score, rp: po.num_comments, t: po.title, n: snipOf(po.selftext) };
 }
 
 /* ---- new IP when Reddit says slow down (at most once every 10 minutes) ---- */
@@ -117,7 +118,7 @@ async function main() {
       }
       if (err && err.net) { log('proxy/network problem, stopping this round:', err.message); pauseUntil = Date.now() + 60000; break; }
       try {
-        if (r) await rpc('checker_report', { k: KEY, pid: p.id, st: r.s, sc: r.sc ?? null, rp: r.rp ?? null, ttl: r.t ?? null, msg: null });
+        if (r) await rpc('checker_report', { k: KEY, pid: p.id, st: r.s, sc: r.sc ?? null, rp: r.rp ?? null, ttl: r.t ?? null, msg: null, snip: r.n ?? null });
         else await rpc('checker_report', { k: KEY, pid: p.id, st: 'error', sc: null, rp: null, ttl: null, msg: 'checker: ' + String(err.message || err) });
         if (r) done++;
       } catch (e) { log('could not save result:', e.message); }
