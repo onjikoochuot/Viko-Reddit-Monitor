@@ -153,9 +153,18 @@ async function look(url, kind) {
 async function lookRetry(url, kind) {
   for (let a = 0; ; a++) {
     try { return await look(url, kind); }
-    catch (e) { if (e.slow && a === 0 && await rotate()) continue; throw e; }
+    catch (e) {
+      if (e.slow && a < 2) { if (!(await rotate())) await sleep((+process.env.SLOW_WAIT_MS || 20000) * (a + 1)); continue; }
+      throw e;
+    }
   }
 }
+// If Reddit will not answer the quick check, do not give up: the page itself is checked after the screenshot instead.
+async function lookSoft(url, kind) {
+  try { return await lookRetry(url, kind); }
+  catch (e) { if (e.net) throw e; log('quick check unavailable (' + String(e.message).slice(0, 80) + '), will verify on the page'); return { unknown: true }; }
+}
+const GONE_TXT = /\[removed\]|\[deleted\]|removed by (?:the )?moderators?|comment (?:removed|deleted)|this (?:comment|post) (?:was|has been) (?:removed|deleted)|post (?:removed|deleted) by/i;
 async function resolveShort(url, keepComment = false) { // /r/Sub/s/xxxx -> the real post link (or comment link)
   const r = await curl(BASE + new URL(url).pathname, { json: false });
   const m = ids(r.url);
@@ -217,9 +226,10 @@ async function shoot(page, pair, words, layout) {
   const nP = await page.evaluate(([e, w, f]) => (new Function('return ' + f))()(e, w), [hp, words, highlightFn.toString()]);
   const nC = await page.evaluate(([e, w, f]) => (new Function('return ' + f))()(e, w), [hc, words, highlightFn.toString()]);
   await page.waitForTimeout(250);
+  const postText = await postEl.innerText().catch(() => ''), comText = await comEl.innerText().catch(() => '');
   const post = await postEl.screenshot({ type: 'png', timeout: 30000 });
   const com = await comEl.screenshot({ type: 'png', timeout: 30000 });
-  return { post, com, hits: { post: nP, comment: nC } };
+  return { post, com, postText, comText, hits: { post: nP, comment: nC } };
 }
 
 /* ---------------- the PDF ---------------- */
@@ -293,15 +303,17 @@ async function runJob(job) {
         if (!pair.comment || !ids(pair.comment) || !commentId(pair.comment)) { skip('Link is not a Reddit comment link'); continue; }
         if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? await resolveShort(pair.post) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
         const shownPost = raw.post || pair.post;
-        const lc = await lookRetry(pair.comment, 'comment'); await sleep(GAP_MS);
-        if (!lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
-        const lp = await lookRetry(pair.post, 'post'); await sleep(GAP_MS);
-        if (!lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
+        const lc = await lookSoft(pair.comment, 'comment'); await sleep(GAP_MS);
+        if (!lc.unknown && !lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
+        const lp = await lookSoft(pair.post, 'post'); await sleep(GAP_MS);
+        if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
         let shot = null, err = null;
         for (const layout of (job.layout === 'classic' ? ['classic'] : ['modern', 'classic'])) {
           try { shot = await shoot(page, pair, kws, layout); break; } catch (e) { err = e; log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
         if (!shot) { skip('Could not capture the page (' + String((err && err.message) || 'unknown').split('\n')[0].slice(0, 120) + ')'); continue; }
+        if (lc.unknown && (!shot.comText.trim() || GONE_TXT.test(shot.comText.slice(0, 300)))) { skip('Comment is no longer live (checked on the page)'); continue; }
+        if (lp.unknown && !shot.postText.trim()) { skip('Post is no longer live (checked on the page)'); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
         items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
         bump(n); log(n + '/' + pairs.length, 'captured (highlights: post ' + shot.hits.post + ', comment ' + shot.hits.comment + ')');
