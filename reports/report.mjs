@@ -5,6 +5,19 @@
 import { execFile } from 'node:child_process';
 import net from 'node:net';
 import fs from 'node:fs';
+import path from 'node:path';
+import { fileURLToPath } from 'node:url';
+
+// Settings file for running on your own computer (settings.env next to this file). Not used on GitHub.
+const HERE = path.dirname(fileURLToPath(import.meta.url));
+for (const f of ['settings.env', '.env']) {
+  try {
+    for (const line of fs.readFileSync(path.join(HERE, f), 'utf8').split(/\r?\n/)) {
+      const m = line.match(/^\s*([A-Z_]+)\s*=\s*(.*?)\s*$/);
+      if (m && !line.trim().startsWith('#') && m[2] !== '' && !(m[1] in process.env)) process.env[m[1]] = m[2].replace(/^["']|["']$/g, '');
+    }
+  } catch {}
+}
 import { chromium } from 'playwright';
 
 const SB = process.env.SB_URL || 'https://fkrgiaeglingmogcsyik.supabase.co';
@@ -23,7 +36,16 @@ const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
-if (!SERVICE) { console.error('SUPABASE_SERVICE_KEY secret is missing. See README.'); process.exit(1); }
+const LOCAL = process.env.LOCAL === '1';           // 1 = run on your own computer in your own logged-in Brave
+const PROFILE = process.env.PROFILE_DIR || path.join(HERE, 'reports_profile');
+function findBrowser() {
+  if (process.env.BROWSER_PATH) return process.env.BROWSER_PATH;
+  const c = ['C:\\Program Files\\BraveSoftware\\Brave-Browser\\Application\\brave.exe', 'C:\\Program Files (x86)\\BraveSoftware\\Brave-Browser\\Application\\brave.exe',
+    path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
+    '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser', '/usr/bin/brave-browser'];
+  return c.find((x) => x && fs.existsSync(x)) || '';
+}
+if (!SERVICE && !process.argv.includes('--login')) { console.error('SUPABASE_SERVICE_KEY is missing. On GitHub it is a Secret; on your computer it goes in settings.env.'); process.exit(1); }
 
 /* ---------------- Supabase (REST, with the service key) ---------------- */
 async function sb(path, { method = 'GET', body, headers = {}, raw } = {}) {
@@ -35,7 +57,13 @@ async function sb(path, { method = 'GET', body, headers = {}, raw } = {}) {
   if (!r.ok) throw new Error('db ' + r.status + ' ' + t.slice(0, 200));
   try { return t ? JSON.parse(t) : null; } catch { return t; }
 }
-const patchJob = (id, o) => sb('/rest/v1/report_jobs?id=eq.' + id, { method: 'PATCH', body: o, headers: { Prefer: 'return=minimal' } });
+const patchJob = async (id, o) => {
+  try { return await sb('/rest/v1/report_jobs?id=eq.' + id, { method: 'PATCH', body: o, headers: { Prefer: 'return=minimal' } }); }
+  catch (e) { // database update 15 not run yet: carry on without the new column
+    if (/retry_local/.test(String(e.message)) && 'retry_local' in o) { const { retry_local, ...rest } = o; return sb('/rest/v1/report_jobs?id=eq.' + id, { method: 'PATCH', body: rest, headers: { Prefer: 'return=minimal' } }); }
+    throw e;
+  }
+};
 
 /* ---------------- SOCKS5 relay: Chromium cannot log in to a SOCKS5 proxy, so we do it here ---------------- */
 function reader(s) {
@@ -299,12 +327,28 @@ function reportHtml(job, items) {
 
 /* ---------------- main ---------------- */
 async function claim() {
+  const hdr = { Prefer: 'return=representation' };
+  if (LOCAL) {
+    // Your computer: first the reports GitHub could not finish, then (only if you chose so) brand-new ones.
+    let rows = await sb('/rest/v1/report_jobs?retry_local=eq.true&order=created_at.asc&limit=1').catch(() => []);
+    if ((!rows || !rows[0]) && process.env.LOCAL_TAKE_NEW === '1') {
+      const stale = new Date(Date.now() - 45 * 60000).toISOString();
+      await sb('/rest/v1/report_jobs?status=eq.running&started_at=lt.' + stale, { method: 'PATCH', body: { status: 'pending' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
+      rows = await sb('/rest/v1/report_jobs?status=eq.pending&order=created_at.asc&limit=1');
+      if (!rows || !rows[0]) return null;
+      const got = await sb('/rest/v1/report_jobs?id=eq.' + rows[0].id + '&status=eq.pending', { method: 'PATCH', body: { status: 'running', started_at: new Date().toISOString(), progress: 0, note: 'Your computer is making this report.' }, headers: hdr });
+      return got && got[0] ? got[0] : null;
+    }
+    if (!rows || !rows[0]) return null;
+    const got = await sb('/rest/v1/report_jobs?id=eq.' + rows[0].id + '&retry_local=eq.true', { method: 'PATCH', body: { status: 'running', retry_local: false, started_at: new Date().toISOString(), progress: 0, skipped: [], included: 0, note: 'Your computer is making this report.' }, headers: hdr });
+    return got && got[0] ? got[0] : null;
+  }
   const stale = new Date(Date.now() - 45 * 60000).toISOString();
   await sb('/rest/v1/report_jobs?status=eq.running&started_at=lt.' + stale, { method: 'PATCH', body: { status: 'pending' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
   const f = ONLY ? '&id=eq.' + ONLY : '';
   const rows = await sb('/rest/v1/report_jobs?status=eq.pending' + f + '&order=created_at.asc&limit=1');
   if (!rows || !rows[0]) return null;
-  const got = await sb('/rest/v1/report_jobs?id=eq.' + rows[0].id + '&status=eq.pending', { method: 'PATCH', body: { status: 'running', started_at: new Date().toISOString(), progress: 0, note: null }, headers: { Prefer: 'return=representation' } });
+  const got = await sb('/rest/v1/report_jobs?id=eq.' + rows[0].id + '&status=eq.pending', { method: 'PATCH', body: { status: 'running', started_at: new Date().toISOString(), progress: 0, note: null }, headers: hdr });
   return got && got[0] ? got[0] : null;
 }
 
@@ -312,15 +356,23 @@ async function runJob(job) {
   const kws = String(job.keyword || '').split(',').map((s) => s.trim()).filter(Boolean);
   const pairs = Array.isArray(job.pairs) ? job.pairs : [];
   const skipped = [], items = [];
-  let relay = null, browser = null, noHit = 0;
+  let relay = null, browser = null, ctx = null, noHit = 0;
   const bump = (n) => patchJob(job.id, { progress: n }).catch(() => {});
   try {
     if (PROXY) { relay = await startRelay(PROXY); log('proxy relay on port', relay.port); }
     try { const r = await curl('https://api.ipify.org', { json: false }); log('exit IP seen by the internet:', r.body.trim(), PROXY ? '(through proxy)' : '(NO proxy set)'); } catch (e) { log('IP test failed:', e.message); }
-    const largs = ['--disable-blink-features=AutomationControlled', '--disable-background-networking'].concat(relay ? ['--proxy-server=socks5://127.0.0.1:' + relay.port] : []);
-    try { browser = await chromium.launch({ channel: 'chromium', args: largs }); } catch (e) { log('using the standard browser build'); browser = await chromium.launch({ args: largs }); }
-    const ctx = await browser.newContext({ viewport: { width: 1100, height: 1400 }, deviceScaleFactor: 1.6, locale: 'en-US', userAgent: UA_WEB });
-    if (COOKIE) {
+    if (LOCAL) {
+      const exe = findBrowser();
+      if (!exe) throw new Error('Brave was not found on this computer. Put its path in settings.env as BROWSER_PATH=...');
+      log('using your own browser:', exe);
+      ctx = await chromium.launchPersistentContext(PROFILE, { executablePath: exe, headless: process.env.HEADLESS === '1', viewport: { width: 1100, height: 1400 }, deviceScaleFactor: 1.6, locale: 'en-US',
+        args: ['--disable-background-networking'].concat(process.env.EXTRA_ARGS ? process.env.EXTRA_ARGS.split(' ') : []) });
+    } else {
+      const largs = ['--disable-blink-features=AutomationControlled', '--disable-background-networking'].concat(relay ? ['--proxy-server=socks5://127.0.0.1:' + relay.port] : []);
+      try { browser = await chromium.launch({ channel: 'chromium', args: largs }); } catch (e) { log('using the standard browser build'); browser = await chromium.launch({ args: largs }); }
+      ctx = await browser.newContext({ viewport: { width: 1100, height: 1400 }, deviceScaleFactor: 1.6, locale: 'en-US', userAgent: UA_WEB });
+    }
+    if (COOKIE && !LOCAL) {
       const host = new URL(BASE).hostname.replace(/^www\./, '');
       await ctx.addCookies(COOKIE.split(';').map((c) => c.trim()).filter(Boolean).map((c) => { const i = c.indexOf('='); return { name: c.slice(0, i), value: c.slice(i + 1), domain: host, path: '/' }; })).catch(() => {});
     }
@@ -331,10 +383,10 @@ async function runJob(job) {
     for (const raw of pairs) {
       n++;
       const pair = { post: raw.post || '', comment: raw.comment || '', sub: raw.sub || '' };
-      const skip = (why) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
+      const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
-          try { pair.comment = await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')'); continue; }
+          try { pair.comment = await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
         }
         if (!pair.comment || !ids(pair.comment) || !commentId(pair.comment)) { skip('Link is not a Reddit comment link'); continue; }
         if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? await resolveShort(pair.post) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
@@ -347,34 +399,65 @@ async function runJob(job) {
         for (const layout of (job.layout === 'classic' ? ['classic'] : ['modern', 'classic'])) {
           try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
-        if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330)); continue; }
+        if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330), true); continue; }
         if (lc.unknown && (!shot.comText.trim() || GONE_TXT.test(shot.comText.slice(0, 300)))) { skip('Comment is no longer live (checked on the page)'); continue; }
         if (lp.unknown && !shot.postText.trim()) { skip('Post is no longer live (checked on the page)'); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
         items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
         bump(n); log(n + '/' + pairs.length, 'captured (highlights: post ' + shot.hits.post + ', comment ' + shot.hits.comment + ')');
       } catch (e) {
-        if (e.net) { skip('Network or proxy problem: ' + e.message); }
-        else if (e.slow) { skip('Reddit asked us to slow down. Try this one again later.'); await sleep(20000); }
-        else skip('Could not check on Reddit (' + String(e.message).slice(0, 100) + ')');
+        if (e.net) { skip('Network or proxy problem: ' + e.message, true); }
+        else if (e.slow) { skip('Reddit asked us to slow down. Try this one again later.', true); await sleep(20000); }
+        else skip('Could not check on Reddit (' + String(e.message).slice(0, 100) + ')', true);
       }
     }
-    if (!items.length) { await patchJob(job.id, { status: 'failed', note: 'None of the ' + pairs.length + ' engagements could be included, so no report was made. See the list below for the reasons.', skipped, included: 0, progress: pairs.length, finished_at: new Date().toISOString() }); return; }
+    const retryable = skipped.filter((x) => x.retry).length, escalate = !LOCAL && retryable > 0 && process.env.ESCALATE !== '0';
+    if (!items.length) {
+      await patchJob(job.id, { status: 'failed', retry_local: escalate, note: escalate ? 'GitHub could not open these pages (' + retryable + '). Your computer will try next. It needs the Keep_running window open.' : 'None of the ' + pairs.length + ' engagements could be included, so no report was made. See the list below for the reasons.', skipped, included: 0, progress: pairs.length, finished_at: new Date().toISOString() });
+      return;
+    }
     const pdfPage = await ctx.newPage();
     await pdfPage.setContent(reportHtml(job, items), { waitUntil: 'load' });
     const pdf = await pdfPage.pdf({ format: 'Letter', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
     const path = job.id + '/report.pdf';
     await sb('/storage/v1/object/reports/' + path, { method: 'POST', raw: true, body: pdf, headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
-    const note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
-    await patchJob(job.id, { status: 'done', file_path: path, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
+    let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
+    if (escalate) note = 'Partly ready: ' + retryable + ' engagement' + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
+    await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: path, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');
   } finally {
+    if (ctx && LOCAL) await ctx.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
     if (relay) relay.close();
   }
 }
 
+async function loginOnly() {
+  const exe = findBrowser();
+  if (!exe) { console.error('Brave was not found. Put its path in settings.env as BROWSER_PATH=...'); process.exit(1); }
+  const c = await chromium.launchPersistentContext(PROFILE, { executablePath: exe, headless: false, viewport: null });
+  const pg = c.pages()[0] || await c.newPage();
+  await pg.goto('https://www.reddit.com/login').catch(() => {});
+  log('A browser window opened. Log in to Reddit there, then CLOSE the window. Your login is remembered for the reports.');
+  await new Promise((r) => c.on('close', r));
+  log('Login saved. You can now double-click Make_reports.bat');
+}
 async function main() {
+  if (process.argv.includes('--login')) { await loginOnly(); return; }
+  if (process.argv.includes('--watch')) { // keep running and check every minute
+    log('Watching for reports that GitHub could not finish. Leave this window open (you can minimise it).');
+    let idle = 0;
+    for (;;) {
+      let did = false;
+      try { did = await once(); } catch (e) { log('could not reach the database, will try again:', String(e.message).slice(0, 100)); }
+      if (did) idle = 0; else if (++idle % 10 === 0) log('still watching, nothing waiting');
+      await sleep(60000);
+    }
+  }
+  const any = await once();
+  if (!any) log('no report waiting');
+}
+async function once() {
   let any = false;
   for (let i = 0; i < 20; i++) { // one run works through every waiting report
     const job = await claim();
@@ -382,8 +465,8 @@ async function main() {
     any = true;
     log('making report', job.id, '-', job.title, '-', (job.pairs || []).length, 'engagements');
     try { await runJob(job); }
-    catch (e) { console.error(e); await patchJob(job.id, { status: 'failed', note: 'The report stopped: ' + String(e.message || e).slice(0, 200), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
+    catch (e) { console.error(e); await patchJob(job.id, { status: 'failed', retry_local: !LOCAL && process.env.ESCALATE !== '0', note: 'The report stopped: ' + String(e.message || e).slice(0, 200) + (LOCAL ? '' : ' Your computer will try next.'), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
   }
-  if (!any) log('no report waiting');
+  return any;
 }
 if (process.argv[1] && process.argv[1].endsWith('report.mjs')) main();
