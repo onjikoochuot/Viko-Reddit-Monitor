@@ -1786,6 +1786,10 @@ function rqPoll(){const q=RQ();clearTimeout(q.timer);if(ST.tab!=='reports')retur
 const rqFile=j=>(j.title||'report').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_'+ymd(j.created_at)+'.pdf';
 async function rqDl(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!j.file_path)return;const{data,error}=await sb.storage.from('reports').createSignedUrl(j.file_path,300,{download:rqFile(j)});
  if(error||!data)return alert('Could not open the file: '+((error&&error.message)||'try again'));const a=document.createElement('a');a.href=data.signedUrl;a.download=rqFile(j);document.body.appendChild(a);a.click();a.remove()}
+async function rqRetry(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j)return;
+ if(j.status==='done'&&!confirm('Make this report again? The current PDF will be replaced when the new one is ready.'))return;
+ const{error}=await sb.from('report_jobs').update({status:'pending',progress:0,included:0,skipped:[],note:null,layout:'modern',started_at:null,finished_at:null}).eq('id',id);if(!noErr(error))return;
+ const q=RQ();q.msg='Started again. It begins within about 5 minutes (or press Run workflow on GitHub).';await rqJobs();rqDraw()}
 async function rqDel(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!confirm('Delete this report'+(j.file_path?' and its PDF':'')+'?'))return;
  if(j.file_path)await sb.storage.from('reports').remove([j.file_path]);const{error}=await sb.from('report_jobs').delete().eq('id',id);if(!noErr(error))return;await rqJobs()}
 function rqJobsHtml(){const q=RQ();if(q.jerr==='v14')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_14.sql</b> and press Run, then reload this page.</div>';
@@ -1793,7 +1797,7 @@ function rqJobsHtml(){const q=RQ();if(q.jerr==='v14')return '<div class="warn"><
  if(!q.jobs.length)return '<div class="empty">No reports yet. Make your first one above.</div>';
  const st=j=>j.status==='done'?'<span class="chip ok">Ready</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Working: '+(j.progress||0)+' of '+(j.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
  return q.jobs.map(j=>{const sk=Array.isArray(j.skipped)?j.skipped:[];return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.title)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.brand_name||'Uploaded file')+(j.range_label&&j.source!=='upload'?' &middot; '+esc(j.range_label):'')+' &middot; '+(j.status==='done'?(j.included||0)+' of '+j.total+' included':j.total+' requested')+'</div></div>'+st(j)
-  +'<div class="a">'+(j.status==='done'&&j.file_path?'<button class="p sm" onclick="rqDl(\''+j.id+'\')">Download PDF</button>':'')+'<button class="sm dng" onclick="rqDel(\''+j.id+'\')">Delete</button></div></div>'
+  +'<div class="a">'+(j.status==='done'&&j.file_path?'<button class="p sm" onclick="rqDl(\''+j.id+'\')">Download PDF</button>':'')+(j.status==='failed'?'<button class="p sm" onclick="rqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="rqRetry(\''+j.id+'\')">Make again</button>':'')+'<button class="sm dng" onclick="rqDel(\''+j.id+'\')">Delete</button></div></div>'
   +(j.status==='running'&&j.total?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/j.total*100)+'%"></i></div>':'')
   +(j.note&&j.status!=='done'?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
   +(sk.length?'<details style="margin-top:8px"><summary>Not included ('+sk.length+')</summary><table class="et"><tr><th>Link</th><th>Why</th></tr>'+sk.map(s=>'<tr><td><a href="'+esc(s.comment||s.post||'#')+'" target="_blank" rel="noopener">'+esc(clip(s.comment||s.post||'',70))+'</a></td><td>'+esc(s.reason||'')+'</td></tr>').join('')+'</table></details>':'')+'</div>'}).join('')}
@@ -1814,7 +1818,7 @@ function rqMain(){const q=RQ(),brandSrc=q.src==='brand';
  return '<div class="cb">'+src+body+'</div>'
   +'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Report title</span><input id="rq_t" style="width:100%" value="'+esc(q.title)+'" placeholder="Brand Reddit Engagement Report" oninput="RQ().title=this.value;RQ().titleDone=true"></label>'
   +'<label style="flex:1;min-width:200px"><span class="s">Word to highlight in yellow (separate several with commas)</span><input id="rq_k" style="width:100%" value="'+esc(q.kw)+'" placeholder="for example Dripify" oninput="RQ().kw=this.value;RQ().kwDone=true"></label>'
-  +'<label><span class="s">Reddit look</span><select onchange="RQ().layout=this.value"><option value="modern"'+(q.layout==='modern'?' selected':'')+'>Modern Reddit</option><option value="classic"'+(q.layout==='classic'?' selected':'')+'>Classic Reddit (most reliable)</option></select></label></div></div>'
+  +'<label><span class="s">Reddit look</span><select onchange="RQ().layout=this.value"><option value="modern"'+(q.layout==='modern'?' selected':'')+'>Modern Reddit</option><option value="classic"'+(q.layout==='classic'?' selected':'')+'>Classic Reddit (needs a logged-in browser)</option></select></label></div></div>'
   +(q.msg?'<div class="hint">'+esc(q.msg)+'</div>':'')
   +'<div class="cb"><div id="rq_rows">'+rqRowsHtml()+'</div><div class="row" style="margin-top:14px"><button class="p" onclick="rqGo()">Generate report</button><span class="s">It is made in the background (usually 5 to 15 minutes) and appears under Your reports.</span></div></div>'}
 function reportsView(){const q=RQ();if(q.jobs==null&&!q.jerr)setTimeout(rqJobs,30);else rqPoll();
