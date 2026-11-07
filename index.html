@@ -1779,7 +1779,8 @@ async function rqGo(){if(needV14())return;const q=RQ(),use=q.rows.filter(r=>r.on
  const{error}=await sb.from('report_jobs').insert(row);if(!noErr(error))return;
  q.msg='Report requested. It starts within about 5 minutes and shows below when it is ready.';await rqJobs();rqDraw()}
 /* ---- history ---- */
-async function rqJobs(){const q=RQ();const{data,error}=await sb.from('report_jobs').select('id,created_at,title,brand_name,status,total,progress,included,skipped,note,file_path,range_label,source,finished_at').order('created_at',{ascending:false}).limit(25);
+async function rqJobs(){const q=RQ();const cols='id,created_at,title,brand_name,status,total,progress,included,skipped,note,file_path,range_label,source,finished_at';let{data,error}=await sb.from('report_jobs').select(cols+',retry_local').order('created_at',{ascending:false}).limit(25);
+ if(error&&/retry_local/.test(error.message||'')){const r=await sb.from('report_jobs').select(cols).order('created_at',{ascending:false}).limit(25);data=r.data;error=r.error}
  if(error){q.jerr=/report_jobs|schema cache|relation/i.test(error.message||'')?'v14':(error.message||'error')}else{q.jerr='';q.jobs=data||[]}
  const e=$('rq_jobs');if(e)e.innerHTML=rqJobsHtml();rqPoll()}
 function rqPoll(){const q=RQ();clearTimeout(q.timer);if(ST.tab!=='reports')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running'))q.timer=setTimeout(rqJobs,8000)}
@@ -1788,18 +1789,18 @@ async function rqDl(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!j.fil
  if(error||!data)return alert('Could not open the file: '+((error&&error.message)||'try again'));const a=document.createElement('a');a.href=data.signedUrl;a.download=rqFile(j);document.body.appendChild(a);a.click();a.remove()}
 async function rqRetry(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j)return;
  if(j.status==='done'&&!confirm('Make this report again? The current PDF will be replaced when the new one is ready.'))return;
- const{error}=await sb.from('report_jobs').update({status:'pending',progress:0,included:0,skipped:[],note:null,layout:'modern',started_at:null,finished_at:null}).eq('id',id);if(!noErr(error))return;
+ const{error}=await sb.from('report_jobs').update({status:'pending',progress:0,included:0,skipped:[],note:null,layout:'modern',started_at:null,finished_at:null,...('retry_local' in j?{retry_local:false}:{})}).eq('id',id);if(!noErr(error))return;
  const q=RQ();q.msg='Started again. It begins within about 5 minutes (or press Run workflow on GitHub).';await rqJobs();rqDraw()}
 async function rqDel(id){const j=(RQ().jobs||[]).find(x=>x.id===id);if(!j||!confirm('Delete this report'+(j.file_path?' and its PDF':'')+'?'))return;
  if(j.file_path)await sb.storage.from('reports').remove([j.file_path]);const{error}=await sb.from('report_jobs').delete().eq('id',id);if(!noErr(error))return;await rqJobs()}
 function rqJobsHtml(){const q=RQ();if(q.jerr==='v14')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_14.sql</b> and press Run, then reload this page.</div>';
  if(q.jerr)return '<div class="warn">Could not load your reports: '+esc(q.jerr)+'</div>';if(q.jobs==null)return '<div class="s">Loading...</div>';
  if(!q.jobs.length)return '<div class="empty">No reports yet. Make your first one above.</div>';
- const st=j=>j.status==='done'?'<span class="chip ok">Ready</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Working: '+(j.progress||0)+' of '+(j.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
+ const st=j=>j.retry_local?'<span class="chip warn">'+(j.status==='done'?'Partly ready. Your computer will finish it':'Waiting for your computer')+'</span>':j.status==='done'?'<span class="chip ok">Ready</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Working: '+(j.progress||0)+' of '+(j.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
  return q.jobs.map(j=>{const sk=Array.isArray(j.skipped)?j.skipped:[];return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.title)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.brand_name||'Uploaded file')+(j.range_label&&j.source!=='upload'?' &middot; '+esc(j.range_label):'')+' &middot; '+(j.status==='done'?(j.included||0)+' of '+j.total+' included':j.total+' requested')+'</div></div>'+st(j)
   +'<div class="a">'+(j.status==='done'&&j.file_path?'<button class="p sm" onclick="rqDl(\''+j.id+'\')">Download PDF</button>':'')+(j.status==='failed'?'<button class="p sm" onclick="rqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="rqRetry(\''+j.id+'\')">Make again</button>':'')+'<button class="sm dng" onclick="rqDel(\''+j.id+'\')">Delete</button></div></div>'
   +(j.status==='running'&&j.total?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/j.total*100)+'%"></i></div>':'')
-  +(j.note&&j.status!=='done'?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
+  +(j.note&&(j.status!=='done'||j.retry_local)?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
   +(sk.length?'<details style="margin-top:8px"><summary>Not included ('+sk.length+')</summary><table class="et"><tr><th>Link</th><th>Why</th></tr>'+sk.map(s=>'<tr><td><a href="'+esc(s.comment||s.post||'#')+'" target="_blank" rel="noopener">'+esc(clip(s.comment||s.post||'',70))+'</a></td><td>'+esc(s.reason||'')+'</td></tr>').join('')+'</table></details>':'')+'</div>'}).join('')}
 /* ---- page ---- */
 function rqRowsHtml(){const q=RQ(),R=q.rows;if(!R.length)return q.src==='brand'?(q.bid?'<div class="empty">No live comments for this brand in this period.</div>':'<div class="s">Choose a brand to see its live comments.</div>'):(q.parsing?'':'<div class="s">Nothing loaded yet.</div>');
