@@ -60,11 +60,23 @@ async function openOwnBrowser({ exe, profile, headless = false, url = 'about:bla
   const port = 9300 + Math.floor(Math.random() * 600);
   const args = ['--remote-debugging-port=' + port, '--remote-allow-origins=*', '--user-data-dir=' + profile, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--window-size=1250,1500']
     .concat(headless ? ['--headless=new'] : []).concat(process.env.EXTRA_ARGS ? process.env.EXTRA_ARGS.split(' ') : []).concat([url]);
+  log('starting the browser:', exe);
   const child = spawn(exe, args, { stdio: 'ignore' });
-  child.on('error', (e) => log('could not start the browser:', e.message));
+  let exited = null, startErr = null;
+  child.on('error', (e) => { startErr = e; log('could not start the browser:', e.message); });
+  child.on('exit', (code) => { exited = code; });
   let up = false;
-  for (let i = 0; i < 80 && !up; i++) { try { up = (await fetch('http://127.0.0.1:' + port + '/json/version')).ok; } catch {} if (!up) await sleep(500); }
-  if (!up) { killTree(child); throw new Error('The browser did not start. Close every Brave window that uses the reports profile (also check near the clock) and try again.'); }
+  for (let i = 0; i < 160 && !up; i++) {
+    try { up = (await fetch('http://127.0.0.1:' + port + '/json/version')).ok; } catch {}
+    if (!up) { if (startErr || exited !== null) break; await sleep(500); }
+  }
+  if (!up) {
+    killTree(child);
+    const why = startErr ? 'Windows could not open it (' + startErr.message + '). Check BROWSER_PATH in settings.env.'
+      : exited !== null ? 'It closed straight away (code ' + exited + '). This almost always means another Brave window is already using the reports profile. Close it (also check near the clock) and try again.'
+      : 'It opened but did not answer in 80 seconds.';
+    throw new Error('The browser did not start. ' + why);
+  }
   const browser = await chromium.connectOverCDP('http://127.0.0.1:' + port);
   return { browser, child };
 }
@@ -494,8 +506,27 @@ async function loginOnly() { // opens your real Brave (no automation at all) wit
   await new Promise((r) => child.on('exit', r));
   log('Done. Next, double-click Keep_running.bat');
 }
+async function testBrowser() { // quick check that the browser starts and Reddit shows you as logged in
+  const exe = findBrowser();
+  if (!exe) { console.error('Brave was not found. Put its path in settings.env as BROWSER_PATH=...'); return; }
+  log('Brave found at', exe, '| profile folder:', PROFILE);
+  let own;
+  try { own = await openOwnBrowser({ exe, profile: PROFILE, headless: process.env.HEADLESS === '1', url: 'https://www.reddit.com/' }); } catch (e) { console.error('FAILED:', e.message); return; }
+  try {
+    log('Brave started and answered. Good.');
+    const ctx = own.browser.contexts()[0] || await own.browser.newContext();
+    const pg = ctx.pages()[0] || await ctx.newPage();
+    await pg.goto('https://www.reddit.com/', { waitUntil: 'domcontentloaded', timeout: 60000 });
+    await sleep(4000);
+    const info = await pg.evaluate(() => ({ title: document.title, loggedIn: !!document.querySelector('[id*="expand-user-drawer"], faceplate-tracker[source="user_menu"], #USER_DROPDOWN_ID, [aria-label="Open user menu"], [data-testid="user-drawer-button"]'), text: (document.body ? document.body.innerText : '').slice(0, 120).replace(/\s+/g, ' ') }));
+    log('Reddit page title:', info.title);
+    log(info.loggedIn ? 'Reddit looks LOGGED IN.' : 'Could not see a logged-in Reddit menu (you may be logged out, or Reddit looks different). First text on the page: ' + info.text);
+  } catch (e) { console.error('The browser started but Reddit did not load:', e.message); }
+  finally { await own.browser.close().catch(() => {}); killTree(own.child); }
+}
 async function main() {
   if (process.argv.includes('--login')) { await loginOnly(); return; }
+  if (process.argv.includes('--test')) { await testBrowser(); return; }
   if (process.argv.includes('--watch')) { // keep running and check every minute
     log('Watching for reports that GitHub could not finish. Leave this window open (you can minimise it).');
     let idle = 0;
