@@ -1,0 +1,60 @@
+name: Make reports
+
+# Looks for a report that was requested on the website (Make reports), and builds it:
+# re-checks every post and comment on Reddit through your proxy, takes screenshots, builds the PDF.
+# When nothing is waiting it stops after a few seconds, so it costs almost nothing.
+on:
+  schedule:
+    - cron: '*/5 * * * *'
+  workflow_dispatch:
+
+concurrency:
+  group: reports
+  cancel-in-progress: false
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Is a report waiting?
+        id: peek
+        env:
+          SB_URL: https://fkrgiaeglingmogcsyik.supabase.co
+          KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+        run: |
+          if [ -z "$KEY" ]; then echo "The SUPABASE_SERVICE_KEY secret is missing. See the setup steps."; exit 1; fi
+          STALE=$(date -u -d '45 minutes ago' +%Y-%m-%dT%H:%M:%SZ)
+          AUTH=""
+          case "$KEY" in eyJ*) AUTH="header = \"Authorization: Bearer $KEY\"" ;; esac
+          ANS=$(printf 'silent\nshow-error\nheader = "apikey: %s"\n%s\nurl = "%s/rest/v1/report_jobs?select=id&or=(status.eq.pending,and(status.eq.running,started_at.lt.%s))&limit=1"\n' "$KEY" "$AUTH" "$SB_URL" "$STALE" | curl -K -) || { echo "Could not reach the database."; exit 1; }
+          case "$ANS" in
+            "[]") echo "No report waiting."; echo "go=no" >> "$GITHUB_OUTPUT" ;;
+            "[{"*) echo "A report is waiting."; echo "go=yes" >> "$GITHUB_OUTPUT" ;;
+            *) echo "Unexpected answer from the database: ${ANS:0:200}"; exit 1 ;;
+          esac
+
+      - uses: actions/setup-node@v4
+        if: steps.peek.outputs.go == 'yes'
+        with:
+          node-version: 20
+
+      - name: Install the browser
+        if: steps.peek.outputs.go == 'yes'
+        working-directory: reports
+        run: |
+          npm install --no-audit --no-fund
+          npx playwright install --with-deps chromium
+
+      - name: Make the report
+        if: steps.peek.outputs.go == 'yes'
+        working-directory: reports
+        env:
+          SB_URL: https://fkrgiaeglingmogcsyik.supabase.co
+          SUPABASE_SERVICE_KEY: ${{ secrets.SUPABASE_SERVICE_KEY }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          ROTATE_URL: ${{ secrets.ROTATE_URL }}
+          REDDIT_COOKIE: ${{ secrets.REDDIT_COOKIE }}
+        run: node report.mjs
