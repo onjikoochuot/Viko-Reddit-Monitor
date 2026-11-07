@@ -238,6 +238,16 @@ async function resolveShort(url, keepComment = false) { // /r/Sub/s/xxxx -> the 
   return o + '/r/' + m.sub + '/comments/' + m.post + '/';
 }
 
+async function resolveShortInBrowser(page, url, keepComment = false) { // your own browser follows the short link
+  await page.goto(BASE + new URL(url).pathname, { waitUntil: 'domcontentloaded', timeout: 60000 });
+  await page.waitForTimeout(1500);
+  const u = page.url(), m = ids(u);
+  if (!m) throw new Error('short link could not be opened');
+  const o = new URL(u).origin;
+  if (keepComment && commentId(u)) return o + new URL(u).pathname;
+  return o + '/r/' + m.sub + '/comments/' + m.post + '/';
+}
+
 /* ---------------- screenshots ---------------- */
 const CLEAN_CSS = `shreddit-comment shreddit-comment,shreddit-comment [slot="children"],.thing.comment .child{display:none!important}
  shreddit-async-loader[bundlename*="xpromo"],[class*="xpromo"],xpromo-bottom-sheet,#onetrust-consent-sdk,#cmp-app-container,faceplate-dialog,shreddit-scrim,.infobar-toaster-container,#eu-cookie-policy,.cookie-infobar{display:none!important}
@@ -435,22 +445,24 @@ async function runJob(job) {
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
-          try { pair.comment = await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
+          try { pair.comment = LOCAL ? await resolveShortInBrowser(page, pair.comment, true) : await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
         }
         if (!pair.comment || !ids(pair.comment) || !commentId(pair.comment)) { skip('Link is not a Reddit comment link'); continue; }
-        if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? await resolveShort(pair.post) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
+        if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? (LOCAL ? await resolveShortInBrowser(page, pair.post) : await resolveShort(pair.post)) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
         const shownPost = raw.post || pair.post;
-        const lc = await lookSoft(pair.comment, 'comment'); await sleep(GAP_MS);
+        log(n + '/' + pairs.length, 'opening', pair.comment.replace(/^https?:\/\/[^/]+/, '').slice(0, 70));
+        const lc = LOCAL ? { unknown: true } : await lookSoft(pair.comment, 'comment'); if (!LOCAL) await sleep(GAP_MS);
         if (!lc.unknown && !lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
-        const lp = await lookSoft(pair.post, 'post'); await sleep(GAP_MS);
+        const lp = LOCAL ? { unknown: true } : await lookSoft(pair.post, 'post'); if (!LOCAL) await sleep(GAP_MS);
         if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
         let shot = null; const errs = [];
-        for (const layout of (job.layout === 'classic' ? ['classic'] : ['modern', 'classic'])) {
+        for (const layout of ['modern']) { // old Reddit is not used: it needs a login and is being phased out
           try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
         if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330), true); continue; }
         if (lc.unknown && GONE_TXT.test(shot.comText.slice(0, 300))) { skip('Comment is no longer live (checked on the page)'); continue; }
         if (lc.unknown && !shot.comText.trim()) { skip('Could not read the comment on the page (it may still be loading)', true); continue; }
+        if (lp.unknown && GONE_TXT.test(shot.postText.slice(0, 300))) { skip('Post is no longer live (checked on the page)'); continue; }
         if (lp.unknown && !shot.postText.trim()) { skip('Could not read the post on the page (it may still be loading)', true); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
         items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
