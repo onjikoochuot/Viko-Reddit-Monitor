@@ -1759,8 +1759,8 @@ const rqRangeTxt=()=>{const q=RQ(),r=rqRange();return (RP_PRESETS.find(p=>p[0]==
 function rqBrandRows(){const q=RQ();if(!q.bid)return[];const[a,z]=rqRange(),tk={};(ST.allT||[]).forEach(t=>{tk[t.id]=t});
  const ps=(ST.allP||[]).filter(p=>p.brand_id===q.bid&&!(tk[p.task_id]||{}).trashed_at),rows=[];
  ps.filter(p=>p.kind==='comment'&&p.url&&p.status==='live'&&p.published_at).forEach(c=>{const d=ymd(c.published_at);if((a&&d<a)||(z&&d>z))return;
-  const t=tk[c.task_id]||{},post=ps.find(p=>p.task_id===c.task_id&&p.kind==='post'&&p.url),purl=post?post.url:(t.thread||'');let why='';
-  if(post&&post.status!=='live')why='The post is not live';else if(!purl)why='No post link on this task. Add the thread link to the task.';
+  const t=tk[c.task_id]||{},post=ps.find(p=>p.task_id===c.task_id&&p.kind==='post'&&p.url),purl=post?post.url:(t.thread||rqPostOf(c.url));let why='';
+  if(post&&post.status!=='live')why='The post is not live';else if(!purl)why='The post could not be worked out from the comment link';
   rows.push({post:purl,comment:c.url,sub:t.sub||rqSub(c.url),date:d,on:!why,why,locked:!!why})});
  return rows.sort((x,y)=>x.date<y.date?-1:x.date>y.date?1:0)}
 function rqSetBrand(id){const q=RQ(),b=ST.allB.find(x=>x.id===id);q.bid=id;if(b){if(!q.kwDone)q.kw=b.name;if(!q.titleDone)q.title=b.name+' Reddit Engagement Report'}q.rows=rqBrandRows();rqDraw()}
