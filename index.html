@@ -276,6 +276,23 @@ svg.hb text.l{fill:var(--n700)}svg.hb text.v{fill:var(--primary)}
 .ivtot{display:flex;justify-content:space-between;align-items:baseline;border-top:2px solid var(--primary);padding:12px 4px 0;margin-top:12px}.ivtot b{font:800 22px var(--f-d);letter-spacing:-.02em}
 details.adv summary{cursor:pointer;font-weight:600}
 .bpbtns{display:inline-flex;gap:8px;margin-left:auto;flex-wrap:wrap}
+
+/* ===== client view: live items as compact cards ===== */
+.lvc{display:flex;gap:16px;align-items:flex-start;background:#F6FBF8;border:1px solid #D2EBDD;border-radius:16px;padding:18px 20px;margin:0 0 12px}
+.lvi{flex:none;width:36px;height:36px;border-radius:50%;background:#DDF2E7;color:#14663F;display:inline-flex;align-items:center;justify-content:center;margin-top:2px}
+.lvb{flex:1;min-width:0}
+.lvt{font:700 16px/1.35 var(--f-d);letter-spacing:-.015em;color:var(--primary);overflow-wrap:anywhere}
+.lvs{font-size:13.5px;color:var(--n600);margin-top:2px}
+.lvp{font-size:14px;color:var(--n700);margin:8px 0 2px;line-height:1.5;border-left:3px solid #BFE3CE;padding-left:12px;overflow-wrap:anywhere}
+.lvm{font-size:13px;color:var(--n500);margin-top:6px}
+.lvl{flex:none;font-weight:600;font-size:14px;color:#14663F;text-decoration:none;white-space:nowrap;padding:4px 0}.lvl:hover{text-decoration:underline}
+@media(max-width:560px){.lvc{flex-wrap:wrap;padding:16px}.lvl{margin-left:52px}}
+.lvn{font-weight:700;color:var(--primary)}
+.pvt{font-size:13px;color:var(--n600);margin-top:8px}
+.pc .lvp{margin:6px 0 4px}.lvp.gone{opacity:.65;border-left-color:var(--n300)}
+.lvn{font-weight:700;color:var(--primary)}
+.pvt{font-size:13px;color:var(--n600);margin-top:8px}
+.pc .lvp{margin:6px 0 4px}.lvp.gone{opacity:.65;border-left-color:var(--n300)}
 </style></head><body>
 <header><span class="logo">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -308,7 +325,7 @@ const media=p=>(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>
 
 /* ---------- data ---------- */
 async function fetchAll(table,cols,orders,eq){let all=[],from=0;for(;;){let r=sb.from(table).select(cols);if(eq)r=r.eq(eq[0],eq[1]);orders.forEach(o=>{r=r.order(o)});const{data,error}=await r.range(from,from+999);if(error)return{data:all,error};all=all.concat(data||[]);if(!data||data.length<1000)break;from+=1000}return{data:all}}
-const PCOLS='id,task_id,brand_id,kind,ptitle,body,links,url,published_at,status,stage,next_check,last_check,score,replies,title,hist,sort,submitted_by';
+const PCOLS='id,task_id,brand_id,kind,ptitle,body,links,url,published_at,status,stage,next_check,last_check,score,replies,title,hist,sort,submitted_by,snip';
 async function ensureAtt(bid){if(!bid||ST.attBrands[bid]||!me||me.role!=='admin')return;const r=await fetchAll('pieces','id,att',['id'],['brand_id',bid]);if(r.error)return;r.data.forEach(x=>{if(x.att&&x.att.length)ST.attCache[x.id]=x.att});ST.attBrands[bid]=1;ST.pieces.forEach(p=>{if(p.brand_id===bid)p.att=ST.attCache[p.id]||[]})}
 async function load(){
  if(ST.tok){const{data,error}=await sb.rpc('open_brand',{tok:ST.tok});if(error||!data)throw new Error('closed');ST.obrand=data.brand;ST.tasks=data.tasks;ST.pieces=data.pieces;ST.pby={};ST.pieces.forEach(p=>{(ST.pby[p.task_id]=ST.pby[p.task_id]||[]).push(p)});return}
@@ -348,15 +365,20 @@ const banner=()=>{const n=overdueN();return (ST.v6===false&&me&&me.role==='admin
 
 /* ---------- piece card ---------- */
 const DV=p=>(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')+media(p);
+function pvw(p){
+ if(!p.url)return '';
+ const txt=p.body||p.snip;
+ return (p.kind==='comment'&&p.title?'<div class="pvt">On: '+esc(clip(p.title,110))+'</div>':'')+(txt?'<div class="lvp'+(p.status==='removed'?' gone':'')+'">'+esc(clip(txt,200))+'</div>':'');
+}
 function pc(p,adm){
  if(adm&&ST.edit===p.id)return '<div class="pc cb"><b>Edit '+(p.kind==='post'?'post':'comment')+' draft</b>'+(p.kind==='post'?'<div class="fld"><span>Title</span><input id="et" style="width:100%" value="'+esc(p.ptitle||'')+'"></div>':'')+'<div class="fld"><span>Text</span><textarea id="eb" style="min-height:150px">'+esc(p.body||'')+'</textarea></div><div class="row"><button class="p" onclick="saveEd(\''+p.id+'\')">Save</button><button onclick="ST.edit=null;draw(true)">Cancel</button></div></div>';
  const h=p.hist||[],err=h.length&&h[h.length-1].s==='error',st=p.status;
  return '<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(st)+sgChip(p,adm)+(p.published_at?'<span class="s">published '+D(p.published_at)+'</span>':'')+'<span style="flex:1"></span><div class="a">'
  +(p.ptitle?'<button onclick="cp(\''+p.id+'\',1)">Copy title</button>':'')+(p.body?'<button onclick="cp(\''+p.id+'\')">Copy '+(p.kind==='post'?'body':'text')+'</button>':'')
- +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">View</a>':'')
+ +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">'+(p.kind==='post'?'View post':'View comment')+'</a>':'')
  +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
  +(adm&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+(adm&&!p.url?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove draft">&#10005;</button>':'')+'</div></div>'
- +(p.url?'<details><summary>Show what was published</summary>'+DV(p)+'</details>':DV(p))
+ +pvw(p)+(p.url?'<details><summary>Show what was published</summary>'+DV(p)+'</details>':DV(p))
  +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+up(p.score)+' &middot; '+p.replies+(p.kind==='post'?(p.replies==1?' comment':' comments'):(p.replies==1?' reply':' replies')):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit'+(h[h.length-1].m?' ('+esc(h[h.length-1].m)+')':'')+'</span>':'')+'</div><div>'+dots(p)+'</div>'
  :'<div class="row"><input class="lin" id="l_'+p.id+'" placeholder="Paste the published '+p.kind+' link here" style="flex:1;min-width:220px"><button class="p" onclick="done(\''+p.id+'\')">Done</button></div>')+'</div>';
 }
@@ -829,7 +851,7 @@ function dlPanel(b){const m=numbered(b.id),mx=k=>Math.max(0,...ST.tasks.filter(t
  +'<div class="s">Only tasks that do not have their own date yet are picked, in number order.</div><div class="dsep"></div><div class="row" style="margin:0"><button onclick="clearDues()">Remove all task deadlines in this brand</button><span class="s">You can also set one task at a time in the Drafts list.</span></div></div>'}
 
 /* archive and trash */
-const miniPc=p=>'<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(p.status)+'<span class="s">'+(p.published_at?'published '+D(p.published_at)+' &middot; '+up(p.score):'not published')+'</span><span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">View</a>':'')+'</div>'+DV(p)+'</div>';
+const miniPc=p=>'<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(p.status)+'<span class="s">'+(p.published_at?'published '+D(p.published_at)+' &middot; '+up(p.score):'not published')+'</span><span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">'+(p.kind==='post'?'View post':'View comment')+'</a>':'')+'</div>'+DV(p)+'</div>';
 function arcRow(t,m,mode){const ps=ST.pby[t.id]||[],when=mode==='trash'?'in Trash, '+daysLeft(t.trashed_at)+' days left':'archived '+D(t.archived_at);
  const btns=mode==='trash'?'<button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button><button onclick="purgeTask(\''+t.id+'\')">Delete forever</button>':'<button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button><button onclick="trashTask(\''+t.id+'\')">Trash</button>';
  return '<div class="task'+(catOf(t)==='comment'?' cc':'')+'"><div class="row" style="margin:0"><div style="flex:1"><div class="t"><span class="num2">'+esc(tnum(t,m)||tn2(t))+'</span>'+esc(tlabel(t))+'</div><div class="s">'+when+' &middot; '+ps.length+' item'+(ps.length==1?'':'s')+(t.sub?' &middot; r/'+esc(t.sub):'')+'</div></div><div class="a">'+btns+'</div></div><details><summary>Show items</summary>'+(ps.map(miniPc).join('')||'<div class="s">No items.</div>')+'</details></div>'}
@@ -1692,16 +1714,28 @@ function pView(){
  +(PT.tab==='deleted'?'<p class="s">These items were published but are no longer visible on Reddit (removed by moderators or deleted). They are kept here so you have a complete record. They are not counted as live.</p>':'')
  +(sel.length?sel.map(pPiece).join(''):'<div class="empty">Nothing here yet.</div>');
 }
-function pPiece(p){
+function pPieceOld(p){
  const head=p.ptitle||p.task||(p.body||'').slice(0,60)||'Item';
- return '<div class="task"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(p.status==='checking'?'checking':p.status)+(p.at?'<span class="s">published '+D(p.at)+'</span>':'')+'<span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">Open on Reddit</a>':'')+'</div>'
+ return '<div class="task"><div class="row" style="margin:0"><b>'+pNum(p)+'</b>'+chip(p.status==='checking'?'checking':p.status)+(p.at?'<span class="s">published '+D(p.at)+'</span>':'')+'<span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">Open on Reddit</a>':'')+'</div>'
  +(p.sub?'<div class="s">r/'+esc(p.sub)+(p.kind==='comment'&&p.post_url?' &middot; <a href="'+esc(p.post_url)+'" target="_blank" rel="noopener">on this post</a>':'')+'</div>':'')
  +(p.ptitle?'<div class="t" style="margin-top:8px">'+esc(p.ptitle)+'</div>':'')+(p.body?'<div class="dr">'+esc(p.body)+'</div>':'')
  +(p.links&&p.links.length?'<div class="s">Links: '+p.links.map(l=>'<a href="'+esc(l)+'" target="_blank" rel="noopener">'+esc(l)+'</a>').join(' &middot; ')+'</div>':'')
  +(p.att&&p.att.length?'<div class="s">Attachments: '+p.att.map(a=>esc(a.n)).join(', ')+'</div>':'')
  +(p.url?'<div class="s">'+up(p.score)+' &middot; '+p.replies+(p.kind==='post'?(p.replies==1?' comment':' comments'):(p.replies==1?' reply':' replies'))+'</div>':'')
  +(p.sugg&&p.sugg.length?'<div style="margin-top:8px">'+p.sugg.map(s=>'<div class="s">Your suggestion ('+D(s.at)+'): '+esc(s.note)+' <span class="chip '+(s.status==='new'?'todo':'live')+'">'+({new:'Sent',done:'Done',dismissed:'Reviewed'}[s.status])+'</span></div>').join('')+'</div>':'')
- +(p.status==='removed'?'':'<div style="margin-top:8px"><button onclick="pSugg(\''+p.id+'\')">Suggest a change</button></div>')+'<div id="sb_'+p.id+'" style="display:none" class="cb"><div class="fld"><span>Your name (optional)</span><input id="pw_'+p.id+'" style="width:100%"></div><div class="fld"><span>What would you like changed?</span><textarea id="pn_'+p.id+'" placeholder="Describe the change or paste your suggested wording"></textarea></div><div class="row"><button class="p" onclick="pSend(\''+p.id+'\')">Send suggestion</button><button onclick="pSugg(\''+p.id+'\')">Cancel</button></div></div></div>';
+ +(p.status!=='todo'?'':'<div style="margin-top:8px"><button onclick="pSugg(\''+p.id+'\')">Suggest a change</button></div>')+'<div id="sb_'+p.id+'" style="display:none" class="cb"><div class="fld"><span>Your name (optional)</span><input id="pw_'+p.id+'" style="width:100%"></div><div class="fld"><span>What would you like changed?</span><textarea id="pn_'+p.id+'" placeholder="Describe the change or paste your suggested wording"></textarea></div><div class="row"><button class="p" onclick="pSend(\''+p.id+'\')">Send suggestion</button><button onclick="pSugg(\''+p.id+'\')">Cancel</button></div></div></div>';
+}
+const clip=(t,n)=>{t=String(t||'').replace(/\s+/g,' ').trim();return t.length>n?t.slice(0,n-1).trimEnd()+'…':t};
+const pNum=p=>{const k=p.task_kind||p.kind,n=p.task_seq;return (k==='post'?'Post':'Comment')+(n?' '+n:'')};
+function pPiece(p){
+ if(p.status!=='live'||!p.url)return pPieceOld(p);
+ const title=p.title||p.ptitle||p.task||(p.kind==='post'?'Reddit post':'Reddit comment'),txt=p.body||p.snip,when=p.vat?'Verified '+D(p.vat):(p.at?'Published '+D(p.at):''),
+  meta=[p.sub?'r/'+esc(p.sub):'','<b class="lvn">'+esc(pNum(p))+'</b>'].filter(Boolean).join(' &middot; ')+(p.kind==='comment'&&p.post_url&&p.post_url!==p.url?' &middot; <a href="'+esc(p.post_url)+'" target="_blank" rel="noopener">the post</a>':'');
+ return '<div class="lvc"><span class="lvi" aria-hidden="true"><svg viewBox="0 0 20 20" width="18" height="18"><path d="M4.5 10.5l3.5 3.5 7.5-8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg></span>'
+  +'<div class="lvb"><div class="lvt">'+esc(clip(title,120))+'</div><div class="lvs">'+meta+'</div>'
+  +(txt?'<div class="lvp">'+esc(clip(txt,180))+'</div>':'')
+  +'<div class="lvm">'+when+(when?' &middot; ':'')+up(p.score)+' &middot; '+(p.replies||0)+(p.kind==='post'?(p.replies==1?' comment':' comments'):(p.replies==1?' reply':' replies'))+'</div></div>'
+  +'<a class="lvl" href="'+esc(p.url)+'" target="_blank" rel="noopener">'+(p.kind==='post'?'View post':'View comment')+'</a></div>';
 }
 function pSugg(id){const e=$('sb_'+id);e.style.display=e.style.display==='none'?'':'none'}
 async function pSend(id){const note=$('pn_'+id).value.trim();if(!note)return alert('Please write your suggestion first');
