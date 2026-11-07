@@ -2,7 +2,8 @@
 // Takes the next waiting report from Supabase, re-checks every post and comment on Reddit (through your mobile proxy),
 // takes screenshots, highlights your brand word in yellow, builds the PDF and saves it back for the website to download.
 // No secrets live in this file: they come from GitHub Secrets.
-import { execFile } from 'node:child_process';
+import { execFile, spawn } from 'node:child_process';
+import os from 'node:os';
 import net from 'node:net';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -44,6 +45,28 @@ function findBrowser() {
     path.join(process.env.LOCALAPPDATA || '', 'BraveSoftware', 'Brave-Browser', 'Application', 'brave.exe'),
     '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser', '/usr/bin/brave-browser'];
   return c.find((x) => x && fs.existsSync(x)) || '';
+}
+function findPdfBrowser() { // only used to turn the finished page into a PDF, so any Chromium browser will do (Edge is on every Windows PC)
+  if (process.env.PDF_BROWSER_PATH) return process.env.PDF_BROWSER_PATH;
+  const pf = [process.env['ProgramFiles(x86)'], process.env.ProgramFiles, process.env.LOCALAPPDATA].filter(Boolean);
+  const c = [];
+  pf.forEach((b) => { c.push(path.join(b, 'Microsoft', 'Edge', 'Application', 'msedge.exe'), path.join(b, 'Google', 'Chrome', 'Application', 'chrome.exe')); });
+  c.push('/usr/bin/microsoft-edge', '/usr/bin/google-chrome', '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome');
+  return c.find((x) => x && fs.existsSync(x)) || findBrowser();
+}
+const killTree = (child) => { try { if (process.platform === 'win32') execFile('taskkill', ['/pid', String(child.pid), '/T', '/F'], () => {}); else child.kill('SIGKILL'); } catch {} };
+// Starts the real browser like a person would (no automation flags) and only then connects to it, so Reddit sees a genuine Brave.
+async function openOwnBrowser({ exe, profile, headless = false, url = 'about:blank' }) {
+  const port = 9300 + Math.floor(Math.random() * 600);
+  const args = ['--remote-debugging-port=' + port, '--remote-allow-origins=*', '--user-data-dir=' + profile, '--no-first-run', '--no-default-browser-check', '--disable-background-networking', '--window-size=1250,1500']
+    .concat(headless ? ['--headless=new'] : []).concat(process.env.EXTRA_ARGS ? process.env.EXTRA_ARGS.split(' ') : []).concat([url]);
+  const child = spawn(exe, args, { stdio: 'ignore' });
+  child.on('error', (e) => log('could not start the browser:', e.message));
+  let up = false;
+  for (let i = 0; i < 80 && !up; i++) { try { up = (await fetch('http://127.0.0.1:' + port + '/json/version')).ok; } catch {} if (!up) await sleep(500); }
+  if (!up) { killTree(child); throw new Error('The browser did not start. Close every Brave window that uses the reports profile (also check near the clock) and try again.'); }
+  const browser = await chromium.connectOverCDP('http://127.0.0.1:' + port);
+  return { browser, child };
 }
 if (!SERVICE && !process.argv.includes('--login')) { console.error('SUPABASE_SERVICE_KEY is missing. On GitHub it is a Secret; on your computer it goes in settings.env.'); process.exit(1); }
 
@@ -356,7 +379,7 @@ async function runJob(job) {
   const kws = String(job.keyword || '').split(',').map((s) => s.trim()).filter(Boolean);
   const pairs = Array.isArray(job.pairs) ? job.pairs : [];
   const skipped = [], items = [];
-  let relay = null, browser = null, ctx = null, noHit = 0;
+  let relay = null, browser = null, ctx = null, ownChild = null, noHit = 0;
   const bump = (n) => patchJob(job.id, { progress: n }).catch(() => {});
   try {
     if (PROXY) { relay = await startRelay(PROXY); log('proxy relay on port', relay.port); }
@@ -365,8 +388,9 @@ async function runJob(job) {
       const exe = findBrowser();
       if (!exe) throw new Error('Brave was not found on this computer. Put its path in settings.env as BROWSER_PATH=...');
       log('using your own browser:', exe);
-      ctx = await chromium.launchPersistentContext(PROFILE, { executablePath: exe, headless: process.env.HEADLESS === '1', viewport: { width: 1100, height: 1400 }, deviceScaleFactor: 1.6, locale: 'en-US',
-        args: ['--disable-background-networking'].concat(process.env.EXTRA_ARGS ? process.env.EXTRA_ARGS.split(' ') : []) });
+      const own = await openOwnBrowser({ exe, profile: PROFILE, headless: process.env.HEADLESS === '1' });
+      browser = own.browser; ownChild = own.child;
+      ctx = browser.contexts()[0] || await browser.newContext();
     } else {
       const largs = ['--disable-blink-features=AutomationControlled', '--disable-background-networking'].concat(relay ? ['--proxy-server=socks5://127.0.0.1:' + relay.port] : []);
       try { browser = await chromium.launch({ channel: 'chromium', args: largs }); } catch (e) { log('using the standard browser build'); browser = await chromium.launch({ args: largs }); }
@@ -376,9 +400,13 @@ async function runJob(job) {
       const host = new URL(BASE).hostname.replace(/^www\./, '');
       await ctx.addCookies(COOKIE.split(';').map((c) => c.trim()).filter(Boolean).map((c) => { const i = c.indexOf('='); return { name: c.slice(0, i), value: c.slice(i + 1), domain: host, path: '/' }; })).catch(() => {});
     }
-    await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
+    if (!LOCAL) await ctx.addInitScript(() => { Object.defineProperty(navigator, 'webdriver', { get: () => undefined }); });
     const page = await ctx.newPage();
     page.setDefaultNavigationTimeout(60000);
+    if (LOCAL) { // sharp screenshots (like a high-resolution screen) without changing how the browser looks to Reddit
+      const cdp = await ctx.newCDPSession(page);
+      await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 1400, deviceScaleFactor: 1.6, mobile: false });
+    }
     let n = 0;
     for (const raw of pairs) {
       n++;
@@ -416,31 +444,45 @@ async function runJob(job) {
       await patchJob(job.id, { status: 'failed', retry_local: escalate, note: escalate ? 'GitHub could not open these pages (' + retryable + '). Your computer will try next. It needs the Keep_running window open.' : 'None of the ' + pairs.length + ' engagements could be included, so no report was made. See the list below for the reasons.', skipped, included: 0, progress: pairs.length, finished_at: new Date().toISOString() });
       return;
     }
-    const pdfPage = await ctx.newPage();
-    await pdfPage.setContent(reportHtml(job, items), { waitUntil: 'load' });
-    const pdf = await pdfPage.pdf({ format: 'Letter', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
-    const path = job.id + '/report.pdf';
-    await sb('/storage/v1/object/reports/' + path, { method: 'POST', raw: true, body: pdf, headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
+    const html = reportHtml(job, items);
+    let pdf;
+    if (!LOCAL) {
+      const pdfPage = await ctx.newPage();
+      await pdfPage.setContent(html, { waitUntil: 'load' });
+      pdf = await pdfPage.pdf({ format: 'Letter', printBackground: true, margin: { top: 0, right: 0, bottom: 0, left: 0 } });
+    } else { // a visible browser cannot print to PDF, so a hidden one does it
+      const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'viko-pdf-'));
+      const pb = await openOwnBrowser({ exe: findPdfBrowser(), profile: tmp, headless: true });
+      try {
+        const pc = pb.browser.contexts()[0] || await pb.browser.newContext();
+        const pg = await pc.newPage();
+        await pg.setContent(html, { waitUntil: 'load' });
+        const cdp = await pc.newCDPSession(pg);
+        const r = await cdp.send('Page.printToPDF', { printBackground: true, preferCSSPageSize: true, marginTop: 0, marginBottom: 0, marginLeft: 0, marginRight: 0 });
+        pdf = Buffer.from(r.data, 'base64');
+      } finally { await pb.browser.close().catch(() => {}); killTree(pb.child); try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
+    }
+    const objPath = job.id + '/report.pdf';
+    await sb('/storage/v1/object/reports/' + objPath, { method: 'POST', raw: true, body: pdf, headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
     let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
     if (escalate) note = 'Partly ready: ' + retryable + ' engagement' + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
-    await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: path, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
+    await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: objPath, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');
   } finally {
-    if (ctx && LOCAL) await ctx.close().catch(() => {});
     if (browser) await browser.close().catch(() => {});
+    if (ownChild) killTree(ownChild);
     if (relay) relay.close();
   }
 }
 
-async function loginOnly() {
+async function loginOnly() { // opens your real Brave (no automation at all) with the reports profile so you can log in like normal
   const exe = findBrowser();
   if (!exe) { console.error('Brave was not found. Put its path in settings.env as BROWSER_PATH=...'); process.exit(1); }
-  const c = await chromium.launchPersistentContext(PROFILE, { executablePath: exe, headless: false, viewport: null });
-  const pg = c.pages()[0] || await c.newPage();
-  await pg.goto('https://www.reddit.com/login').catch(() => {});
-  log('A browser window opened. Log in to Reddit there, then CLOSE the window. Your login is remembered for the reports.');
-  await new Promise((r) => c.on('close', r));
-  log('Login saved. You can now double-click Make_reports.bat');
+  fs.mkdirSync(PROFILE, { recursive: true });
+  const child = spawn(exe, ['--user-data-dir=' + PROFILE, '--no-first-run', '--no-default-browser-check', 'https://www.reddit.com/login'], { stdio: 'ignore' });
+  log('Brave opened. Log in to Reddit there like normal, then CLOSE the window. Your login is remembered for the reports.');
+  await new Promise((r) => child.on('exit', r));
+  log('Done. Next, double-click Keep_running.bat');
 }
 async function main() {
   if (process.argv.includes('--login')) { await loginOnly(); return; }
