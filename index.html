@@ -195,6 +195,56 @@ details>summary,.shw summary{color:var(--bl);font-weight:600}
 @media(max-width:640px){main{padding:30px 16px 100px}header,nav{padding-left:16px;padding-right:16px}nav{top:57px}.cb{padding:20px 18px}.kpi b{font-size:34px}.hero{padding:26px}.iam{justify-content:flex-start}.iam>div{text-align:left}}
 #toast{background:var(--primary);box-shadow:0 20px 40px -20px rgba(14,42,46,.7)}
 .filt label{display:flex;flex-direction:column;gap:4px}.filt label.sw{flex-direction:row}
+
+/* ---- v9: step-by-step pricing, performance charts ---- */
+.pwhero{display:flex;align-items:center;gap:24px;justify-content:space-between;flex-wrap:wrap;padding:26px 28px}
+.pwhero>div{flex:1;min-width:260px;max-width:620px}
+.pwcard{padding:26px 28px 24px}
+.pwsteps{list-style:none;display:flex;gap:6px;margin:0 0 22px;padding:0 0 18px;border-bottom:1px solid var(--hair);flex-wrap:wrap}
+.pwsteps li{display:flex}
+.pwsteps li>*{display:flex;align-items:center;gap:8px;font-size:13px;font-weight:500;color:var(--n500);padding:6px 12px 6px 6px;border-radius:999px;background:none;border:0;box-shadow:none;font-family:inherit}
+.pwsteps b{width:24px;height:24px;border-radius:50%;display:inline-flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--n100);color:var(--n600)}
+.pwsteps li.on>*{color:var(--primary);font-weight:700;background:var(--n50)}
+.pwsteps li.on b{background:var(--accent);color:#fff}
+.pwsteps li.done>*{color:var(--primary);cursor:pointer}
+.pwsteps li.done b{background:var(--primary);color:#fff}
+.pwbody h3{margin:0 0 6px;font-size:22px}
+.pwwho{margin:0 0 14px;color:var(--n600);font-size:14px}
+.pwopts{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:14px;margin:16px 0}
+.pwopt{display:flex;flex-direction:column;align-items:flex-start;gap:8px;text-align:left;padding:20px 20px 18px;border:1px solid var(--hair);border-radius:16px;background:var(--surface);cursor:pointer;font-family:inherit;box-shadow:none;transition:all .25s}
+.pwopt b{font-family:var(--f-d);font-size:19px;color:var(--primary)}
+.pwopt span{font-size:13px;line-height:1.5;color:var(--n600);font-weight:400}
+.pwopt:hover:not(:disabled){border-color:var(--accent);transform:translateY(-2px);box-shadow:var(--lift)}
+.pwopt.on{border-color:var(--accent);box-shadow:0 0 0 2px var(--accent) inset}
+.pwopt:disabled{opacity:.5;cursor:not-allowed}
+.pwin{display:inline-flex;align-items:center;border:1px solid var(--n200);border-radius:10px;background:#fff;overflow:hidden}
+.pwin input{border:0!important;box-shadow:none!important;width:130px;border-radius:0!important}
+.pwcur{padding:0 10px;font-size:12px;font-weight:700;color:var(--n500);background:var(--n50);align-self:stretch;display:flex;align-items:center;border-right:1px solid var(--n200)}
+.pwtwo{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:18px;margin-top:14px}
+.pwblk{border:1px solid var(--hair);border-radius:14px;padding:16px 18px;background:var(--surface)}
+.pwblk>b{font-family:var(--f-d);font-size:17px;color:var(--primary)}
+.pwrad{display:flex;flex-direction:column;gap:6px;margin-top:10px}
+.pwr{display:flex;align-items:flex-start;gap:10px;padding:10px 12px;border-radius:10px;border:1px solid transparent;cursor:pointer}
+.pwr:hover{background:var(--n50)}
+.pwr:has(input:checked){background:var(--n50);border-color:var(--accent)}
+.pwr input{margin-top:3px;accent-color:var(--accent)}
+.pwr span{flex:1;display:flex;flex-direction:column;gap:2px;min-width:0}
+.pwr small{color:var(--n500);font-size:12.5px;line-height:1.45}
+.pwr em{font-style:normal;font-size:12.5px;font-weight:700;color:var(--primary);white-space:nowrap}
+.pwchips{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0}
+.pwchip input{position:absolute;opacity:0;pointer-events:none}
+.pwchip span{display:inline-block;padding:9px 16px;border-radius:999px;border:1px solid var(--n200);background:#fff;font-size:14px;cursor:pointer;transition:all .2s}
+.pwchip input:checked+span{background:var(--primary);color:#fff;border-color:var(--primary)}
+.pwchip input:focus-visible+span{outline:2px solid var(--accent);outline-offset:2px}
+.pwsum{border:1px solid var(--hair);border-radius:14px;padding:6px 20px 14px;background:var(--surface);margin:14px 0}
+.pwnav{margin-top:22px;padding-top:18px;border-top:1px solid var(--hair)}
+tr.plc td{background:var(--n50)}
+.hb text.l{fill:var(--n700)}.hb text.v{fill:var(--primary)}
+.charts.eq{grid-template-columns:minmax(0,1fr) minmax(0,1fr);margin-bottom:22px;align-items:start}
+.kpi.perf{display:grid;grid-template-columns:repeat(3,minmax(0,1fr))}
+.kpi b .kt{font-size:24px;letter-spacing:-.03em;line-height:1.15;display:block;margin-bottom:4px}
+.pwbody .row label{display:flex;flex-direction:column;gap:6px}
+@media(max-width:860px){.charts.eq,.kpi.perf{grid-template-columns:1fr}.pwhero{padding:20px}.pwcard{padding:20px 18px}}
 </style></head><body>
 <header><span class="logo">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -204,7 +254,7 @@ const $=id=>document.getElementById(id),DAY=864e5;
 const esc=s=>String(s==null?'':s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
 const D=t=>t?new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-';
 const ST={tab:'overview',bid:null,brands:[],tasks:[],pieces:[],profiles:[],clients:[],sugg:[],sessions:[],sessErr:0,panel:'',tf:'all',q:'',lim:30,bq:'',bf:'all',bg:1,gc:{},asUser:null,attCache:{},attBrands:{},hold:0,edit:null,tok:'',obrand:null};
-Object.assign(ST,{bv:'active',alim:30,elim:100,ep:'',set:{auto_archive_on:true,auto_archive_days:30,trash_days:40,trim_days:90,currency:'USD',count_mode:'published',monthly_goal:0},rates:[],pay:[],hours:[],bank:[],inv:[],jobs:[],v7:true,allB:[],allT:[],allP:[],trashB:[],trashT:[],trashP:[],tmap:{},bmap:{},pby:{},v6:true});
+Object.assign(ST,{bv:'active',alim:30,elim:100,ep:'',set:{auto_archive_on:true,auto_archive_days:30,trash_days:40,trim_days:90,currency:'USD',count_mode:'published',monthly_goal:0},rates:[],pay:[],hours:[],bank:[],inv:[],jobs:[],plans:[],v9:true,v7:true,allB:[],allT:[],allP:[],trashB:[],trashT:[],trashP:[],tmap:{},bmap:{},pby:{},v6:true});
 let sb,me=null,PA=[],CB=[{t:'',l:'',att:[]}];
 const base=()=>location.href.split('#')[0];
 const norm=u=>(u||'').trim().split(/[?#]/)[0].replace(/\/+$/,'').replace(/^https?:\/\/(?:old\.|new\.|np\.|www\.)?reddit\.com/i,'https://www.reddit.com');
@@ -245,7 +295,7 @@ async function load(){
  const trI=new Set(ST.trashT.map(x=>x.id));ST.pieces=pd.filter(x=>ST.tmap[x.task_id]);ST.trashP=pd.filter(x=>trI.has(x.task_id));
  ST.pby={};ST.pieces.concat(ST.trashP).forEach(x=>{(ST.pby[x.task_id]=ST.pby[x.task_id]||[]).push(x)});ST.pieces.forEach(x=>{x._arc=!!ST.tmap[x.task_id].archived_at});
  ST.profiles=pr.data||[];ST.clients=cl.data||[];ST.sugg=sg.data||[];ST.sessions=se.data||[];ST.sessErr=se.error?1:0;
- if(adm){const[ra,pa,ho,bk,se2,iv7,jb7]=await Promise.all([fetchAll('rates','*',['created_at']),fetchAll('payments','*',['paid_on','created_at']),fetchAll('time_entries','*',['work_date','created_at']),fetchAll('earn_bank','*',['piece_id']),fetchAll('app_settings','*',['k']),fetchAll('invoices','*',['created_at']),fetchAll('jobs','*',['created_at'])]);ST.v7=!(iv7.error||jb7.error);const cr8=await fetchAll('count_rules','*',['created_at']);ST.v8=!cr8.error;ST.crules=ST.v8?(cr8.data||[]):[];ST.inv=ST.v7?(iv7.data||[]):[];ST.jobs=ST.v7?(jb7.data||[]):[];
+ if(adm){const[ra,pa,ho,bk,se2,iv7,jb7]=await Promise.all([fetchAll('rates','*',['created_at']),fetchAll('payments','*',['paid_on','created_at']),fetchAll('time_entries','*',['work_date','created_at']),fetchAll('earn_bank','*',['piece_id']),fetchAll('app_settings','*',['k']),fetchAll('invoices','*',['created_at']),fetchAll('jobs','*',['created_at'])]);ST.v7=!(iv7.error||jb7.error);const cr8=await fetchAll('count_rules','*',['created_at']);ST.v8=!cr8.error;ST.crules=ST.v8?(cr8.data||[]):[];const pp9=await fetchAll('price_plans','*',['created_at']);ST.v9=!pp9.error;ST.plans=ST.v9?(pp9.data||[]):[];ST.inv=ST.v7?(iv7.data||[]):[];ST.jobs=ST.v7?(jb7.data||[]):[];
   ST.rates=ra.data||[];ST.pay=pa.data||[];ST.hours=ho.data||[];ST.bank=bk.data||[];ST.earnErr=!!(ra.error||pa.error||ho.error||bk.error);
   const S0={auto_archive_on:true,auto_archive_days:30,trash_days:40,trim_days:90,currency:'USD',count_mode:'published',monthly_goal:0,invoice_auto_delete_on:true,invoice_delete_days:30,invoice_due_days:14,biz_name:'Viko Marketing Agency',pay_info:''};(se2.data||[]).forEach(r=>{S0[r.k]=r.v});ST.set=S0}
  if(adm&&ST.bid)await ensureAtt(ST.bid);
@@ -801,14 +851,14 @@ function settingsView(){
  +row('Monthly goal','Shown on the Earnings page with your progress. Use 0 to turn it off.','<input id="s_monthly_goal" type="number" min="0" value="'+esc(s.monthly_goal||0)+'" style="width:130px" onchange="numSet(\'monthly_goal\',0,100000000)"> <span class="s">'+esc(s.currency)+'</span>')+'</div>'+invSetHtml()}
 
 /* ---------- v7: earnings, invoices, jobs and reports (admin only) ---------- */
-const TY={post:'Posts',comment:'Comments',task:'Tasks (flat price)',brand:'Brand fees',month:'Monthly fees',hour:'Hours',upvote:'Upvote bonuses',job:'Jobs'};
-const UN={post:'per post',comment:'per comment',task:'per task',brand:'one-time brand fee',month:'per month',hour:'per hour',upvote:'per upvote (bonus)'};
+const TY={post:'Posts',comment:'Comments',task:'Tasks (flat price)',brand:'Brand fees',month:'Monthly fees',week:'Weekly fees',year:'Yearly fees',hour:'Hours',upvote:'Upvote bonuses',job:'Jobs'};
+const UN={post:'per post',comment:'per comment',task:'per task',brand:'one-time brand fee',month:'per month',week:'per week',year:'per year',hour:'per hour',upvote:'per upvote (bonus)'};
 const EF0={cnt:'',period:'all',from:'',to:'',client:'',brand:'',type:'',group:'client',show:{kpi:1,sum:1,goal:1,trend:1,share:1,table:1,pay:1,lines:0}};
 try{ST.ef=Object.assign({},EF0,JSON.parse(localStorage.getItem('rm_ef')||'{}'));ST.ef.show=Object.assign({},EF0.show,ST.ef.show)}catch(e){ST.ef=Object.assign({},EF0,{show:Object.assign({},EF0.show)})}
 const efSave=()=>{try{localStorage.setItem('rm_ef',JSON.stringify(ST.ef))}catch(e){}};
 function efSet(k,v){ST.ef[k]=v;if(k==='client')ST.ef.brand='';efSave();draw()}
 function efShow(k,v){ST.ef.show[k]=v?1:0;efSave();draw()}
-const ETABS=[['over','Overview'],['inv','Invoices'],['jobs','Jobs and hours'],['rep','Count and reports'],['price','Prices']];
+const ETABS=[['over','Overview'],['perf','Performance'],['inv','Invoices'],['jobs','Jobs and hours'],['rep','Count and reports'],['price','Prices']];
 try{ST.etab=localStorage.getItem('rm_etab')||'over'}catch(e){ST.etab='over'}
 if(!ETABS.some(t=>t[0]===ST.etab))ST.etab='over';
 function etab(k){ST.etab=k;ST.ep='';ST.pf=null;try{localStorage.setItem('rm_etab',k)}catch(e){}draw()}
@@ -820,10 +870,11 @@ const kf=n=>n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(n>=1e4?0:1)+'k'
 const niceMax=x=>{const p=Math.pow(10,Math.floor(Math.log10(x))),n=x/p;return (n<=1?1:n<=2?2:n<=5?5:10)*p};
 const D_=s=>s?new Date(s+'T00:00:00').toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'-';
 function rateFor(unit,bid,cid,ds){
+ if(unit==='hour'){const pl=planFor(bid,cid);if(pl&&pl.model==='hour'&&pl.rate!=null)return{amount:+pl.rate}}
  const mo=unit==='month',cut=x=>x?(mo?x.slice(0,7):x):'',d0=cut(ds);
  const pick=f=>{let c=null;ST.rates.forEach(r=>{if(r.unit!==unit||!f(r))return;if(r.starts_on&&cut(r.starts_on)>d0)return;if(r.until_on&&cut(r.until_on)<d0)return;if(!c||cut(r.starts_on)>cut(c.starts_on)||(cut(r.starts_on)===cut(c.starts_on)&&String(r.created_at)>String(c.created_at)))c=r});return c};
  return pick(r=>r.brand_id&&r.brand_id===bid)||pick(r=>!r.brand_id&&r.client_id&&r.client_id===cid)||pick(r=>!r.brand_id&&!r.client_id)}
-function cnt(r,st,at){const rule=(r&&r.counts)||'all',md=r&&r.min_days?+r.min_days:0;
+function cnt(r,st,at){const rule=(r&&r.counts)||'all',md=r&&r.min_days?+r.min_days:0;if(rule==='drafted')return{ok:true,why:''};
  let ok=rule==='all'?true:rule==='notdel'?st!=='removed':st==='live',why='';
  if(!ok)why=st==='removed'?'deleted on Reddit':'not confirmed live yet';
  else if(md&&st!=='removed'){const left=Math.ceil(md-(Date.now()-+new Date(at))/DAY);if(left>0){ok=false;why='counts in '+left+' day'+(left>1?'s':'')}}
@@ -831,16 +882,28 @@ function cnt(r,st,at){const rule=(r&&r.counts)||'all',md=r&&r.min_days?+r.min_da
 const schedTxt=r=>r.hours_per==='day'?r.hours_qty+' h/day, '+(r.days_per_week||5)+' days/week':r.hours_per==='week'?r.hours_qty+' h/week':r.hours_qty+' h/month';
 const monthH=r=>r.hours_per==='day'?r.hours_qty*(r.days_per_week||5)*52/12:r.hours_per==='week'?r.hours_qty*52/12:+r.hours_qty;
 function ruleTxt(r){const o=[];if(r.counts)o.push({all:'counts every published item',live:'counts only items confirmed live',notdel:'counts live or still-confirming items'}[r.counts]);if(r.min_days)o.push('only after '+r.min_days+' days up');if(r.hours_qty&&r.hours_per)o.push('scheduled: '+schedTxt(r)+' (about '+Math.round(monthH(r)*10)/10+' h/month)');return o.length?esc(o.join('; ')):'-'}
+/* ---- v9: one pricing plan per brand / client: per task, per hour or fixed price ---- */
+function planFor(bid,cid){const P=ST.plans||[];return P.find(p=>bid&&p.brand_id===bid)||P.find(p=>cid&&!p.brand_id&&p.client_id===cid)||P.find(p=>!p.brand_id&&!p.client_id)||null}
+const addD=(s,n)=>{const d=new Date(s+'T00:00:00');d.setDate(d.getDate()+n);return ymd(d)};
+const addM=(s,n)=>{const a=s.split('-').map(Number),d=new Date(a[0],a[1]-1+n,1),dim=new Date(d.getFullYear(),d.getMonth()+1,0).getDate();d.setDate(Math.min(a[2],dim));return ymd(d)};
+/* the start date of every billing period that has begun (a period counts once it starts) */
+function planPeriods(pl,upTo){const per=pl.model==='hour'?(pl.hours_mode==='fixed'?'once':pl.hours_mode):pl.period;if(!per||per==='logged'||pl.model==='task')return[];
+ const S=pl.start_on||ymd(pl.created_at||new Date()),T=upTo||todayS(),E=pl.end_on&&pl.end_on<T?pl.end_on:T,out=[];if(S>E)return out;
+ if(per==='once'){out.push(S);return out}
+ for(let k=0;k<3000;k++){const d=per==='week'?addD(S,7*k):per==='month'?addM(S,k):addM(S,12*k);if(d>E)break;out.push(d)}return out}
+const planValue=pl=>pl.model==='hour'?nz((+pl.hours||0)*(+pl.rate||0)):nz(+pl.amount||0);
 function earnLines(){
  const L=[],bm={},cm={},tm={},jm={};ST.allB.forEach(b=>bm[b.id]=b);ST.clients.forEach(c=>cm[c.id]=c);ST.allT.forEach(t=>tm[t.id]=t);(ST.jobs||[]).forEach(j=>jm[j.id]=j);
  const live=new Set(),src=[],cnm=id=>id?(cm[id]?cm[id].name:'(removed client)'):'No client';
- ST.allP.forEach(p=>{live.add(p.id);if(!p.url||!p.published_at)return;const t=tm[p.task_id]||{},b=bm[p.brand_id];src.push({pid:p.id,tid:p.task_id,bid:p.brand_id,bn:b?b.name:'(removed brand)',cid:b?b.client_id:null,kind:p.kind,at:p.published_at,st:p.status,tk:t.kind,seq:t.seq,url:p.url,sc:+p.score||0})});
+ ST.allP.forEach(p=>{live.add(p.id);if(!p.url||!p.published_at){if(p.status!=='todo')return;const t0=tm[p.task_id]||{},b0=bm[p.brand_id];if(!b0||b0.trashed_at||t0.trashed_at||!t0.created_at)return;src.push({pid:p.id,tid:p.task_id,bid:p.brand_id,bn:b0.name,cid:b0.client_id,kind:p.kind,at:t0.created_at,st:'todo',tk:t0.kind,seq:t0.seq,url:'',sc:0,draft:true});return}const t=tm[p.task_id]||{},b=bm[p.brand_id];src.push({pid:p.id,tid:p.task_id,bid:p.brand_id,bn:b?b.name:'(removed brand)',cid:b?b.client_id:null,kind:p.kind,at:p.published_at,st:p.status,tk:t.kind,seq:t.seq,url:p.url,sc:+p.score||0})});
  ST.bank.forEach(x=>{if(live.has(x.piece_id))return;const b=bm[x.brand_id];src.push({pid:x.piece_id,tid:x.task_id,bid:x.brand_id,bn:b?b.name:(x.brand_name||'(removed brand)'),cid:b?b.client_id:x.client_id,kind:x.kind,at:x.published_at,st:x.status,tk:x.task_kind,seq:x.task_seq,url:''})});
  const mk=o=>{o.cn=cnm(o.cid);L.push(o)},tasks={};
- src.forEach(s=>{const ds=ymd(s.at),r=rateFor(s.kind,s.bid,s.cid,ds),rm=s.st==='removed',cr=ST.cnov?null:countRule(s.kind,s.tid,s.bid,s.cid),eff=ST.cnov?{counts:ST.cnov,min_days:0}:cr?{counts:cr.counts,min_days:cr.min_days}:r,c0=cnt(eff,s.st,s.at),ex=!c0.ok;
-  mk({id:s.pid,date:ds,bid:s.bid,bn:s.bn,cid:s.cid,type:s.kind,desc:(s.kind==='post'?'Post':'Comment')+(s.seq?' in '+(s.tk==='post'?'Post':'Comment')+' '+s.seq:''),qty:1,rate:r?+r.amount:0,amount:r?+r.amount:0,priced:!!r,removed:rm,excl:ex,why:c0.why,url:s.url,st:s.st,tid:s.tid});
-  if(s.st==='live'&&s.sc>0){const ru=rateFor('upvote',s.bid,s.cid,ds);if(ru){const cu=cnt(ru,'live',s.at);mk({id:'u'+s.pid,date:ds,bid:s.bid,bn:s.bn,cid:s.cid,type:'upvote',desc:'Upvote bonus ('+s.sc+' upvotes)',qty:s.sc,rate:+ru.amount,amount:Math.round(s.sc*ru.amount*100)/100,priced:true,excl:!cu.ok,why:cu.why})}}
-  if(!ex){const g=tasks[s.tid]||(tasks[s.tid]={tid:s.tid,bid:s.bid,bn:s.bn,cid:s.cid,tk:s.tk,seq:s.seq,last:ds});if(ds>g.last)g.last=ds}});
+ src.forEach(s=>{const ds=ymd(s.at),pl=planFor(s.bid,s.cid),cov=!!(pl&&pl.model!=='task'),r=cov?null:rateFor(s.kind,s.bid,s.cid,ds),rm=s.st==='removed',cr=ST.cnov?null:countRule(s.kind,s.tid,s.bid,s.cid),eff=ST.cnov?{counts:ST.cnov,min_days:0}:cr?{counts:cr.counts,min_days:cr.min_days}:r;
+  if(s.draft&&(cov||!eff||eff.counts!=='drafted'))return;
+  const c0=cnt(eff,s.st,s.at),ex=!c0.ok;
+  mk({id:s.pid,date:ds,bid:s.bid,bn:s.bn,cid:s.cid,type:s.kind,desc:(s.kind==='post'?'Post':'Comment')+(s.seq?' in '+(s.tk==='post'?'Post':'Comment')+' '+s.seq:'')+(s.draft?' (draft)':'')+(cov?(pl.model==='hour'?' (covered by the hourly plan)':' (covered by the fixed price)'):''),qty:1,rate:r?+r.amount:0,amount:r?+r.amount:0,priced:cov||!!r,removed:rm,excl:ex,why:c0.why,url:s.url,st:s.st,tid:s.tid,cov});
+  if(!cov&&s.st==='live'&&s.sc>0){const ru=rateFor('upvote',s.bid,s.cid,ds);if(ru){const cu=cnt(ru,'live',s.at);mk({id:'u'+s.pid,date:ds,bid:s.bid,bn:s.bn,cid:s.cid,type:'upvote',desc:'Upvote bonus ('+s.sc+' upvotes)',qty:s.sc,rate:+ru.amount,amount:Math.round(s.sc*ru.amount*100)/100,priced:true,excl:!cu.ok,why:cu.why})}}
+  if(!ex&&!cov&&!s.draft){const g=tasks[s.tid]||(tasks[s.tid]={tid:s.tid,bid:s.bid,bn:s.bn,cid:s.cid,tk:s.tk,seq:s.seq,last:ds});if(ds>g.last)g.last=ds}});
  Object.keys(tasks).forEach(k=>{const g=tasks[k],r=rateFor('task',g.bid,g.cid,g.last);if(r)mk({id:'t'+g.tid,date:g.last,bid:g.bid,bn:g.bn,cid:g.cid,type:'task',desc:'Task '+(g.tk==='post'?'Post':'Comment')+' '+(g.seq||''),qty:1,rate:+r.amount,amount:+r.amount,priced:true})});
  const nowD=new Date();
  ST.allB.forEach(b=>{const r0=rateFor('brand',b.id,b.client_id,ymd(nowD));if(r0)mk({id:'b'+b.id,date:r0.starts_on||ymd(b.created_at),bid:b.id,bn:b.name,cid:b.client_id,type:'brand',desc:'Brand fee',qty:1,rate:+r0.amount,amount:+r0.amount,priced:true});
@@ -848,7 +911,8 @@ function earnLines(){
   while(cur<=endM){const ds=ymd(cur),r=rateFor('month',b.id,b.client_id,ds);if(r)mk({id:'m'+b.id+ds,date:ds,bid:b.id,bn:b.name,cid:b.client_id,type:'month',desc:'Monthly fee '+MN(ds.slice(0,7)),qty:1,rate:+r.amount,amount:+r.amount,priced:true});cur=new Date(cur.getFullYear(),cur.getMonth()+1,1)}});
  ST.hours.forEach(h=>{const j=h.job_id?jm[h.job_id]:null;if(j&&j.mode!=='worked')return;
   const b=bm[h.brand_id||(j&&j.brand_id)],cid=b?b.client_id:(h.client_id||(j&&j.client_id)||null),jr=j&&j.rate!=null?{amount:+j.rate}:null,r=h.rate!=null?{amount:h.rate}:jr||rateFor('hour',h.brand_id||(j&&j.brand_id)||null,cid,h.work_date),hr=+h.hours;
-  mk({id:'h'+h.id,date:h.work_date,bid:h.brand_id||(j&&j.brand_id)||null,bn:b?b.name:(h.brand_name||(j&&j.brand_name)||'General (no brand)'),cid,type:'hour',desc:(j?j.title+': ':'')+(h.note||'Hours worked'),qty:hr,rate:r?+r.amount:0,amount:r?+r.amount*hr:0,priced:!!r,jid:j?j.id:null})});
+  const hp=j?null:planFor(h.brand_id||null,cid),hcov=!!(hp&&hp.model!=='task'&&!(hp.model==='hour'&&hp.hours_mode==='logged'));
+  mk({id:'h'+h.id,date:h.work_date,bid:h.brand_id||(j&&j.brand_id)||null,bn:b?b.name:(h.brand_name||(j&&j.brand_name)||'General (no brand)'),cid,type:'hour',desc:(j?j.title+': ':'')+(h.note||'Hours worked')+(hcov?' (time tracking only: covered by the plan)':''),qty:hr,rate:hcov?0:(r?+r.amount:0),amount:hcov?0:(r?+r.amount*hr:0),priced:hcov||!!r,jid:j?j.id:null,cov:hcov})});
  (ST.jobs||[]).forEach(j=>{if(j.mode==='worked'||j.status==='cancelled')return;
   const b=bm[j.brand_id],cid=b?b.client_id:j.client_id,ji=jobMath(j),done=j.status==='done',on=done||j.count_on==='start',ds=done?(j.done_on||ymd(j.created_at)):(j.start_on||ymd(j.created_at));
   mk({id:'j'+j.id,date:ds,bid:j.brand_id||null,bn:b?b.name:(j.brand_name||'No brand'),cid,type:'job',desc:'Job: '+j.title+(j.mode==='hours'?' ('+(+j.hours)+' h)':''),qty:j.mode==='hours'?+j.hours:1,rate:ji.rate,amount:ji.value,priced:ji.priced,excl:!on,why:on?'':'counts when marked done',jid:j.id})});
@@ -859,6 +923,11 @@ function earnLines(){
   while(cur<=en){const dim=new Date(cur.getFullYear(),cur.getMonth()+1,0).getDate(),me=new Date(cur.getFullYear(),cur.getMonth(),dim),a=st>cur?st:cur,z=en<me?en:me,days=Math.round((z-a)/DAY)+1;
    if(days>0){const hrs=Math.round(mh*days/dim*100)/100;mk({id:'s'+r.id+ymd(cur),date:ymd(cur),bid:r.brand_id||null,bn:b?b.name:(r.brand_id?'(removed brand)':'Scheduled hours'),cid,type:'hour',desc:'Scheduled hours ('+schedTxt(r)+')',qty:hrs,rate:+r.amount,amount:Math.round(hrs*r.amount*100)/100,priced:true,sched:true})}
    cur=new Date(cur.getFullYear(),cur.getMonth()+1,1)}});
+ (ST.plans||[]).forEach(pl=>{if(pl.model==='task'||(!pl.brand_id&&!pl.client_id))return;
+  const b=pl.brand_id?bm[pl.brand_id]:null,cid=pl.brand_id?(b?b.client_id:null):pl.client_id,bn=b?b.name:(pl.brand_id?'(removed brand)':cnm(cid)+' (whole client)'),end=b&&(b.trashed_at||b.archived_at)?ymd(b.trashed_at||b.archived_at):null;
+  planPeriods(pl,end&&end<todayS()?end:null).forEach(ds=>{
+   if(pl.model==='hour'){const q=+pl.hours||0,rt=+pl.rate||0;mk({id:'p'+pl.id+'_'+ds,date:ds,bid:pl.brand_id||null,bn,cid,type:'hour',desc:pl.hours_mode==='fixed'?'Fixed hours: '+q+' h':q+' h per '+pl.hours_mode+(pl.hours_mode==='week'?' (week of '+D_(ds)+')':' (from '+D_(ds)+')'),qty:q,rate:rt,amount:nz(q*rt),priced:true,sched:true,plan:true})}
+   else{const per=pl.period,ty=per==='once'?'brand':per;mk({id:'p'+pl.id+'_'+ds,date:ds,bid:pl.brand_id||null,bn,cid,type:ty,desc:per==='once'?'Fixed price':{week:'Weekly fee',month:'Monthly fee',year:'Yearly fee'}[per]+' (from '+D_(ds)+')',qty:1,rate:+pl.amount,amount:nz(+pl.amount),priced:true,plan:true})}})});
  return L}
 /* what a job is worth: fixed hours x price, a flat price, or the hours logged so far */
 function jobMath(j){const b=ST.allB.find(x=>x.id===j.brand_id),cid=b?b.client_id:j.client_id,rr=j.rate!=null?{amount:+j.rate}:rateFor('hour',j.brand_id||null,cid,todayS()),rate=rr?+rr.amount:0;
@@ -1141,7 +1210,7 @@ function rpTickAll(t,keys,on){(ST.rsel||(ST.rsel={client:[],brand:[]}))[t]=on?ke
 function cntTable(R,gk){const D=gk==='client'?R.dc:R.db,sel=(ST.rsel&&ST.rsel[gk])||[],nm=gk==='client'?'Client':'Brand',T={e:0,p:0,o:0,n:0,x:0},S={e:0,p:0,o:0,k:0};
  if(!D.rows.length)return '<div class="s">Nothing here for this choice yet.</div>';
  const keys=D.rows.map(g=>g.k),body=D.rows.map(g=>{T.e+=g.e;T.p+=g.p;T.o+=g.owed||0;T.n+=g.n;T.x+=g.nx;const on=sel.includes(g.k);if(on){S.e+=g.e;S.p+=g.p;S.o+=g.owed||0;S.k++}
-  const inc=gk==='brand'&&g.k!=='none'&&g.k!=='pay-none'?'<select class="sm" onchange="quickRule(\''+g.k+'\',this.value)" aria-label="What to include for '+esc(g.l)+'"><option value="">Brand\'s own rule</option>'+Object.keys(CRL).map(k=>'<option value="'+k+'"'+(((ST.crules||[]).find(r=>r.brand_id===g.k&&!r.task_id&&!r.kind)||{}).counts===k?' selected':'')+'>'+CRL[k]+'</option>').join('')+'</select>':'';
+  const inc=gk==='brand'&&g.k!=='none'&&g.k!=='pay-none'&&planned(g.k)?'<span class="s">Set in Prices</span>':gk==='brand'&&g.k!=='none'&&g.k!=='pay-none'?'<select class="sm" onchange="quickRule(\''+g.k+'\',this.value)" aria-label="What to include for '+esc(g.l)+'"><option value="">Brand\'s own rule</option>'+Object.keys(CRL).map(k=>'<option value="'+k+'"'+(((ST.crules||[]).find(r=>r.brand_id===g.k&&!r.task_id&&!r.kind)||{}).counts===k?' selected':'')+'>'+CRL[k]+'</option>').join('')+'</select>':'';
   return '<tr'+(on?' class="tk"':'')+'><td><input type="checkbox" '+(on?'checked':'')+' onchange="rpTick(\''+gk+'\',\''+g.k+'\',this.checked)" aria-label="Add up '+esc(g.l)+'"></td><td><b>'+esc(g.l)+'</b>'+(gk==='brand'&&g.k!=='none'&&g.k!=='pay-none'?rowInfo(D,'brand',g.k):'')+'</td><td class="n">'+fm(g.e)+'</td><td class="n">'+fm(g.p)+'</td><td class="n'+(g.owed>0.005?' owe':'')+'">'+(g.owed<-0.005?'<span class="gr">Credit '+fm(-g.owed)+'</span>':fm(g.owed))+'</td><td class="n">'+g.n+(g.nx?'<div class="s">+'+g.nx+' left out</div>':'')+'</td><td>'+inc+'</td></tr>'}).join('');
  return '<div class="scrollx"><table class="et"><tr><th style="width:34px"><input type="checkbox" '+(sel.length===keys.length?'checked':'')+' onchange="rpTickAll(\''+gk+'\','+esc(JSON.stringify(keys)).replace(/"/g,'&quot;')+',this.checked)" aria-label="Tick all"></th><th>'+nm+'</th><th class="n">Work done</th><th class="n">Already paid</th><th class="n">Balance</th><th class="n">Items</th><th>'+(gk==='brand'?'What to include':'')+'</th></tr>'+body
  +(sel.length?'<tr class="sel"><td></td><td><b>Ticked: '+S.k+' '+(gk==='client'?'client':'brand')+(S.k>1?'s':'')+'</b></td><td class="n">'+fm(S.e)+'</td><td class="n">'+fm(S.p)+'</td><td class="n">'+fm(S.o)+'</td><td></td><td></td></tr>':'')
@@ -1210,7 +1279,7 @@ function overView(){
  return '<div class="cb filt"><div class="row" style="margin:0">'+pills(PERIODS,f.period,'period')+'</div>'+(f.period==='custom'?'<div class="row"><label><span class="s">From</span><input type="date" value="'+esc(f.from)+'" onchange="efSet(\'from\',this.value)"></label><label><span class="s">To</span><input type="date" value="'+esc(f.to)+'" onchange="efSet(\'to\',this.value)"></label></div>':'')
  +'<div class="row"><label><span class="s">Client</span><select onchange="efSet(\'client\',this.value)">'+copts(f.client,'All clients').replace('>All clients</option>','>All clients</option><option value="none"'+(f.client==='none'?' selected':'')+'>No client</option>')+'</select></label><label><span class="s">Brand</span><select onchange="efSet(\'brand\',this.value)">'+bopts(f.brand,'All brands',f.client&&f.client!=='none'?f.client:'')+'</select></label><label><span class="s">What to include</span><select onchange="efSet(\'cnt\',this.value)"><option value="">As my rules say</option>'+Object.keys(CRL).map(k=>'<option value="'+k+'"'+(f.cnt===k?' selected':'')+'>What if: '+CRL[k].toLowerCase()+'</option>').join('')+'</select></label><label><span class="s">Type</span><select onchange="efSet(\'type\',this.value)"><option value="">Everything</option>'+Object.keys(TY).map(k=>'<option value="'+k+'"'+(f.type===k?' selected':'')+'>'+TY[k]+'</option>').join('')+'</select></label><span style="flex:1"></span><span class="s">Group by</span>'+pills(gp,f.group,'group')+'</div>'
  +'<details class="shw"'+(ST.shwOpen?' open':'')+' ontoggle="ST.shwOpen=this.open"><summary>Choose what to show</summary><div class="row">'+shows.map(x=>'<label class="sw"><input type="checkbox" '+(sh[x[0]]?'checked':'')+' onchange="efShow(\''+x[0]+'\',this.checked)"><span>'+x[1]+'</span></label>').join('')+'</div></details></div>'
- +(D.unpriced?'<div class="warn"><b>'+D.unpriced+' item'+(D.unpriced>1?'s have':' has')+' no price yet.</b> They add 0 until you set a price. <button class="sm" onclick="etab(\'price\');ST.ep=\'rate\';draw()">Set a price</button></div>':'')
+ +(D.unpriced?'<div class="warn"><b>'+D.unpriced+' item'+(D.unpriced>1?'s have':' has')+' no price yet.</b> They add 0 until you set a price. <button class="sm" onclick="etab(\'price\');pwStart()">Set a price</button></div>':'')
  +(sh.kpi?'<div class="kpi money">'+kpi('k-live',fm(D.earned),'total work done',esc(pt)+' &middot; '+D.n+' item'+(D.n==1?'':'s'))+(D.tf?'':kpi('k-chk',fm(D.recv),'already paid',esc(pt))+kpi(D.owed>0.005?'k-ink':'k-live',fm(Math.abs(D.owed)),D.owed<-0.005?'credit, paid in advance':'balance','all time, still to collect'))+(ST.v7===false?'':kpi('k-dr',fm(D.unbilled),'not invoiced yet','work done with no invoice'))+(D.nx?kpi('k-mu',fm(D.xv),'left out',D.nx+' item'+(D.nx==1?'':'s')+' &middot; '+esc(pt)):'')+'</div>':'')
  +(f.cnt?'<div class="warn"><b>What-if view.</b> Every item is included as "'+CRL[f.cnt].toLowerCase()+'", ignoring your saved rules. Invoices always use your saved rules. <button class="sm" onclick="efSet(\'cnt\',\'\')">Back to my rules</button></div>':'')
  +(sh.sum?'<h3>How these numbers add up</h3>'+recHtml(D):'')
@@ -1222,7 +1291,7 @@ function overView(){
  +(sh.lines?'<h3>Every line behind the totals</h3>'+linesList(D):'')}
 function earnView(){
  if(ST.v6===false||ST.earnErr)return '<h1>Earnings</h1><div class="warn">Earnings needs the latest database update. Run <b>supabase_update_6.sql</b> in Supabase (SQL Editor), then reload this page.</div>';
- const tab=ST.etab,body=tab==='inv'?invView():tab==='jobs'?jobsView():tab==='rep'?repView():tab==='price'?priceView():overView();
+ const tab=ST.etab,body=tab==='inv'?invView():tab==='jobs'?jobsView():tab==='rep'?repView():tab==='price'?priceView():tab==='perf'?perfView():overView();
  return '<div class="row pagehead"><h1 style="margin:0;flex:1">Earnings</h1><button class="p" onclick="ST.pf=null;ST.ep=\'pay\';draw();setTimeout(payHint,30)">+ Record payment</button><button onclick="if(!needV7()){ST.iv=null;ST.etab=\'inv\';ST.ep=\'inv\';draw()}">New invoice</button><button onclick="ST.ep=\'hours\';draw()">Log hours</button>'+(ST.etab==='over'?'<button onclick="dlEarn(\'view\')">Download Excel</button>':'')+'</div>'
  +'<p class="mu" style="margin-top:6px">Only admins see this page. Work you publish and the prices you set are <b>work done</b>. Invoice it, then record each payment when it arrives.</p>'
  +'<div class="etabs" role="tablist">'+ETABS.map(t=>'<button role="tab" class="'+(ST.etab===t[0]?'on':'')+'" onclick="etab(\''+t[0]+'\')">'+t[1]+(t[0]==='inv'&&ST.inv&&ST.inv.length?' <small>'+ST.inv.filter(i=>{const x=invInfo(i);return x.st==='open'||x.st==='part'}).length+'</small>':'')+'</button>').join('')+'</div>'
@@ -1237,7 +1306,7 @@ function invSetHtml(){const s=ST.set,row=(l,h,ctl)=>'<div class="srow"><div><b>'
  +row('Delete closed invoices automatically','Paid, written-off and cancelled invoices are deleted after the days below. Unpaid invoices are never deleted automatically. Payments always stay in your records, so your totals do not change.','<label class="sw"><input type="checkbox" '+(s.invoice_auto_delete_on===false?'':'checked')+' onchange="saveSet(\'invoice_auto_delete_on\',this.checked)"><span>'+(s.invoice_auto_delete_on===false?'Off':'On')+'</span></label>')
  +row('Delete them after','Days after the invoice was closed.','<input id="s_invoice_delete_days" type="number" min="1" max="365" value="'+esc(s.invoice_delete_days!=null?s.invoice_delete_days:30)+'" style="width:90px" onchange="numSet(\'invoice_delete_days\',1,365)"> <span class="s">days</span>')+'</div>'}
 /* ---- v8: counting rules (per client, brand, task), audit against the Brands page, split payments ---- */
-const CRL={all:'Every published item',live:'Only items confirmed live',notdel:'Live or still confirming'};
+const CRL={drafted:'Everything drafted',all:'Everything submitted',notdel:'Submitted and not deleted',live:'Only what is live'};
 const V8W='<div class="warn"><b>One more database update is needed for counting rules and split payments.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_8.sql</b> and press Run, then reload this page.</div>';
 const needV8=()=>{if(ST.v8===false){alert('Run supabase_update_8.sql in Supabase first (SQL Editor), then reload this page.');return true}return false};
 function countRule(kind,tid,bid,cid){const rs=ST.crules||[];let best=null,bs=-1;
@@ -1250,7 +1319,7 @@ function effRule(kind,bid,cid){const cr=countRule(kind,null,bid,cid);if(cr)retur
 const taskName=t=>t?bname2(t.brand_id)+' / '+(t.kind==='post'?'Post':'Comment')+' '+(t.seq||'')+(t.label?' '+t.label:''):'(removed task)';
 function crWho(r){return r.task_id?'Task: '+esc(taskName(ST.allT.find(t=>t.id===r.task_id))):r.brand_id?'Brand: '+esc(bname2(r.brand_id)||'(removed brand)'):r.client_id?'Client: '+esc(cn2(r.client_id)):'Everyone (default)'}
 function rowInfo(D,gk,k){const L=D.allL.filter(l=>(l.type==='post'||l.type==='comment')&&(gk==='brand'?l.bid===k:l.cid===k)),c={live:0,checking:0,removed:0};L.forEach(l=>{if(c[l.st]!=null)c[l.st]++});
- let rl='';if(gk==='brand'){const b=ST.allB.find(x=>x.id===k);if(b){const a=effRule('comment',k,b.client_id),p=effRule('post',k,b.client_id),nt=(ST.crules||[]).filter(r=>r.task_id&&r.brand_id===k).length;rl='Included: '+(a.t===p.t?esc(a.t):'posts: '+esc(p.t)+'; comments: '+esc(a.t))+(nt?' (+'+nt+' task rule'+(nt>1?'s':'')+')':'')}}
+ let rl='';if(gk==='brand'){const b=ST.allB.find(x=>x.id===k);if(b&&planned(k))rl='Priced by: '+esc(planTxt(planned(k)));else if(b){const a=effRule('comment',k,b.client_id),p=effRule('post',k,b.client_id),nt=(ST.crules||[]).filter(r=>r.task_id&&r.brand_id===k).length;rl='Included: '+(a.t===p.t?esc(a.t):'posts: '+esc(p.t)+'; comments: '+esc(a.t))+(nt?' (+'+nt+' task rule'+(nt>1?'s':'')+')':'')}}
  return (L.length?'<div class="s">'+c.live+' live &middot; '+c.checking+' confirming &middot; '+c.removed+' deleted</div>':'')+(rl?'<div class="s">'+rl+'</div>':'')}
 /* ---- the rule form ---- */
 function crForm(){if(ST.v8===false)return '<div class="cb pf">'+V8W+'</div>';const d=ST.crd||{};
@@ -1280,9 +1349,9 @@ function brandRulesHtml(){const bs=ST.brands.slice().sort((a,b)=>cn2(a.client_id
  return '<div class="scrollx"><table class="et"><tr><th>Brand</th><th>Posts included</th><th>Comments included</th><th>Set it here</th><th></th></tr>'+bs.map(b=>{const p=effRule('post',b.id,b.client_id),c=effRule('comment',b.id,b.client_id),own=(ST.crules||[]).find(r=>r.brand_id===b.id&&!r.task_id&&!r.kind);
   const cell=x=>esc(x.t)+' <span class="chip '+(x.src==='default'?'mut':'')+'">'+x.src+'</span>';
   return '<tr><td><b>'+esc(b.name)+'</b><div class="s">'+esc(cn2(b.client_id))+'</div></td><td>'+cell(p)+'</td><td>'+cell(c)+'</td><td><select onchange="quickRule(\''+b.id+'\',this.value)" aria-label="Counting rule for '+esc(b.name)+'"><option value="">Use the client or default rule</option>'+Object.keys(CRL).map(k=>'<option value="'+k+'"'+(own&&own.counts===k?' selected':'')+'>'+CRL[k]+'</option>').join('')+'</select></td><td><button class="sm" onclick="customRule(\''+b.id+'\')">More options</button></td></tr>'}).join('')+'</table></div>'}
-function rulesList(){const l=ST.crules||[];if(!l.length)return '<div class="s">No saved rules yet. Every brand includes every published item.</div>';
+function rulesList(){const l=ST.crules||[];if(!l.length)return '<div class="s">No saved rules yet. Every brand includes everything submitted (link pasted).</div>';
  return '<div class="scrollx"><table class="et"><tr><th>Applies to</th><th>Included</th><th>Note</th><th></th></tr>'+l.slice().sort((a,b)=>crWho(a).localeCompare(crWho(b))).map(r=>'<tr><td>'+crWho(r)+'</td><td>'+esc(crTxt(r))+'</td><td>'+esc(r.note||'')+'</td><td><button class="sm" aria-label="Delete rule" onclick="delRule(\''+r.id+'\')">&#10005;</button></td></tr>').join('')+'</table></div>'}
-function priceView(){return '<div class="row" style="margin-top:0"><button class="p" onclick="ST.crd=null;ST.ep=\'cr\';draw();window.scrollTo(0,0)">Set a counting rule</button><button onclick="ST.ep=\'rate\';draw();window.scrollTo(0,0)">Set a price</button></div>'
+function priceViewAdv(){return '<div class="row" style="margin-top:0"><button class="p" onclick="ST.crd=null;ST.ep=\'cr\';draw();window.scrollTo(0,0)">Set a counting rule</button><button onclick="ST.ep=\'rate\';draw();window.scrollTo(0,0)">Set a price</button></div>'
  +'<h3 style="margin-top:28px">What included in the totals</h3><p class="mu">Decide per brand, per client or per task whether every published item counts, only items confirmed live, or live and still-confirming ones, and whether an item must stay up for a number of days first. Earnings update by themselves as items are confirmed or deleted.</p>'
  +(ST.v8===false?V8W:brandRulesHtml()+'<h3>Saved rules</h3>'+rulesList())
  +'<h3>Prices</h3><p class="mu">What each post, comment, task, hour or month is worth.</p>'+ratesList()}
@@ -1304,6 +1373,153 @@ function paySplit(){const on=$('ep_split').checked,box=$('ep_sp'),c=$('ep_c').va
 function payFill(){const D=earnData({period:'all',client:$('ep_c').value,brand:'',type:'',group:'brand'});document.querySelectorAll('.spa').forEach(i=>{const g=D.rows.find(x=>x.k===i.dataset.b);i.value=g&&g.owed>0.004?nz(g.owed):''});paySum()}
 function paySum(){let t=0;document.querySelectorAll('.spa').forEach(i=>t+=+i.value||0);$('ep_a').value=nz(t)||''}
 async function payBrand(id,bid){const p=ST.pay.find(x=>x.id===id),b=bid?ST.allB.find(x=>x.id===bid):null;const{error}=await sb.from('payments').update({brand_id:bid||null,brand_name:b?b.name:null}).eq('id',id);if(!noErr(error))return;await reload();toast('Payment moved')}
+/* ---- v9: pricing as a step-by-step choice (brand, how you charge, price, what counts, check) ---- */
+const V9W='<div class="warn"><b>One more database update is needed for step-by-step pricing.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_9.sql</b> and press Run, then reload this page.</div>';
+const needV9=()=>{if(ST.v9===false){alert('Run supabase_update_9.sql in Supabase first (SQL Editor), then reload this page.');return true}return false};
+const MODELS=[['task','Per task','A price for each post and each comment.'],['hour','Per hour','An hourly rate: a set number of hours, hours per week or month, or the hours you log.'],['fixed','Fixed price','One agreed amount, once or repeating every week, month or year.']];
+const HMODES=[['fixed','A fixed number of hours','The total hours for the job, charged once.'],['week','Hours per week','The same hours every week.'],['month','Hours per month','The same hours every month.'],['logged','Hours I log','No set hours. You press Log hours as you work.']];
+const PER2=[['once','One-time'],['week','Every week'],['month','Every month'],['year','Every year']];
+const CNTD={drafted:'Counts as soon as it is written, even before it is published.',all:'Counts when the link is pasted, even if Reddit deletes it later.',notdel:'Counts while it is live or still being confirmed.',live:'Counts only after the checker confirms it is live.'};
+const pwSc=k=>k==='all'?{c:null,b:null}:/^c:./.test(k||'')?{c:k.slice(2),b:null}:/^b:./.test(k||'')?{c:null,b:k.slice(2)}:null;
+const pwCid=s=>s?(s.c||(s.b?(ST.allB.find(x=>x.id===s.b)||{}).client_id:null)||null):null;
+function pwName(k){const s=pwSc(k);if(!s)return '';return !s.c&&!s.b?'Everyone else (default prices)':s.b?bname2(s.b)+' ('+cn2(pwCid(s))+')':'All brands of '+cn2(s.c)}
+const planExact=k=>{const s=pwSc(k);return s?(ST.plans||[]).find(p=>(p.client_id||null)===s.c&&(p.brand_id||null)===s.b)||null:null};
+const planKey=p=>p.brand_id?'b:'+p.brand_id:p.client_id?'c:'+p.client_id:'all';
+const planned=bid=>{const b=ST.allB.find(x=>x.id===bid),pl=b&&planFor(bid,b.client_id);return pl&&pl.model!=='task'?pl:null};
+function planTxt(pl){if(!pl)return '';const cid=pl.brand_id?(ST.allB.find(x=>x.id===pl.brand_id)||{}).client_id:pl.client_id;
+ const st=pl.start_on&&pl.start_on>todayS()?', starts '+D_(pl.start_on):'',en=pl.end_on?', ends '+D_(pl.end_on):'';
+ if(pl.model==='task'){const a=rateFor('post',pl.brand_id,cid,todayS()),b=rateFor('comment',pl.brand_id,cid,todayS());return 'Per task: posts '+(a?fm(a.amount):'no price')+', comments '+(b?fm(b.amount):'no price')}
+ if(pl.model==='hour')return 'Hourly '+fm(pl.rate)+' per hour, '+({fixed:(+pl.hours)+' h in total',week:(+pl.hours)+' h per week',month:(+pl.hours)+' h per month',logged:'the hours you log'}[pl.hours_mode]||'')+st+en;
+ return 'Fixed '+fm(pl.amount)+' '+({once:'one-time',week:'every week',month:'every month',year:'every year'}[pl.period]||'')+st+en}
+function legacyTxt(bid,cid){const a=rateFor('post',bid,cid,todayS()),b=rateFor('comment',bid,cid,todayS());return (a||b)?'Prices: posts '+(a?fm(a.amount):'none')+', comments '+(b?fm(b.amount):'none'):'No prices yet'}
+/* how many posts / comments would count under each way of counting, straight from the earnings engine */
+function pwStats(k){const w=ST.pw;if(w&&w.stk===k&&w.stats)return w.stats;const s=pwSc(k)||{c:null,b:null},r={post:{},comment:{}};
+ ['drafted','all','notdel','live'].forEach(rule=>{ST.cnov=rule;let L;try{L=earnLines()}finally{ST.cnov=''}
+  L.forEach(l=>{if(l.type!=='post'&&l.type!=='comment')return;if(l.excl)return;if(s.b?l.bid!==s.b:s.c?l.cid!==s.c:l.cov)return;r[l.type][rule]=(r[l.type][rule]||0)+1})});
+ if(w){w.stk=k;w.stats=r}return r}
+function pwStart(k){if(needV9())return;const w={step:k?2:1,scope:k||'',model:'',rate:'',hmode:'month',hours:'',amount:'',period:'month',start:todayS(),end:'',pp:'',pc:'',cp:'all',cc:'all',from:''};ST.pw=w;if(k)pwLoad(w);ST.etab='price';ST.ep='';draw();window.scrollTo(0,0)}
+function pwLoad(w){const s=pwSc(w.scope);if(!s)return;const cid=pwCid(s),pl=planExact(w.scope),pr=u=>{const r=rateFor(u,s.b,cid,todayS());return r?String(+r.amount):''},ct=u=>{const cr=countRule(u,null,s.b,cid);return cr?cr.counts:((rateFor(u,s.b,cid,todayS())||{}).counts||'all')};
+ w.pp=pr('post');w.pc=pr('comment');w.cp=ct('post');w.cc=ct('comment');w.stats=null;w.stk='';
+ if(pl){w.model=pl.model;w.edit=true;w.rate=pl.rate!=null?String(+pl.rate):'';w.hmode=pl.hours_mode||'month';w.hours=pl.hours!=null?String(+pl.hours):'';w.amount=pl.amount!=null?String(+pl.amount):'';w.period=pl.period||'month';w.start=pl.start_on||todayS();w.end=pl.end_on||''}
+ else{w.edit=false;const r=rateFor('hour',s.b,cid,todayS());if(r)w.rate=String(+r.amount)}}
+function pwRead(){const w=ST.pw;if(!w)return;[['pw_s','scope'],['pw_rate','rate'],['pw_hours','hours'],['pw_amount','amount'],['pw_start','start'],['pw_end','end'],['pw_pp','pp'],['pw_pc','pc'],['pw_from','from']].forEach(a=>{const e=$(a[0]);if(e)w[a[1]]=e.value});
+ [['pw_cp','cp'],['pw_cc','cc'],['pw_hm','hmode'],['pw_per','period']].forEach(a=>{const e=document.querySelector('input[name="'+a[0]+'"]:checked');if(e)w[a[1]]=e.value})}
+function pwOk(w,step){const num=x=>x!==''&&x!=null&&!isNaN(+x)&&+x>=0;
+ if(step>=1&&!pwSc(w.scope))return 'Choose a brand or client first.';
+ if(step>=2&&!w.model)return 'Choose how you charge.';
+ if(step>=3){if(w.model==='task'&&(!num(w.pp)||!num(w.pc)))return 'Enter a price for posts and for comments (0 is allowed).';if(w.model==='hour'&&!num(w.rate))return 'Enter the hourly rate.';if(w.model==='fixed'&&!num(w.amount))return 'Enter the agreed amount.'}
+ if(step>=4){if(w.model==='hour'&&w.hmode!=='logged'&&!(+w.hours>0))return 'Enter the number of hours.';if(w.model!=='task'&&!(w.model==='hour'&&w.hmode==='logged')&&!w.start)return 'Choose the start date.';if(w.model!=='task'&&w.end&&w.end<w.start)return 'The end date is before the start date.'}
+ return ''}
+function pwGo(n){pwRead();const w=ST.pw;if(n>w.step){const m=pwOk(w,w.step);if(m){alert(m);return}}w.step=n;draw();window.scrollTo(0,0)}
+function pwModel(m){pwRead();const w=ST.pw;w.model=m;w.step=3;draw();window.scrollTo(0,0)}
+function pwPickScope(){pwRead();const w=ST.pw;if(!pwSc(w.scope))return;pwLoad(w);w.step=2;draw()}
+const pwClose=()=>{ST.pw=null;draw()};
+function pwScopeOpts(sel){const cs=ST.clients.slice().sort((a,b)=>a.name.localeCompare(b.name)),ob=b=>'<option value="b:'+b.id+'"'+(sel==='b:'+b.id?' selected':'')+'>'+esc(b.name)+'</option>';
+ let o='<option value="">Choose...</option><option value="all"'+(sel==='all'?' selected':'')+'>Everyone else (default prices)</option>';
+ cs.forEach(c=>{o+='<optgroup label="'+esc(c.name)+'"><option value="c:'+c.id+'"'+(sel==='c:'+c.id?' selected':'')+'>All brands of '+esc(c.name)+'</option>'+ST.brands.filter(b=>b.client_id===c.id).sort((a,b)=>a.name.localeCompare(b.name)).map(ob).join('')+'</optgroup>'});
+ const nb=ST.brands.filter(b=>!b.client_id||!ST.clients.some(c=>c.id===b.client_id));if(nb.length)o+='<optgroup label="No client">'+nb.map(ob).join('')+'</optgroup>';return o}
+function pwCalc(){const w=ST.pw,e=$('pw_calc');if(!w||!e)return;pwRead();const t=pwPlan(w);if(!t){e.textContent='';return}
+ const v=planValue(t),per=t.model==='hour'?(t.hours_mode==='fixed'?'once':t.hours_mode):t.period,pn=planPeriods(t).length;
+ e.innerHTML=(t.model==='hour'?'<b>'+(+t.hours||0)+' h</b> &times; <b>'+fm(t.rate||0)+'</b> = <b>'+fm(v)+'</b>':'<b>'+fm(v)+'</b>')+({once:' charged once',week:' every week',month:' every month',year:' every year'}[per]||'')+(per!=='once'&&t.start_on?'. Since '+D_(t.start_on)+' that is <b>'+pn+'</b> period'+(pn==1?'':'s')+' so far = <b>'+fm(v*pn)+'</b>.':'')}
+function pwPlan(w){const s=pwSc(w.scope);if(!s||w.model==='task')return null;const t={client_id:s.c,brand_id:s.b,model:w.model,start_on:w.start||null,end_on:w.end||null,created_at:todayS()};
+ if(w.model==='hour'){t.rate=+w.rate||0;t.hours_mode=w.hmode;t.hours=w.hmode==='logged'?null:(+w.hours||0)}else{t.amount=+w.amount||0;t.period=w.period}return t}
+function pwLegacy(w){const s=pwSc(w.scope);if(!s||w.model==='task')return[];return ST.rates.filter(r=>(r.client_id||null)===s.c&&(r.brand_id||null)===s.b&&(r.unit==='month'||r.unit==='brand'||(r.unit==='hour'&&r.hours_qty)))}
+/* ---- the card ---- */
+function pwView(){const w=ST.pw;if(!w)return '';if(ST.v9===false)return '<div class="cb">'+V9W+'</div>';
+ const tl=w.model==='hour'?'Hours':w.model==='fixed'?'Billing period':'What counts',names=['Brand','How you charge','Price',tl,'Check'];
+ const bar='<ol class="pwsteps">'+names.map((n,i)=>'<li class="'+(i+1===w.step?'on':i+1<w.step?'done':'')+'">'+(i+1<w.step?'<button onclick="pwGo('+(i+1)+')" aria-label="Back to step '+(i+1)+'">':'<span>')+'<b>'+(i+1)+'</b>'+n+(i+1<w.step?'</button>':'</span>')+'</li>').join('')+'</ol>';
+ const who=w.scope&&pwSc(w.scope)?'<div class="pwwho">Pricing for <b>'+esc(pwName(w.scope))+'</b>'+(w.edit?' <span class="chip">editing</span>':'')+'</div>':'';
+ const nav=(next,label)=>'<div class="row pwnav">'+(w.step>1?'<button onclick="pwGo('+(w.step-1)+')">Back</button>':'')+(next?'<button class="p" onclick="'+next+'">'+label+'</button>':'')+'<span style="flex:1"></span><button onclick="pwClose()">Cancel</button></div>';
+ const cur='<span class="pwcur">'+esc((ST.set.currency||'USD'))+'</span>';
+ let b='';
+ if(w.step===1){const ex=planExact(w.scope);b='<h3>Which brand or client is this pricing for?</h3><p class="s">Pick one brand, or all the brands of a client, or the default for everyone you have not set up.</p><div class="row"><select id="pw_s" onchange="pwPickScope()" style="min-width:min(100%,360px)">'+pwScopeOpts(w.scope)+'</select></div>'+(ex?'<div class="hint">Already set: '+esc(planTxt(ex))+'. Pressing Next lets you change it.</div>':'')+nav('pwPickScope()','Next')}
+ else if(w.step===2){b='<h3>How do you charge for this work?</h3>'+who+'<div class="pwopts">'+MODELS.map(m=>{const off=w.scope==='all'&&m[0]!=='task';return '<button class="pwopt'+(w.model===m[0]?' on':'')+'" '+(off?'disabled title="Choose a brand or client first"':'onclick="pwModel(\''+m[0]+'\')"')+'><b>'+m[1]+'</b><span>'+m[2]+(off?' Needs a brand or client.':'')+'</span></button>'}).join('')+'</div>'+nav('','')}
+ else if(w.step===3){
+  if(w.model==='task')b='<h3>What is one post and one comment worth?</h3>'+who+'<div class="row"><label><span class="s">Price per post</span><span class="pwin">'+cur+'<input id="pw_pp" type="number" min="0" step="0.01" value="'+esc(w.pp)+'" placeholder="0.00"></span></label><label><span class="s">Price per comment</span><span class="pwin">'+cur+'<input id="pw_pc" type="number" min="0" step="0.01" value="'+esc(w.pc)+'" placeholder="0.00"></span></label></div><details class="shw"><summary>The price changes from a certain date (optional)</summary><p class="s">Leave empty to use these prices for all work. Pick a date to keep older work at the old price and use these prices from that date on.</p><label><span class="s">New prices start on</span><input id="pw_from" type="date" value="'+esc(w.from)+'"></label></details>'
+  else if(w.model==='hour')b='<h3>What is your hourly rate?</h3>'+who+'<div class="row"><label><span class="s">Rate per hour</span><span class="pwin">'+cur+'<input id="pw_rate" type="number" min="0" step="0.01" value="'+esc(w.rate)+'" placeholder="0.00"></span></label></div>'
+  else b='<h3>What is the agreed amount?</h3>'+who+'<div class="row"><label><span class="s">Amount</span><span class="pwin">'+cur+'<input id="pw_amount" type="number" min="0" step="0.01" value="'+esc(w.amount)+'" placeholder="0.00"></span></label></div>';
+  b+=nav('pwGo(4)','Next')}
+ else if(w.step===4){
+  if(w.model==='task'){const st=pwStats(w.scope),blk=(kind,lab,key,pk)=>'<div class="pwblk"><b>'+lab+'</b><div class="pwrad">'+['drafted','all','notdel','live'].map(r=>{const n=st[kind][r]||0,pr=+w[pk]||0;return '<label class="pwr"><input type="radio" name="pw_c'+kind[0]+'" value="'+r+'"'+(w[key]===r?' checked':'')+'><span><b>'+CRL[r]+'</b><small>'+CNTD[r]+'</small></span><em>'+n+' now'+(pr?' &middot; '+fm(n*pr):'')+'</em></label>'}).join('')+'</div></div>';
+   b='<h3>What gets counted?</h3>'+who+'<p class="s">Pick, for posts and for comments, when an item starts to count. The numbers on the right show what each choice would count right now. Items that do not count yet are not lost: they start counting by themselves the moment they qualify.</p><div class="pwtwo">'+blk('post','Posts','cp','pp')+blk('comment','Comments','cc','pc')+'</div>'+(ST.v8===false?V8W:'')}
+  else if(w.model==='hour')b='<h3>How are the hours worked out?</h3>'+who+'<div class="pwrad">'+HMODES.map(m=>'<label class="pwr"><input type="radio" name="pw_hm" value="'+m[0]+'"'+(w.hmode===m[0]?' checked':'')+' onchange="pwRead();draw()"><span><b>'+m[1]+'</b><small>'+m[2]+'</small></span></label>').join('')+'</div>'
+   +(w.hmode==='logged'?'<div class="hint">Nothing is added by itself. Each time you press <b>Log hours</b> for this brand, the hours are charged at the rate above.</div>':'<div class="row"><label><span class="s">'+({fixed:'Total hours',week:'Hours per week',month:'Hours per month'}[w.hmode])+'</span><input id="pw_hours" type="number" min="0" step="0.25" value="'+esc(w.hours)+'" oninput="pwCalc()" style="width:130px"></label><label><span class="s">Starts on</span><input id="pw_start" type="date" value="'+esc(w.start)+'" oninput="pwCalc()"></label>'+(w.hmode==='fixed'?'':'<label><span class="s">Ends on (optional)</span><input id="pw_end" type="date" value="'+esc(w.end)+'" oninput="pwCalc()"></label>')+'</div><div class="hint" id="pw_calc"></div>');
+  else b='<h3>Is it charged once, or does it repeat?</h3>'+who+'<div class="pwchips">'+PER2.map(m=>'<label class="pwchip"><input type="radio" name="pw_per" value="'+m[0]+'"'+(w.period===m[0]?' checked':'')+' onchange="pwRead();draw()"><span>'+m[1]+'</span></label>').join('')+'</div><div class="row"><label><span class="s">'+(w.period==='once'?'Charged on':'First period starts on')+'</span><input id="pw_start" type="date" value="'+esc(w.start)+'" oninput="pwCalc()"></label>'+(w.period==='once'?'':'<label><span class="s">Ends on (optional)</span><input id="pw_end" type="date" value="'+esc(w.end)+'" oninput="pwCalc()"></label>')+'</div><div class="hint" id="pw_calc"></div><p class="s">A period counts as soon as it starts. Each period starts on the same day as the first one.</p>';
+  b+=nav('pwGo(5)','Next')}
+ else b=pwReview(w,who,nav);
+ return '<div class="cb pwcard">'+bar+'<div class="pwbody">'+b+'</div></div>'}
+function pwReview(w,who,nav){const s=pwSc(w.scope),old=planExact(w.scope),lg=pwLegacy(w);let h='<h3>Check it, then save</h3>'+who,rows='';
+ if(w.model==='task'){const st=pwStats(w.scope),pp=+w.pp||0,pc=+w.pc||0,np=st.post[w.cp]||0,nc=st.comment[w.cc]||0;
+  rows='<div class="rr"><span>Posts<small>'+fm(pp)+' each &middot; '+CRL[w.cp].toLowerCase()+'</small></span><b>'+np+' &times; '+fm(pp)+' = '+fm(np*pp)+'</b></div><div class="rr"><span>Comments<small>'+fm(pc)+' each &middot; '+CRL[w.cc].toLowerCase()+'</small></span><b>'+nc+' &times; '+fm(pc)+' = '+fm(nc*pc)+'</b></div><div class="rr sum"><span>Counted right now</span><b>'+fm(np*pp+nc*pc)+'</b></div><p class="s">This grows by itself as new work is published and confirmed.</p>'}
+ else{const t=pwPlan(w),v=planValue(t),pn=planPeriods(t).length,per=w.model==='hour'?(w.hmode==='fixed'?'once':w.hmode):w.period;
+  rows=(w.model==='hour'?'<div class="rr"><span>Hourly rate</span><b>'+fm(w.rate)+'</b></div>'+(w.hmode==='logged'?'<div class="rr"><span>Hours</span><b>As you log them</b></div>':'<div class="rr"><span>'+({fixed:'Total hours',week:'Hours per week',month:'Hours per month'}[w.hmode])+'</span><b>'+(+w.hours)+' h</b></div>'):'')
+   +(w.hmode==='logged'&&w.model==='hour'?'':'<div class="rr"><span>'+(per==='once'?'Charged once':'Charged '+({week:'every week',month:'every month',year:'every year'}[per]))+'</span><b>'+fm(v)+'</b></div><div class="rr"><span>Starts</span><b>'+D_(w.start)+(w.end&&per!=='once'?' &middot; ends '+D_(w.end):'')+'</b></div><div class="rr sum"><span>Counted right now<small>'+(pn?pn+' period'+(pn==1?'':'s')+' started':'Nothing yet: it has not started')+'</small></span><b>'+fm(v*pn)+'</b></div>');
+  rows+='<p class="s">Posts, comments and hours you log for '+esc(s&&s.b?'this brand':'these brands')+' stay visible in your totals as work delivered, but they add nothing extra because this plan covers them.</p>'}
+ h+='<div class="pwsum">'+rows+'</div>';
+ if(old&&old.model!==w.model)h+='<div class="hint">This replaces the current plan: '+esc(planTxt(old))+'.</div>';
+ if(lg.length)h+='<div class="warn"><b>Older prices would be counted twice.</b> '+esc(pwName(w.scope))+' also has: '+lg.map(r=>esc(fm(r.amount)+' '+UN[r.unit]+(r.hours_qty?' ('+schedTxt(r)+')':''))).join('; ')+'. They are removed when you save, so nothing is counted twice.</div>';
+ return h+nav('pwSave()','Save pricing')}
+async function pwSave(){if(needV9())return;pwRead();const w=ST.pw,s=pwSc(w.scope),m=pwOk(w,4);if(m)return alert(m);
+ const key={client_id:s.c,brand_id:s.b},old=planExact(w.scope),plan=Object.assign({},key,{model:w.model,rate:null,hours_mode:null,hours:null,amount:null,period:null,start_on:null,end_on:null});
+ if(w.model==='hour'){plan.rate=+w.rate;plan.hours_mode=w.hmode;plan.hours=w.hmode==='logged'?null:+w.hours;plan.period=w.hmode==='fixed'||w.hmode==='logged'?null:w.hmode;plan.start_on=w.hmode==='logged'?null:w.start;plan.end_on=w.hmode==='week'||w.hmode==='month'?(w.end||null):null}
+ else if(w.model==='fixed'){plan.amount=+w.amount;plan.period=w.period;plan.start_on=w.start;plan.end_on=w.period==='once'?null:(w.end||null)}
+ let r=await(old?sb.from('price_plans').update(plan).eq('id',old.id):sb.from('price_plans').insert(plan));if(!noErr(r.error))return;
+ if(w.model==='task'){
+  for(const u of ['post','comment']){const amt=+(u==='post'?w.pp:w.pc),from=w.from||null,ex=ST.rates.find(x=>(x.client_id||null)===s.c&&(x.brand_id||null)===s.b&&x.unit===u&&(x.starts_on||null)===from),row=Object.assign({},key,{unit:u,amount:amt,starts_on:from});
+   r=await(ex?sb.from('rates').update(row).eq('id',ex.id):sb.from('rates').insert(row));if(!noErr(r.error))return}
+  if(ST.v8!==false)for(const u of ['post','comment']){const ct=u==='post'?w.cp:w.cc,ex=(ST.crules||[]).find(x=>(x.client_id||null)===s.c&&(x.brand_id||null)===s.b&&!x.task_id&&x.kind===u);
+   r=await(ex?sb.from('count_rules').update({counts:ct}).eq('id',ex.id):sb.from('count_rules').insert(Object.assign({},key,{kind:u,counts:ct})));if(!noErr(r.error))return}}
+ else{const lg=pwLegacy(w);if(lg.length){r=await sb.from('rates').delete().in('id',lg.map(x=>x.id));if(!noErr(r.error))return}}
+ ST.pw=null;await reload();toast('Pricing saved: '+pwName(w.scope))}
+const delPlan=id=>{const pl=(ST.plans||[]).find(p=>p.id===id);if(pl)delRow('price_plans',id,'Remove the pricing plan for '+pwName(planKey(pl))+'? Fixed or hourly amounts from it stop being counted. Per-post and per-comment prices you set stay saved.')};
+/* ---- the Prices tab ---- */
+function plFilter(){const q=($('pl_q')||{value:''}).value.toLowerCase();document.querySelectorAll('#pl_t tr[data-n]').forEach(r=>{r.style.display=!q||r.dataset.n.includes(q)?'':'none'})}
+function planList(){const C=earnData({period:'all',group:'client',client:'',brand:'',type:'',cs:[],bs:[],cnt:''}),B=earnData({period:'all',group:'brand',client:'',brand:'',type:'',cs:[],bs:[],cnt:''}),ec={},eb={};C.rows.forEach(r=>ec[r.k]=r.e);B.rows.forEach(r=>eb[r.k]=r.e);
+ const act=(k,pl,n)=>'<button class="sm" onclick="pwStart(\''+k+'\')">'+(pl?'Edit':'Set up')+'</button>'+(pl?' <button class="sm" aria-label="Remove plan" onclick="delPlan(\''+pl.id+'\')">&#10005;</button>':''),chip=pl=>pl?'<span class="chip '+(pl.model==='task'?'':'ok')+'">'+({task:'Per task',hour:'Per hour',fixed:'Fixed price'}[pl.model])+'</span>':'<span class="chip mut">Not set up</span>';
+ const dp=planExact('all');let h='<div class="row" style="margin-bottom:8px"><input id="pl_q" placeholder="Find a brand or client" oninput="plFilter()" style="min-width:min(100%,260px)"></div><div class="scrollx"><table class="et" id="pl_t"><tr><th>Brand or client</th><th>How you charge</th><th>Details</th><th class="n">Work done so far</th><th></th></tr>'
+ +'<tr data-n="everyone else default"><td><b>Everyone else</b><div class="s">Default for anything not set up below</div></td><td>'+(dp?chip(dp):'<span class="chip mut">Default prices</span>')+'</td><td>'+esc(legacyTxt(null,null))+'</td><td class="n"></td><td>'+act('all',dp,'everyone else')+'</td></tr>';
+ ST.clients.slice().sort((a,b)=>a.name.localeCompare(b.name)).forEach(c=>{const cp=planExact('c:'+c.id),bs=ST.brands.filter(b=>b.client_id===c.id).sort((a,b)=>a.name.localeCompare(b.name));
+  h+='<tr class="plc" data-n="'+esc(c.name.toLowerCase())+'"><td><b>'+esc(c.name)+'</b><div class="s">All brands of this client</div></td><td>'+chip(cp)+'</td><td>'+(cp?esc(planTxt(cp)):'<span class="s">Brands below use their own plan, or the default</span>')+'</td><td class="n">'+fm(ec[c.id]||0)+'</td><td>'+act('c:'+c.id,cp,c.name)+'</td></tr>';
+  bs.forEach(b=>{const bp=planExact('b:'+b.id),eff=bp||cp;h+='<tr data-n="'+esc((b.name+' '+c.name).toLowerCase())+'"><td style="padding-left:28px">'+esc(b.name)+'</td><td>'+(bp?chip(bp):cp?'<span class="chip mut">Client plan</span>':'<span class="chip mut">Default prices</span>')+'</td><td>'+(bp?esc(planTxt(bp)):cp?esc(planTxt(cp)):'<span class="s">'+esc(legacyTxt(b.id,c.id))+'</span>')+'</td><td class="n">'+fm(eb[b.id]||0)+'</td><td>'+act('b:'+b.id,bp,b.name)+'</td></tr>'})});
+ const nb=ST.brands.filter(b=>!b.client_id||!ST.clients.some(c=>c.id===b.client_id));
+ nb.forEach(b=>{const bp=planExact('b:'+b.id);h+='<tr data-n="'+esc(b.name.toLowerCase())+'"><td>'+esc(b.name)+'<div class="s">No client</div></td><td>'+chip(bp)+'</td><td>'+(bp?esc(planTxt(bp)):'<span class="s">'+esc(legacyTxt(b.id,null))+'</span>')+'</td><td class="n">'+fm(eb[b.id]||0)+'</td><td>'+act('b:'+b.id,bp,b.name)+'</td></tr>'});
+ return h+'</table></div>'}
+function priceView(){
+ const hero=ST.pw?pwView():'<div class="cb pwhero"><div><h3 style="margin:0 0 6px">Set up how you charge</h3><p class="s" style="margin:0">Pick a brand, say how you charge (per task, per hour or a fixed price), enter the price and decide what counts. The totals do the rest.</p></div><button class="p" onclick="pwStart()">Set up pricing</button></div>';
+ return hero+(ST.v9===false?V9W:'<h3>Who pays how</h3>'+planList())
+ +'<details class="cb adv"'+(ST.advOpen?' open':'')+' ontoggle="ST.advOpen=this.open"><summary>Advanced: individual prices, price history and counting rules</summary><p class="s">The steps above write to these. Use this only for special cases, for example a price for upvote bonuses or a rule for one single task.</p>'+priceViewAdv()+'</details>'}
+/* ---- v9: Performance page: who pays best, which brands do well, how you charge ---- */
+const PRK=[['e','Work done'],['p','Already paid'],['o','Balance']];
+const MDL={task:'Per task',hour:'Per hour',fixed:'Fixed price',none:'Default prices'};
+function perfSet(k,v){const P=ST.perf||(ST.perf={period:'all',from:'',to:'',rank:'e'});P[k]=v;draw()}
+function hbar(items,color,lab){const it=items.filter(x=>x.v>0.004);if(!it.length)return '<div class="s">Nothing to show yet.</div>';
+ const W=620,L=176,R=96,RH=30,bh=14,H=it.length*RH+6,mx=niceMax(Math.max.apply(null,it.map(x=>x.v))),iw=W-L-R;
+ let o='<svg class="hb" viewBox="0 0 '+W+' '+H+'" width="100%" role="img" aria-label="'+esc(lab)+'">';
+ it.forEach((x,i)=>{const y=i*RH+4,w=Math.max(3,iw*x.v/mx),t=x.l.length>27?x.l.slice(0,26)+'…':x.l;
+  o+='<g><title>'+esc(x.l)+': '+esc(fm(x.v))+(x.t?' ('+esc(x.t)+')':'')+'</title><text class="l" x="'+(L-10)+'" y="'+(y+bh-2)+'" text-anchor="end" font-size="12">'+esc(t)+'</text><rect x="'+L+'" y="'+y+'" width="'+iw+'" height="'+bh+'" rx="4" fill="'+ECH.grid+'" opacity=".55"/><rect x="'+L+'" y="'+y+'" width="'+w+'" height="'+bh+'" rx="4" fill="'+color+'"/><text class="v" x="'+(L+iw+8)+'" y="'+(y+bh-2)+'" font-size="12" font-weight="700">'+esc(fm(x.v))+'</text></g>'});
+ return o+'</svg>'}
+function perfView(){const P=ST.perf||(ST.perf={period:'all',from:'',to:'',rank:'e'}),base={period:P.period,from:P.from,to:P.to,client:'',brand:'',type:'',cs:[],bs:[],cnt:''},g=x=>earnData(Object.assign({},base,{group:x}));
+ const C=g('client'),B=g('brand'),M=g('month'),T=g('type'),rk=P.rank,rkn=PRK.find(x=>x[0]===rk)[1],pt=perTxt(base),val=r=>rk==='e'?r.e:rk==='p'?r.p:Math.max(0,r.owed||0),col=rk==='p'?ECH.p:rk==='o'?ECH.pal[1]:ECH.e;
+ const top=(D,n,real)=>D.rows.filter(r=>real(r)).slice().sort((a,b)=>val(b)-val(a)).slice(0,n).map(r=>({l:r.l,v:val(r),t:rkn})),realC=r=>r.k!=='none',realB=r=>r.k!=='pay-none'&&r.k!=='none';
+ const rs=C.rows.filter(realC),bestC=rs.slice().sort((a,b)=>val(b)-val(a))[0],bestB=B.rows.filter(realB).slice().sort((a,b)=>val(b)-val(a))[0],pct=C.eAll>0.004?Math.round(C.rAll/C.eAll*100):0;
+ const sumE=x=>x.reduce((a,r)=>a+r.e,0),fit=(a,b)=>Math.abs(a-b)<0.011,same=fit(sumE(C.rows),C.earned)&&fit(sumE(B.rows),C.earned)&&fit(M.months.reduce((a,m)=>a+m.e,0),C.earned);
+ const pills='<div class="row" style="margin:0">'+PERIODS.map(p=>'<button class="tb'+(P.period===p[0]?' on':'')+'" onclick="perfSet(\'period\',\''+p[0]+'\')">'+p[1]+'</button>').join('')+'</div>'+(P.period==='custom'?'<div class="row"><label><span class="s">From</span><input type="date" value="'+esc(P.from)+'" onchange="perfSet(\'from\',this.value)"></label><label><span class="s">To</span><input type="date" value="'+esc(P.to)+'" onchange="perfSet(\'to\',this.value)"></label></div>':'')
+  +'<div class="row"><span class="s"><b>Rank by</b></span>'+PRK.map(p=>'<button class="tb'+(rk===p[0]?' on':'')+'" onclick="perfSet(\'rank\',\''+p[0]+'\')">'+p[1]+'</button>').join('')+'</div>';
+ const kp='<div class="kpi money perf">'+kpi('k-live',fm(C.earned),'work done',esc(pt)+' &middot; '+C.n+' item'+(C.n==1?'':'s'))+kpi('k-chk',fm(C.recv),'already paid',esc(pt))+kpi(C.owed>0.005?'k-ink':'k-live',fm(Math.abs(C.owed)),C.owed<-0.005?'credit, paid in advance':'balance','all time, still to collect')+kpi('k-dr',pct+'%','of all work is paid','all time')
+  +(bestC&&val(bestC)>0?kpi('k-mu','<span class="kt">'+esc(bestC.l)+'</span>','top client by '+rkn.toLowerCase(),fm(val(bestC))):'')+(bestB&&val(bestB)>0?kpi('k-mu','<span class="kt">'+esc(bestB.l)+'</span>','top brand by '+rkn.toLowerCase(),fm(val(bestB))):'')+'</div>';
+ /* brand table */
+ const pub={},lv={};B.allL.forEach(l=>{if((l.type==='post'||l.type==='comment')&&(l.st==='live'||l.st==='checking'||l.st==='removed')){const k=l.bid||'none';pub[k]=(pub[k]||0)+1;if(l.st==='live')lv[k]=(lv[k]||0)+1}});
+ const brs=B.rows.filter(realB).slice().sort((a,b)=>val(b)-val(a)),bmod=id=>{const b=ST.allB.find(x=>x.id===id),pl=b&&planFor(id,b.client_id);return pl?pl.model:'none'};
+ const tbl='<div class="scrollx"><table class="et"><tr><th>#</th><th>Brand</th><th>How charged</th><th class="n">Work done</th><th class="n">Already paid</th><th class="n">Balance</th><th class="n">Items</th><th class="n">Per item</th><th class="n">Live rate</th></tr>'+brs.map((r,i)=>{const b=ST.allB.find(x=>x.id===r.k);return '<tr><td>'+(i+1)+'</td><td><b>'+esc(r.l)+'</b>'+(b?'<div class="s">'+esc(cn2(b.client_id))+'</div>':'')+'</td><td>'+(b?'<span class="chip mut">'+MDL[bmod(r.k)]+'</span>':'')+'</td><td class="n">'+fm(r.e)+'</td><td class="n">'+fm(r.p)+'</td><td class="n'+(r.owed>0.005?' owe':'')+'">'+fm(r.owed||0)+'</td><td class="n">'+r.n+'</td><td class="n">'+(r.n?fm(r.e/r.n):'-')+'</td><td class="n">'+(pub[r.k]?Math.round((lv[r.k]||0)/pub[r.k]*100)+'%':'-')+'</td></tr>'}).join('')+'</table></div>';
+ /* how brands are charged */
+ const mm={task:{n:0,e:0},hour:{n:0,e:0},fixed:{n:0,e:0},none:{n:0,e:0}},eb={};B.rows.forEach(r=>eb[r.k]=r.e);ST.brands.forEach(b=>{const m=bmod(b.id);mm[m].n++;mm[m].e+=eb[b.id]||0});
+ const mix=Object.keys(mm).filter(k=>mm[k].n).map(k=>({l:MDL[k]+' ('+mm[k].n+' brand'+(mm[k].n==1?'':'s')+')',v:nz(mm[k].e)}));
+ return '<div class="cb filt">'+pills+'</div>'+kp
+ +'<div class="'+(same?'hint':'warn')+'" style="margin:0 0 16px">'+(same?'<span class="gr"><b>Checked:</b></span> the clients, the brands and the months all add up to the same '+fm(C.earned)+' of work done as the Overview.':'<b>The tables do not agree.</b> Clients '+fm(sumE(C.rows))+', brands '+fm(sumE(B.rows))+', total '+fm(C.earned)+'.')+'</div>'
+ +'<div class="charts eq"><div class="cb"><div class="ct">Best paying clients</div><div class="cs">Top clients by '+rkn.toLowerCase()+', '+esc(pt)+'</div>'+hbar(top(C,8,realC),col,'Top clients by '+rkn)+'</div><div class="cb"><div class="ct">Best performing brands</div><div class="cs">Top brands by '+rkn.toLowerCase()+', '+esc(pt)+'</div>'+hbar(top(B,8,realB),col,'Top brands by '+rkn)+'</div></div>'
+ +'<div class="charts eq"><div class="cb"><div class="ct">Work done and paid by month</div><div class="cs">Work done next to what you were paid</div>'+trendSvg(M)+'</div><div class="cb"><div class="ct">Who still owes you</div><div class="cs">Balance by client, all time</div>'+hbar(C.rows.filter(realC).map(r=>({l:r.l,v:Math.max(0,r.owed||0),t:'balance'})).sort((a,b)=>b.v-a.v).slice(0,8),ECH.pal[1],'Balance by client')+'</div></div>'
+ +'<h3>All brands, ranked by '+rkn.toLowerCase()+'</h3><p class="s">Per item is work done divided by items. Live rate is the share of published posts and comments that are live now.</p>'+tbl
+ +'<div class="charts eq" style="margin-top:20px"><div class="cb"><div class="ct">Where the work comes from</div><div class="cs">Work done by type, '+esc(pt)+'</div>'+hbar(T.rows.map(r=>({l:r.l,v:r.e,t:'work done'})).sort((a,b)=>b.v-a.v),ECH.e,'Work done by type')+'</div><div class="cb"><div class="ct">How your brands are charged</div><div class="cs">Work done by pricing model, '+esc(pt)+'</div>'+hbar(mix,ECH.pal[2],'Work done by pricing model')+'</div></div>'}
 function deadlinesCard(){
  const ts=ST.tasks.filter(t=>!t.archived_at&&bOf(t.brand_id).status==='live'&&dueOf(t)&&!isDone(t)).sort((a,b)=>dueOf(a).localeCompare(dueOf(b))),d=dueStats(ts);
  const rows=ts.slice(0,6).map(t=>{const m=numbered(t.brand_id);return '<div class="top"><div style="flex:1;min-width:0"><b style="font-size:14px">'+esc(bname(t.brand_id))+'</b> <span class="s">'+esc(tnum(t,m))+(t.assignee?' &middot; '+esc(pname(t.assignee)):'')+'</span></div>'+dueChip(t)+'</div>'}).join('');
@@ -1341,7 +1557,7 @@ function draw(soft){
  const adm=me.role==='admin';
  const npend=ST.profiles.filter(u=>u.status==='pending').length;
  $('nv').innerHTML=adm?[['overview','Overview'],['brands','Brands'],['clients','Clients'],['team','Team'+(npend?' ('+npend+')':'')],['earn','Earnings'],['set','Settings']].map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;draw()">'+v[1]+'</button>').join(''):'';
- if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.tab==='earn'&&ST.ep))$('app').innerHTML=adm?admView():workView();return}
+ if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.tab==='earn'&&(ST.ep||ST.pw)))$('app').innerHTML=adm?admView():workView();return}
  $('app').innerHTML=adm?admView():workView();
  if(adm&&ST.bid&&$('kd'))scn();
 }
