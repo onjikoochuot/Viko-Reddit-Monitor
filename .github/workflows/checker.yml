@@ -19,7 +19,7 @@ jobs:
         with:
           node-version: 20
       - name: Check due links through the proxy
-        run: node checker/check.mjs
+        run: node .github/workflows/checker/check.mjs
         env:
           CHECKER_KEY: ${{ secrets.CHECKER_KEY }}
           PROXY_URL: ${{ secrets.PROXY_URL }}
