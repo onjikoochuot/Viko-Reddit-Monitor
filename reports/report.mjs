@@ -156,11 +156,13 @@ async function lookRetry(url, kind) {
     catch (e) { if (e.slow && a === 0 && await rotate()) continue; throw e; }
   }
 }
-async function resolveShort(url) { // /r/Sub/s/xxxx -> full post link
+async function resolveShort(url, keepComment = false) { // /r/Sub/s/xxxx -> the real post link (or comment link)
   const r = await curl(BASE + new URL(url).pathname, { json: false });
   const m = ids(r.url);
   if (!m) throw new Error('short link could not be opened');
-  return new URL(r.url).origin + '/r/' + m.sub + '/comments/' + m.post + '/';
+  const o = new URL(r.url).origin;
+  if (keepComment && commentId(r.url)) return o + new URL(r.url).pathname;
+  return o + '/r/' + m.sub + '/comments/' + m.post + '/';
 }
 
 /* ---------------- screenshots ---------------- */
@@ -285,7 +287,10 @@ async function runJob(job) {
       const pair = { post: raw.post || '', comment: raw.comment || '', sub: raw.sub || '' };
       const skip = (why) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
-        if (!pair.comment || !ids(pair.comment)) { skip('Comment link is not a Reddit comment link'); continue; }
+        if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
+          try { pair.comment = await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')'); continue; }
+        }
+        if (!pair.comment || !ids(pair.comment) || !commentId(pair.comment)) { skip('Link is not a Reddit comment link'); continue; }
         if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? await resolveShort(pair.post) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
         const shownPost = raw.post || pair.post;
         const lc = await lookRetry(pair.comment, 'comment'); await sleep(GAP_MS);
@@ -322,10 +327,15 @@ async function runJob(job) {
 }
 
 async function main() {
-  const job = await claim();
-  if (!job) { log('no report waiting'); return; }
-  log('making report', job.id, '-', job.title, '-', (job.pairs || []).length, 'engagements');
-  try { await runJob(job); }
-  catch (e) { console.error(e); await patchJob(job.id, { status: 'failed', note: 'The report stopped: ' + String(e.message || e).slice(0, 200), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
+  let any = false;
+  for (let i = 0; i < 20; i++) { // one run works through every waiting report
+    const job = await claim();
+    if (!job) break;
+    any = true;
+    log('making report', job.id, '-', job.title, '-', (job.pairs || []).length, 'engagements');
+    try { await runJob(job); }
+    catch (e) { console.error(e); await patchJob(job.id, { status: 'failed', note: 'The report stopped: ' + String(e.message || e).slice(0, 200), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
+  }
+  if (!any) log('no report waiting');
 }
 if (process.argv[1] && process.argv[1].endsWith('report.mjs')) main();
