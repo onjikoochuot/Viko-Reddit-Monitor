@@ -311,8 +311,17 @@ async function shoot(page, pair, words, layout, tag) {
   const nC = await page.evaluate(([e, w, f]) => (new Function('return ' + f))()(e, w), [hc, words, highlightFn.toString()]);
   await page.waitForTimeout(250);
   const postText = await postEl.innerText().catch(() => ''), comText = await comEl.innerText().catch(() => '');
-  const post = await postEl.screenshot({ type: 'png', timeout: 30000 });
-  const com = await comEl.screenshot({ type: 'png', timeout: 30000 });
+  await page.evaluate(() => (document.fonts && document.fonts.ready) || null).catch(() => {});
+  const snapEl = async (el) => { // normal element screenshot; if the browser stalls on it, cut the same area out of a full-page picture
+    try { return await el.screenshot({ type: 'png', timeout: 20000 }); }
+    catch (e) {
+      const bb = await el.boundingBox(); if (!bb) throw e;
+      const sy = await page.evaluate(() => window.scrollY), sx = await page.evaluate(() => window.scrollX);
+      return await page.screenshot({ type: 'png', fullPage: true, clip: { x: bb.x + sx, y: bb.y + sy, width: Math.min(bb.width, 1400), height: Math.min(bb.height, 6000) }, timeout: 40000 });
+    }
+  };
+  const post = await snapEl(postEl);
+  const com = await snapEl(comEl);
   return { post, com, postText, comText, hits: { post: nP, comment: nC } };
 }
 
@@ -428,8 +437,9 @@ async function runJob(job) {
           try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
         if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330), true); continue; }
-        if (lc.unknown && (!shot.comText.trim() || GONE_TXT.test(shot.comText.slice(0, 300)))) { skip('Comment is no longer live (checked on the page)'); continue; }
-        if (lp.unknown && !shot.postText.trim()) { skip('Post is no longer live (checked on the page)'); continue; }
+        if (lc.unknown && GONE_TXT.test(shot.comText.slice(0, 300))) { skip('Comment is no longer live (checked on the page)'); continue; }
+        if (lc.unknown && !shot.comText.trim()) { skip('Could not read the comment on the page (it may still be loading)', true); continue; }
+        if (lp.unknown && !shot.postText.trim()) { skip('Could not read the post on the page (it may still be loading)', true); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
         items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
         bump(n); log(n + '/' + pairs.length, 'captured (highlights: post ' + shot.hits.post + ', comment ' + shot.hits.comment + ')');
