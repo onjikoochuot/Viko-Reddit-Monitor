@@ -1,0 +1,27 @@
+name: Reddit checker
+
+on:
+  schedule:
+    - cron: '*/5 * * * *'   # GitHub's fastest schedule. Each run works for about 4.5 minutes.
+  workflow_dispatch:         # lets you press "Run workflow" to test it by hand
+
+concurrency:
+  group: reddit-checker
+  cancel-in-progress: false  # never run two at once
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Check due links through the proxy
+        run: node checker/check.mjs
+        env:
+          CHECKER_KEY: ${{ secrets.CHECKER_KEY }}
+          PROXY_URL: ${{ secrets.PROXY_URL }}
+          ROTATE_URL: ${{ secrets.ROTATE_URL }}
+          REDDIT_COOKIE: ${{ secrets.REDDIT_COOKIE }}
