@@ -348,35 +348,47 @@ async function shoot(page, pair, words, layout, tag) {
 }
 
 /* ---------------- the PDF ---------------- */
+const pngSize = (b64) => { try { const b = Buffer.from(b64.slice(0, 64), 'base64'); return { w: b.readUInt32BE(16) || 1, h: b.readUInt32BE(20) || 1 }; } catch { return { w: 1, h: 1 }; } };
 function reportHtml(job, items) {
   const kws = String(job.keyword || '').split(',').map((s) => s.trim()).filter(Boolean);
-  const first = (job.brand_name || kws[0] || '').trim();
-  let sub = String(job.title || '').trim();
-  if (first && sub.toLowerCase().startsWith(first.toLowerCase())) sub = sub.slice(first.length).trim();
-  if (!sub) sub = 'Reddit Engagement Report';
-  const date = new Date().toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' });
-  const feat = kws.length ? ' featuring ' + kws.join(', ') : '';
-  const pages = items.map((it, i) => `
-  <section class="pg"><h2>Post ${i + 1} &middot; r/${esc(it.sub)}</h2><div class="rule"></div>
-   <p class="lk"><b>Post:</b> <a href="${esc(it.post)}">${esc(it.post)}</a></p><p class="lk"><b>Comment:</b> <a href="${esc(it.comment)}">${esc(it.comment)}</a></p>
-   <h3>POST SCREENSHOT</h3><div class="im post"><img src="data:image/png;base64,${it.postImg}"></div>
-   <h3>COMMENT / REPLY</h3><div class="im com"><img src="data:image/png;base64,${it.comImg}"></div>
-   <div class="ft">${esc(job.title)} &middot; Page ${i + 1}</div></section>`).join('');
+  const brand = (job.brand_name || kws[0] || String(job.title || '').replace(/\s*Reddit.*$/i, '') || 'Reddit').trim();
+  const nSub = new Set(items.map((i) => String(i.sub || '').toLowerCase()).filter(Boolean)).size || items.length;
+  const inCom = items.filter((i) => i.hits && i.hits.comment > 0).length, inPost = items.filter((i) => i.hits && i.hits.post > 0).length;
+  const named = kws.length ? inCom : items.length;
+  const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
+  let sub = 'Named in ' + pl(named, 'comment') + ' across ' + pl(nSub, 'subreddit') + (inPost ? ', and in ' + pl(inPost, 'post') + '.' : '.');
+  const total = items.length;
+  const pages = items.map((it, i) => {
+    const where = it.hits ? (it.hits.post > 0 && it.hits.comment > 0 ? 'Post &amp; Comment' : it.hits.post > 0 ? 'Post' : it.hits.comment > 0 ? 'Comment' : '') : '';
+    const sp = pngSize(it.postImg), sc = pngSize(it.comImg);
+    const first = i === 0;
+    return `<section class="pg${first ? ' p1' : ''}"><div class="topbar"></div>
+   ${first ? `<div class="hero"><div class="kick">REDDIT POST REPORT</div><h1>${esc(brand)}</h1><p class="sb">${esc(sub)}</p>
+     <div class="stats"><div><b>${items.length}</b><span>TOTAL POSTS</span></div><div><b>${nSub}</b><span>SUBREDDITS</span></div><div><b>${inCom}</b><span>MENTIONS IN COMMENTS</span></div><div><b>${inPost}</b><span>MENTIONS IN POST BODY</span></div></div></div>`
+       : `<div class="run"><span>${esc(brand.toUpperCase())}</span><span>REDDIT POST REPORT</span></div>`}
+   <div class="eh"><div class="num">${String(i + 1).padStart(2, '0')}</div><div class="et"><h2>POST ${i + 1}</h2><div class="rs">${it.sub ? 'r/' + esc(it.sub) : ''}</div></div>${where ? `<div class="pill"><i></i>Brand mentioned in: ${where}</div>` : ''}</div>
+   <div class="links"><div class="lb">POST LINK</div><a href="${esc(it.post)}">${esc(it.post)}</a><div class="lb c">COMMENT LINK</div><a href="${esc(it.comment)}">${esc(it.comment)}</a></div>
+   <div class="shots"><div class="si" style="flex:${(sp.h / sp.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.postImg}"></div><div class="si" style="flex:${(sc.h / sc.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.comImg}"></div></div>
+   <div class="ft"><span>${esc(brand)} &bull; Reddit Post Report</span><span>Page ${i + 1} of ${total}</span></div></section>`;
+  }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(job.title)}</title><style>
-  @page{size:Letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"Liberation Sans",sans-serif;color:#1b1b2f}
-  .pg{width:8.5in;height:11in;padding:.6in .55in .5in;position:relative;page-break-after:always;overflow:hidden}
-  .cover{padding:0 .6in}.cover .bar{margin-top:3.1in;height:6px;background:#f0405a;border-radius:3px}.cover h1{font-size:30pt;text-align:center;margin:.35in 0 0;letter-spacing:.5px}
-  .cover h1.s{margin-top:.08in}.cover .bar2{height:4px;width:2.3in;background:#f0405a;border-radius:2px;margin-top:.3in}
-  .cover p{text-align:center;color:#6b7280;font-size:11pt;line-height:1.5;margin:.08in 0}.cover p.n{margin-top:.35in}
-  h2{font-size:19pt;margin:0 0 .1in}.rule{height:2px;background:#f0405a;margin-bottom:.14in}.lk{font-size:9pt;margin:.03in 0;word-break:break-all}.lk a{color:#1a56d6;text-decoration:none}
-  h3{font-size:10pt;margin:.2in 0 .08in;letter-spacing:.3px}
-  .im{display:flex;justify-content:flex-start;align-items:flex-start}.im img{max-width:100%;display:block;object-fit:contain}
-  .im.post img{max-height:5.2in}.im.com img{max-height:2.4in}
-  .ft{position:absolute;left:0;right:0;bottom:.3in;text-align:center;font-size:8pt;color:#8b8fa3;border-top:1px solid #e5e7eb;margin:0 .55in;padding-top:.08in}
-  </style></head><body>
-  <section class="pg cover"><div class="bar"></div><h1>${esc(first.toUpperCase())}</h1><h1 class="s">${esc(sub)}</h1><div class="bar2"></div>
-   <p class="n">Collection of Reddit posts &amp; comments${esc(feat)}<br>${items.length} engagement${items.length === 1 ? '' : 's'} documented</p>
-   <p>Each page contains one post screenshot, the corresponding comment screenshot, and direct links to both.</p><p>Prepared ${esc(date)}</p></section>${pages}</body></html>`;
+  @page{size:Letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"Liberation Sans",sans-serif;color:#1e2a25}
+  .pg{width:8.5in;height:11in;padding:.72in .75in .62in;position:relative;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
+  .topbar{position:absolute;left:0;right:0;top:0;height:6pt;background:#c26a1b}
+  .run{display:flex;justify-content:space-between;font-size:7.5pt;letter-spacing:.4px;color:#6b7068;border-bottom:1px solid #e6e2d9;padding-bottom:6pt;margin:-.38in 0 .36in}
+  .hero{background:#1e2a25;color:#fff;border-left:.12in solid #c26a1b;border-radius:.16in;padding:.26in .32in .24in;margin:-.28in 0 .3in}
+  .kick{color:#c26a1b;font-weight:700;font-size:8.5pt;letter-spacing:.5px}.hero h1{font-size:25pt;margin:.06in 0 .05in;line-height:1.1}.sb{color:#b0bbb5;font-size:10pt;margin:0 0 .12in;padding-bottom:.1in;border-bottom:1px solid #2f3d36}
+  .stats{display:flex}.stats div{flex:1;padding-left:.16in;border-left:1px solid #3a4a43;display:flex;flex-direction:column}.stats div:first-child{padding-left:0;border-left:0}
+  .stats b{font-size:22pt;line-height:1.1}.stats span{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#e4e5e3}
+  .eh{display:flex;align-items:center;gap:.16in;margin-bottom:.2in}.num{width:.52in;height:.52in;border-radius:.1in;background:#c26a1b;color:#fff;font-weight:700;font-size:15pt;display:flex;align-items:center;justify-content:center}
+  .et{flex:1}.et h2{margin:0;font-size:19pt;line-height:1.1}.rs{font-size:10pt;color:#6b7068;margin-top:2pt}
+  .pill{background:#fbebda;border:1px solid #f4d9b8;border-radius:999px;padding:5pt 10pt;font-size:8.5pt;font-weight:700;display:flex;align-items:center;gap:5pt;white-space:nowrap}.pill i{width:6pt;height:6pt;border-radius:50%;background:#c26a1b;display:block}
+  .links{background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #2f5d4a;border-radius:.12in;padding:.14in .2in;margin-bottom:.2in}
+  .lb{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#6b7068;margin-bottom:2pt}.lb.c{margin-top:.1in}.links a{display:block;font-size:8.5pt;color:#1a56d6;word-break:break-all;line-height:1.3}
+  .shots{flex:1;min-height:0;display:flex;flex-direction:column;gap:.1in;background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #c26a1b;border-radius:.12in;padding:.14in;margin-bottom:.42in}
+  .si{min-height:0;display:flex;align-items:flex-start;justify-content:center}.si img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;border-radius:.05in}
+  .ft{position:absolute;left:.75in;right:.75in;bottom:.3in;display:flex;justify-content:space-between;font-size:8pt;color:#6b7068;border-top:1px solid #e6e2d9;padding-top:.08in}
+  </style></head><body>${pages}</body></html>`;
 }
 
 /* ---------------- main ---------------- */
@@ -465,7 +477,7 @@ async function runJob(job) {
         if (lp.unknown && GONE_TXT.test(shot.postText.slice(0, 300))) { skip('Post is no longer live (checked on the page)'); continue; }
         if (lp.unknown && !shot.postText.trim()) { skip('Could not read the post on the page (it may still be loading)', true); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
-        items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
+        items.push({ post: shownPost, comment: pair.comment, sub: pair.sub || lc.sub || subOf(pair.comment), hits: shot.hits, postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
         bump(n); log(n + '/' + pairs.length, 'captured (highlights: post ' + shot.hits.post + ', comment ' + shot.hits.comment + ')');
       } catch (e) {
         if (e.net) { skip('Network or proxy problem: ' + e.message, true); }
