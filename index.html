@@ -1931,7 +1931,7 @@ function fqCsv(id){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;const
 function fqJobsHtml(){const q=FQ();if(q.jerr==='v16')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_16.sql</b> and press Run, then reload this page.</div>';
  if(q.jerr)return '<div class="warn">Could not load your searches: '+esc(q.jerr)+'</div>';if(q.jobs==null)return '<div class="s">Loading...</div>';
  if(!q.jobs.length)return '<div class="empty">No searches yet. Pick a brand, then make your first one.</div>';
- const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+(j.progress||0)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':(Date.now()-Date.parse(j.created_at)>12*60000?'<span class="chip bad">Waiting for over '+Math.floor((Date.now()-Date.parse(j.created_at))/60000)+' minutes</span>':'<span class="chip mut">Waiting to start</span>');
+ const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+Math.min(j.progress||0,(j.keywords&&j.keywords.topics||[]).length)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':(Date.now()-Date.parse(j.created_at)>12*60000?'<span class="chip bad">Waiting for over '+Math.floor((Date.now()-Date.parse(j.created_at))/60000)+' minutes</span>':'<span class="chip mut">Waiting to start</span>');
  const lab=n=>n>=60?'<span class="chip ok">High '+n+'</span>':n>=40?'<span class="chip warn">Medium '+n+'</span>':'<span class="chip mut">Low '+n+'</span>';
  const bnm=((gwBrand()||{}).name||'').toLowerCase(),JL=q.jobs.filter(j=>!q.bid||j.brand_id===q.bid||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===bnm));
  if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((rwAll().find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
@@ -2092,21 +2092,22 @@ function fbBridge(path){return new Promise((res,rej)=>{const id='b'+Math.random(
  const h=e=>{const d=e.data;if(!d||d.type!=='viko-reddit-res'||d.id!==id)return;clearTimeout(t);window.removeEventListener('message',h);res(d)};
  const t=setTimeout(()=>{window.removeEventListener('message',h);rej(new Error('The add-on did not answer in time'))},30000);
  window.addEventListener('message',h);window.postMessage({type:'viko-reddit-req',id,path},location.origin)})}
-async function fbGet(path){for(let a=0;;a++){let st,txt;
+async function fbGet(path,quick){for(let a=0;;a++){let st,txt;
   if(fbBridgeOn()){const r=await fbBridge(path);if(r.error){const x=new Error('The add-on could not read Reddit: '+r.error);x.net=1;throw x}st=r.status;txt=r.body}
   else{let r;const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),20000);
    try{r=await fetch('https://www.reddit.com'+path,{headers:{Accept:'application/json'},credentials:'omit',cache:'no-store',signal:ac.signal});txt=await r.text();st=r.status}
    catch(e){clearTimeout(tm);if(e&&e.name==='AbortError')throw new Error('Reddit did not answer in time');const x=new Error('This browser is not allowed to read Reddit (blocked by the browser). Install the Viko Reddit Search add-on to search from this browser.');x.net=1;throw x}
    clearTimeout(tm)}
-  if(st===429||st===403){if(a<2){await fbSleep(5000*(a+1));continue}const x=new Error('HTTP '+st);x.slow=1;throw x}
+  if(st===429||st===403){if(!quick&&a<2){await fbSleep(5000*(a+1));continue}const x=new Error('HTTP '+st);x.slow=1;throw x}
   if(st<200||st>=300)throw new Error('HTTP '+st);
   let j=null;try{j=JSON.parse(txt)}catch(e){}
   if(!j)throw new Error('got a web page instead of search results');return j}}
 async function fbRules(subs){const out={},seen=new Set(),list=[];
  subs.forEach(s=>{const k=String(s||'').toLowerCase();if(k&&/^\w+$/.test(k)&&!seen.has(k)){seen.add(k);list.push(String(s))}});
- const one=async s=>{try{const j=await fbGet('/r/'+s+'/about/rules.json?raw_json=1'),arr=j&&Array.isArray(j.rules)?j.rules:[];
-   if(arr.length)out[s.toLowerCase()]={rules:arr.slice(0,20).map(x=>({n:String(x.short_name||'').slice(0,120),d:String(x.description||'').replace(/\s+/g,' ').trim().slice(0,500)}))}}catch(e){}};
- const L=list.slice(0,30);for(let i=0;i<L.length;i+=5)await Promise.all(L.slice(i,i+5).map(one));return out}
+ let bad=0;const one=async s=>{try{const j=await fbGet('/r/'+s+'/about/rules.json?raw_json=1',true),arr=j&&Array.isArray(j.rules)?j.rules:[];
+   if(arr.length)out[s.toLowerCase()]={rules:arr.slice(0,20).map(x=>({n:String(x.short_name||'').slice(0,120),d:String(x.description||'').replace(/\s+/g,' ').trim().slice(0,500)}))}}catch(e){bad++}};
+ // rules are a bonus: never let them hold the search up (no retries, 20 seconds at most, stop early if Reddit refuses)
+ const t0=Date.now(),L=list.slice(0,30);for(let i=0;i<L.length;i+=5){if(Date.now()-t0>20000||(bad>=5&&!Object.keys(out).length))break;await Promise.all(L.slice(i,i+5).map(one))}return out}
 /* ---- Reddit API (AnyAPI, reached through the reddit-api function in Supabase; the key never reaches the browser) ---- */
 const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
 const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
@@ -2145,6 +2146,9 @@ async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed
   doneQ++;o.tick&&o.tick(Math.min(1,doneQ/Math.max(1,total)));return n};
  // first query alone: checks that the "only these communities" syntax worked
  const first=await one(queries[0]);
+ if(!ok&&failed){ // the first request was refused: try shorter, simpler queries (no community clause; the communities are filtered here instead)
+  failed=0;queries=chunk(ph,2).map(g=>mk(g));mode='plain';total=queries.length;doneQ=0;await one(queries[0]);
+  if(!ok)return{found,ok,failed,acc,shape,err:lastErr}}
  if(mode==='combined'){const inSub=[...found.values()].some(p=>subSet.has(String(p.subreddit).toLowerCase()));
   if(!inSub&&acc.reqs<MAXREQ&&o.subs.length<=8){mode='each';found.clear();const per=chunk(ph,6);queries=[];o.subs.slice(0,6).forEach(sb_=>per.forEach(g=>queries.push(mk(g,' subreddit:'+sb_))));total=queries.length;doneQ=0;await one(queries.shift())}}
  let qi=0;const wk=async()=>{while(Date.now()<o.deadline&&acc.reqs<MAXREQ){const qq=queries[qi++];if(qq===undefined)return;await one(qq)}};
@@ -2228,7 +2232,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
         const oldest=kids.length?Math.min(...kids.map(ch=>ch.data.created_utc||now)):0;after=d.after||'';if(!after||!kids.length||(pl.sort==='new'&&oldest<fromTs))break}
       catch(e){failed++;lastErr=String(e.message||e).slice(0,120);if(e.net){netFail=true;return}break}
       await fbSleep(500)}}
-    done++;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
+    done=Math.min(done+1,topics.length);sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
   let usedApi=false,apiAcc=null,apiFail='';
   if(API().on!==false){try{
     const ar=await fqApiFind({topics,subs,T,want,deadline,maxReq:subs.length?14:12,tick:f=>{const p=Math.round(f*topics.length);if(p>done){done=p;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}}});
@@ -2237,7 +2241,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
     else if(ar.ok&&ar.shape){apiOff(new Error('the Reddit API answered in a form this page does not understand'));console.warn('reddit-api shape',ar.shape)}
     else{apiFail=ar.err||'no answer'}
    }catch(e){apiFail=String((e&&e.message)||e);if(e&&e.apiFatal)apiOff(e)}}
-  if(!usedApi)await Promise.all([worker(),worker()]);
+  if(!usedApi){done=0;await Promise.all([worker(),worker()])}
   if(netFail||!ok)return hand((apiFail?'The Reddit API could not do this search ('+String(apiFail).replace(/^The Reddit API said:\s*/i,'').slice(0,200)+'). ':'')+(netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
   for(const p of found.values()){if(p.created_utc&&(p.created_utc<fromTs||p.created_utc>toTs))continue;
@@ -2245,7 +2249,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
    const sc=fbScore(p,{topics,brand,exclude,subs,now});if(sc.score<25)continue;
    res.push({title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:p.created_utc?new Date(p.created_utc*1000).toISOString():'',comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,usedApi?8000:1500),author:p.author||''})}
   res.sort((a,b)=>b.relevance-a.relevance||new Date(b.created)-new Date(a.created));const top=res.slice(0,want);
-  const rules=top.length?await fbRules(top.map(r=>r.sub)).catch(()=>({})):{};
+  const rules={}; // community rules are not collected any more (they were slow and Reddit blocks them); add them by hand in the Community rules tab
   const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'')+(usedApi&&apiAcc?' Reddit API: '+apiAcc.reqs+' request'+(apiAcc.reqs===1?'':'s')+', '+apiMoney(apiAcc.cost||apiAcc.reqs*0.00035)+'.':'')+(!usedApi&&API().on===false&&API().msg?' (Reddit API not used: '+API().msg+')':'');
   const row={status:'done',retry_local:false,results:top,found:top.length,progress:topics.length,note:note.trim()||null,finished_at:nowI()};
   let r=await sb.from('find_jobs').update(Object.keys(rules).length?{...row,rules}:row).eq('id',id);
