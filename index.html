@@ -2049,7 +2049,7 @@ function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeEl
 function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PRE.map(p=>'<button class="tb'+(q.preset===p[0]?' on':'')+'" onclick="FQ().preset=\''+p[0]+'\';fqDraw()">'+p[1]+'</button>').join('');
  return '<div class="cb"><label><span class="s"><b>Keywords to search for</b>: what people write when they need '+esc(b?b.name:'this brand')+'. One per line.</span><textarea id="fq_t" rows="6" style="width:100%" placeholder="spanish classes online&#10;learn spanish&#10;spanish school in madrid" oninput="FQ().topics=this.value">'+esc(q.topics)+'</textarea></label>'
   +'<div class="row" style="margin:12px 0 0;align-items:flex-start"><label style="flex:1;min-width:220px"><span class="s">Words to avoid (optional, posts with these rank lower)</span><input id="fq_x" style="width:100%" value="'+esc(q.exclude)+'" placeholder="for example hiring, giveaway" oninput="FQ().exclude=this.value"></label>'
-  +'<label style="flex:1;min-width:220px"><span class="s">Only these communities (optional)</span><input id="fq_s" style="width:100%" value="'+esc(q.subs)+'" placeholder="for example Spain, languagelearning" oninput="FQ().subs=this.value"></label></div></div>'
+  +'<label style="flex:1;min-width:220px"><span class="s">'+(API().on===true?'Your communities first (optional)':'Only these communities (optional)')+'</span><input id="fq_s" style="width:100%" value="'+esc(q.subs)+'" placeholder="for example Spain, languagelearning" oninput="FQ().subs=this.value"></label></div></div>'
   +'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label><span class="s">How many posts do you want?</span><input id="fq_w" type="number" min="1" max="200" style="width:110px" value="'+esc(q.want)+'" oninput="FQ().want=this.value"></label></div>'
   +'<div class="s" style="margin:14px 0 6px"><b>Search posts made between</b></div><div class="row" style="margin:0">'+pills+'</div>'
   +(q.preset==='custom'?'<div class="row" style="margin:10px 0 0"><label><span class="s">Start date</span><input type="date" value="'+esc(q.from)+'" onchange="FQ().from=this.value;fqDraw()"></label><label><span class="s">End date</span><input type="date" value="'+esc(q.to)+'" onchange="FQ().to=this.value;fqDraw()"></label></div>':'<div class="s" style="margin-top:8px">'+D_(a)+' to '+D_(z)+'</div>')
@@ -2129,36 +2129,21 @@ const apiTestHtml=()=>' <a href="#" onclick="apiTest();return false">Test the Re
 const apiLine=()=>{const a=API();if(a.on===true)return '<b style="color:var(--ok,#0a7a4b)">Reddit API is on.</b> Searches use it first (fast, and no Reddit blocking). It costs a fraction of a cent per search.'+apiTestHtml();
  if(a.on===false)return 'Reddit API is off'+(a.msg?' ('+esc(a.msg)+')':'')+'. The other ways still work. To turn it on, follow REDDIT_API_STEPS.txt.'+apiTestHtml();return ''};
 // gather posts through the Reddit API: a few combined queries, relevance order, 2 pages each, hard cap on requests
-async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed=0,ok=0,lastErr='',shape='',style='';
- const subSet=new Set(o.subs.map(x=>x.toLowerCase())),HARD=o.maxReq||26;
- const clean=t=>String(t).replace(/["()]/g,' ').replace(/\s+/g,' ').trim(),kw=o.topics.map(clean).filter(t=>t&&t.length<=120);
+async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed=0,ok=0,lastErr='',shape='';
+ // works like typing each keyword into Reddit's own search box: one plain keyword per request, sorted by relevance.
+ const HARD=o.maxReq||26,clean=t=>String(t).replace(/["()]/g,' ').replace(/\s+/g,' ').trim(),kw=o.topics.map(clean).filter(t=>t&&t.length<=150);
  if(!kw.length)return{found,ok:0,failed:0,acc,shape:'',err:'no keywords'};
- const quote=t=>/\s/.test(t)?'"'+t+'"':t,chunk=(arr,n)=>{const r=[];for(let i=0;i<arr.length;i+=n)r.push(arr.slice(i,i+n));return r};
- const grp=chunk(kw,4).map(g=>g.length>1?'('+g.map(quote).join(' OR ')+')':quote(g[0]));
- const SB_=o.subs.slice(0,8),sq=!subSet.size?'':SB_.length===1?' subreddit:'+SB_[0]:' ('+SB_.map(x=>'subreddit:'+x).join(' OR ')+')';
- // ways of asking, cheapest first. The first one that really brings posts back is used for the whole search.
- const styles=[];
- if(sq){styles.push({name:'groups in your communities',qs:grp.map(x=>x+sq),pages:2,needSub:true,probe:1});styles.push({name:'keywords in your communities',qs:kw.map(x=>x+sq),pages:1,needSub:true,probe:2});
-  if(SB_.length>1)styles.push({name:'one community at a time',qs:kw.flatMap(k=>SB_.slice(0,6).map(b=>k+' subreddit:'+b)),pages:1,needSub:true,probe:2})}
- styles.push({name:'keyword groups',qs:grp,pages:2,probe:1});styles.push({name:'one keyword at a time',qs:kw.slice(),pages:1,probe:0});
- let total=1,doneQ=0;
- const curs={};const one=async(query,pages,cur0)=>{let cursor=cur0||'',got=[];
-  for(let pg=0;pg<pages;pg++){if(acc.reqs>=HARD||Date.now()>o.deadline)break;
-   try{const d=await apiCall({op:'search',query,sort:'relevance',timeframe:o.T,cursor},acc);ok++;
-    if(!d.posts.length&&d.shape&&!found.size)shape=d.shape;
-    d.posts.forEach(p=>{got.push(p);if(!found.has(p.id))found.set(p.id,p)});cursor=d.next||'';if(!cursor||d.posts.length<5)break}
-   catch(e){failed++;lastErr=String((e&&e.message)||e).slice(0,140);if(e&&e.apiFatal)throw e;break}}
-  curs[query]=cursor;doneQ++;o.tick&&o.tick(Math.min(1,doneQ/Math.max(1,total)));return got};
- for(let si=0;si<styles.length;si++){const st=styles[si],last=si===styles.length-1;let good=last,used=0;
-  if(!last){const before=new Map(found);total=1e9;
-   for(let k=0;k<Math.min(st.probe,st.qs.length)&&!good;k++){const got=await one(st.qs[k],1);used++;good=st.needSub?got.some(p=>subSet.has(String(p.subreddit).toLowerCase())):got.length>0}
-   if(!good){if(st.needSub){found.clear();before.forEach((v,k2)=>found.set(k2,v))}continue}}
-  style=st.name;total=st.qs.length;doneQ=Math.min(used,total);failed=0;
-  // the first page of the probe queries is already in; fetch their second page only for the multi-page styles
-  let qi=0;const wk=async()=>{while(Date.now()<o.deadline&&acc.reqs<HARD){const i=qi++;if(i>=st.qs.length)return;if(i<used){if(st.pages>1&&curs[st.qs[i]]){doneQ--;await one(st.qs[i],st.pages-1,curs[st.qs[i]])}continue}await one(st.qs[i],st.pages)}};
-  await Promise.all([wk(),wk()]);break}
- if(subSet.size)for(const [k,p] of [...found])if(!subSet.has(String(p.subreddit).toLowerCase()))found.delete(k);
- return{found,ok,failed,acc,shape,err:lastErr,style}}
+ const good=()=>{let n=0;for(const p of found.values())if(o.keep(p))n++;return n};let doneQ=0;
+ const one=async(k,sort,cursor)=>{if(acc.reqs>=HARD||Date.now()>o.deadline)return '';
+  try{const d=await apiCall({op:'search',query:kw[k],sort,timeframe:o.T,cursor:cursor||''},acc);ok++;
+   if(!d.posts.length&&d.shape&&!found.size)shape=d.shape;
+   d.posts.forEach((p,i)=>{if(!found.has(p.id)){p._k=k;p._r=i+(cursor?30:0)+(sort==='new'?1000:0);found.set(p.id,p)}});return d.posts.length>=5?(d.next||''):''}
+  catch(e){failed++;lastErr=String((e&&e.message)||e).slice(0,140);if(e&&e.apiFatal)throw e;return ''}};
+ const pass=async(sort,curs,tick)=>{let qi=0;const next={};const wk=async()=>{for(;;){const k=qi++;if(k>=kw.length)return;if(curs&&!curs[k])continue;next[k]=await one(k,sort,curs?curs[k]:'');if(tick){doneQ++;o.tick&&o.tick(Math.min(1,doneQ/kw.length))}}};await Promise.all([wk(),wk()]);return next};
+ const c1=await pass('relevance',null,true);
+ if(ok&&good()<o.want&&acc.reqs<HARD&&Object.values(c1).some(Boolean))await pass('relevance',c1); // the second page of each keyword
+ if(ok&&good()<o.want&&acc.reqs<HARD)await pass('new');                                           // then the newest posts for each keyword
+ return{found,ok,failed,acc,shape,err:lastErr}}
 const apiMoney=c=>{c=+c||0;return c<0.0095?'under 1 cent':'about $'+c.toFixed(2)};
 /* ---- read the ticked posts in full: post text + the first 5 top-level comments (Reddit API, 1 request per post) ---- */
 const fqFull=r=>{let t=String(r.body||r.snippet||'');if(r.top&&r.top.length)t+='\n\nTop comments on this post:\n'+r.top.map((c,i)=>(i+1)+'. '+(c.a?'u/'+c.a+': ':'')+c.t).join('\n');return t};
@@ -2220,7 +2205,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
   beat=setInterval(()=>{sb.from('find_jobs').update({started_at:nowI()}).eq('id',id).eq('status','running').then(()=>{})},20000);
   fqLocalJob(id,{status:'running',progress:0,note:FB_NOTE,started_at:nowI()});
   const k=job.keywords||{},list=a=>(Array.isArray(a)?a:[]).map(x=>String(x).trim()).filter(Boolean);
-  const topics=list(k.topics).slice(0,15),exclude=list(k.exclude),brand=list(k.brand),subs=list(k.subs).map(x=>x.replace(/^\/?r\//i,'')).filter(x=>/^\w+$/.test(x));
+  const topics=list(k.topics).slice(0,20),exclude=list(k.exclude),brand=list(k.brand),subs=list(k.subs).map(x=>x.replace(/^\/?r\//i,'')).filter(x=>/^\w+$/.test(x));
   const want=Math.max(1,Math.min(200,+job.want||20)),now=Math.floor(Date.now()/1000);
   const fromTs=Date.parse((job.date_from||'1970-01-01')+'T00:00:00Z')/1000,toTs=Date.parse((job.date_to||'2999-01-01')+'T23:59:59Z')/1000;
   const ageDays=(now-fromTs)/86400,T=ageDays<=1.5?'day':ageDays<=8?'week':ageDays<=32?'month':ageDays<=370?'year':'all',windowDays=Math.max(1,(Math.min(toTs,now)-fromTs)/86400);
@@ -2236,9 +2221,11 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
       catch(e){failed++;lastErr=String(e.message||e).slice(0,120);if(e.net){netFail=true;return}break}
       await fbSleep(500)}}
     done=Math.min(done+1,topics.length);sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
+  const isLive=p=>!(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine),inDates=p=>!(p.created_utc&&(p.created_utc<fromTs||p.created_utc>toTs));
+  const subSet=new Set(subs.map(x=>x.toLowerCase()));
   let usedApi=false,apiAcc=null,apiFail='';
   if(API().on!==false){try{
-    const ar=await fqApiFind({topics,subs,T,want,deadline,tick:f=>{const p=Math.round(f*topics.length);if(p>done){done=p;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}}});
+    const ar=await fqApiFind({topics,subs,T,want,deadline,keep:p=>isLive(p)&&inDates(p),tick:f=>{const p=Math.round(f*topics.length);if(p>done){done=p;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}}});
     apiAcc=ar.acc;
     if(ar.found.size)API().seen=true;
     if(ar.ok&&(ar.found.size||!ar.shape||API().seen)){ar.found.forEach((v,k)=>found.set(k,v));ok=ar.ok;failed+=ar.failed;usedApi=true;API().on=true;API().msg=''}
@@ -2248,13 +2235,16 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
   if(!usedApi){done=0;await Promise.all([worker(),worker()])}
   if(netFail||!ok)return hand((apiFail?'The Reddit API could not do this search ('+String(apiFail).replace(/^The Reddit API said:\s*/i,'').slice(0,200)+'). ':'')+(netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
-  for(const p of found.values()){if(p.created_utc&&(p.created_utc<fromTs||p.created_utc>toTs))continue;
-   if(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine)continue;
+  let nOld=0,nDead=0;
+  for(const p of found.values()){if(!inDates(p)){nOld++;continue}
+   if(!isLive(p)){nDead++;continue}
    const sc=fbScore(p,{topics,brand,exclude,subs,now});if(!usedApi&&sc.score<25)continue; // API results are already sorted by relevance: keep them even when the wording is not an exact keyword match
-   res.push({title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:p.created_utc?new Date(p.created_utc*1000).toISOString():'',comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,usedApi?8000:1500),author:p.author||''})}
-  res.sort((a,b)=>((b.relevance>=25)-(a.relevance>=25))||b.relevance-a.relevance||new Date(b.created)-new Date(a.created));const top=res.slice(0,want);
+   res.push({_r:p._r||0,_k:p._k||0,_pref:!subSet.size||subSet.has(String(p.subreddit||'').toLowerCase()),title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:p.created_utc?new Date(p.created_utc*1000).toISOString():'',comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,usedApi?8000:1500),author:p.author||''})}
+  if(usedApi)res.sort((a,b)=>(b._pref-a._pref)||a._r-b._r||a._k-b._k); // your communities first, then Reddit's own order, taking turns between the keywords
+  else res.sort((a,b)=>b.relevance-a.relevance||new Date(b.created)-new Date(a.created));
+  const top=res.slice(0,want),nOther=top.filter(r=>!r._pref).length;top.forEach(r=>{if(!r._pref)r.other=true;delete r._r;delete r._k;delete r._pref});
   const rules={}; // community rules are not collected any more (they were slow and Reddit blocks them); add them by hand in the Community rules tab
-  const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'')+(usedApi&&apiAcc?' Reddit API: '+apiAcc.reqs+' request'+(apiAcc.reqs===1?'':'s')+', '+apiMoney(apiAcc.cost||apiAcc.reqs*0.00035)+'.':'')+(!usedApi&&API().on===false&&API().msg?' (Reddit API not used: '+API().msg+')':'');
+  const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(usedApi&&top.length<want&&(nOld||nDead)?' Reddit returned '+found.size+' posts for these keywords: '+nOld+' were outside your dates'+(nDead?' and '+nDead+' were removed, locked or adult':'')+'.':'')+(usedApi&&nOther?' '+nOther+' of the posts are from other communities (listed after your communities).':'')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'')+(usedApi&&apiAcc?' Reddit API: '+apiAcc.reqs+' request'+(apiAcc.reqs===1?'':'s')+', '+apiMoney(apiAcc.cost||apiAcc.reqs*0.00035)+'.':'')+(!usedApi&&API().on===false&&API().msg?' (Reddit API not used: '+API().msg+')':'');
   const row={status:'done',retry_local:false,results:top,found:top.length,progress:topics.length,note:note.trim()||null,finished_at:nowI()};
   let r=await sb.from('find_jobs').update(Object.keys(rules).length?{...row,rules}:row).eq('id',id);
   if(r.error&&/rules/i.test(r.error.message||''))r=await sb.from('find_jobs').update(row).eq('id',id);
