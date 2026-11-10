@@ -28,7 +28,7 @@ const ROTATE = process.env.ROTATE_URL || '';                // secret (optional)
 const COOKIE = process.env.REDDIT_COOKIE || '';             // optional secret
 const BASE = (process.env.REDDIT_BASE || 'https://www.reddit.com').replace(/\/+$/, '');
 const OLD = (process.env.OLD_BASE || 'https://old.reddit.com').replace(/\/+$/, '');
-const GAP_MS = +process.env.GAP_MS || 1500;
+const GAP_MS = +process.env.GAP_MS || 900;
 const ONLY = process.env.REPORT_ID || '';
 const UA_CURL = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const UA_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
@@ -447,7 +447,7 @@ async function runFind(job) {
   const found = new Map(); let reqs = 0, ok = 0, failed = 0, lastErr = '';
   const bump = (n) => patchFind(job.id, { progress: n }).catch(() => {});
   if (!topics.length) { await patchFind(job.id, { status: 'failed', retry_local: false, note: 'There are no keywords to search for.', finished_at: new Date().toISOString() }); return; }
-  const ipt = await curl('https://api.ipify.org', { json: false }).catch(() => null); if (ipt) log('exit IP seen by the internet:', ipt.body.trim(), PROXY ? '(through proxy)' : '(NO proxy set)');
+  const ipt = process.env.SHOW_IP === '1' ? await curl('https://api.ipify.org', { json: false }).catch(() => null) : null; if (ipt) log('exit IP seen by the internet:', ipt.body.trim(), PROXY ? '(through proxy)' : '(NO proxy set)');
   const base = subs.length ? '/r/' + subs.join('+') + '/search.json?restrict_sr=1&' : '/search.json?';
   for (let ti = 0; ti < topics.length; ti++) {
     const t = topics[ti], q = encodeURIComponent(/\s/.test(t) ? '"' + t + '"' : t);
@@ -499,15 +499,16 @@ async function fetchRules(subs) { // the written rules of each community, so the
   const out = {}, seen = new Set(), list = [];
   for (const s of subs) { const k = String(s || '').toLowerCase(); if (k && /^\w+$/.test(k) && !seen.has(k)) { seen.add(k); list.push(String(s)); } }
   let n = 0;
-  for (const s of list.slice(0, 30)) {
+  const L = list.slice(0, 30);
+  const one = async (s) => {
     try {
       const r = await curl(BASE + '/r/' + s + '/about/rules.json?raw_json=1');
       let j = null; try { j = JSON.parse(r.body); } catch {}
       const arr = j && Array.isArray(j.rules) ? j.rules : [];
       if (arr.length) { out[s.toLowerCase()] = { rules: arr.slice(0, 20).map((x) => ({ n: String(x.short_name || '').slice(0, 120), d: String(x.description || '').replace(/\s+/g, ' ').trim().slice(0, 500) })) }; n++; }
     } catch (e) { log('rules for r/' + s + ' not available:', String(e.message || e).slice(0, 60)); }
-    await sleep(Math.min(GAP_MS, 1000));
-  }
+  };
+  for (let i = 0; i < L.length; i += 4) { await Promise.all(L.slice(i, i + 4).map(one)); await sleep(300); }
   log('community rules collected for', n, 'of', list.length, 'communities');
   return out;
 }
@@ -516,8 +517,10 @@ async function claimFind() {
   const rows = LOCAL
     ? await sb('/rest/v1/find_jobs?retry_local=eq.true&order=created_at.asc&limit=1').catch(() => [])
     : await (async () => {
-      const stale = new Date(Date.now() - 45 * 60000).toISOString();
+      const stale = new Date(Date.now() - 45 * 60000).toISOString(), staleWeb = new Date(Date.now() - 4 * 60000).toISOString();
       await sb('/rest/v1/find_jobs?status=eq.running&started_at=lt.' + stale, { method: 'PATCH', body: { status: 'pending' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
+      // a search that was running in the website's own browser and was left (page closed) is taken over after 4 minutes without a sign of life
+      await sb('/rest/v1/find_jobs?status=eq.running&note=like.' + encodeURIComponent('Searching from your browser*') + '&started_at=lt.' + staleWeb, { method: 'PATCH', body: { status: 'pending', progress: 0, note: null }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
       return sb('/rest/v1/find_jobs?status=eq.pending&order=created_at.asc&limit=1').catch(() => []);
     })();
   if (!rows || !rows[0]) return null;
