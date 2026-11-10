@@ -1895,7 +1895,7 @@ async function fqGo(){if(needV16())return;const q=FQ(),b=gwBrand(),topics=fqList
  if(!topics.length)return fqErr('Add at least one keyword. Type them in the box, or save them in Brand info.');
  const[a,z]=fqRange();if(!a||!z||a>z)return fqErr('Choose a start date and an end date (the start must not be after the end).');
  const want=Math.max(1,Math.min(200,parseInt(q.want,10)||20));
- const row={created_by:me&&me.id||null,brand_id:b.id,brand_name:b.name,keywords:{topics,brand:[b.name],exclude:fqList(q.exclude),subs:fqList(q.subs).map(x=>x.replace(/^\/?r\//i,''))},want,range_label:(FQ_PRE.find(p=>p[0]===q.preset)||[0,''])[1],date_from:a,date_to:z};
+ const row={created_by:me&&me.id||null,brand_id:b.id,brand_name:b.name,keywords:{topics,brand:[b.name],exclude:fqList(q.exclude),subs:fqList(q.subs).map(x=>x.replace(/^\/?r\//i,'')),about:String((q.prof&&q.prof.about)||'').slice(0,1500)},want,range_label:(FQ_PRE.find(p=>p[0]===q.preset)||[0,''])[1],date_from:a,date_to:z};
  q.busy=true;fqDraw();const ins=await sb.from('find_jobs').insert(row).select().single(),error=ins.error;q.busy=false;
  if(error&&/brand_id|schema cache/i.test(error.message||'')){fqDraw();return alert('Run supabase_update_18.sql in Supabase first (SQL Editor), then reload this page.')}
  if(!noErr(error)){fqDraw();return}
@@ -2069,6 +2069,29 @@ const FB_ASK=/\b(recommend\w*|suggest\w*|looking for|looking to|searching for|wh
 const FB_NEG=/\b(hiring|for hire|we are hiring|sponsored|giveaway|promo code|discount code)\b/i;
 const fbRx=t=>new RegExp('(?<![a-z0-9])'+String(t).trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+')+'(?![a-z0-9])','i');
 const fbSleep=ms=>new Promise(r=>setTimeout(r,ms));
+/* ---- API results: rank by what the person needs, not by exact keyword wording ----
+   A post scores high when someone is asking for help or describing a problem (intent), when it is about the same things as
+   your keywords and brand description (topic), when several of your keywords found it, and when Reddit itself ranked it high. */
+const FIT_STOP=new Set('the and for with that this from your you are was were have has had not but can how what why when where who which will would should could about into over than then them they their there here just like get got out all any our its it\'s also more most some such very much many been being does did doing make made use used using want need help best good new one two way ways store stores app apps'.split(' '));
+const FIT_PROBLEM=/\b(struggl\w*|problem|issue|stuck|can\'?t|cannot|won\'?t|doesn\'?t|isn\'?t|not (?:showing|working|ranking|getting|appearing|converting)|no (?:sales|traffic|results|visibility)|low (?:sales|traffic|conversion)|drop(?:ped|ping)?|frustrat\w*|confus\w*|fail\w*|how (?:do|to|can|should|would)|why (?:is|are|does|do|isn\'?t|aren\'?t)|what (?:is|are) the best|is there (?:a|an|any)|any (?:tool|app|way|tips|advice|recommendations?)|tips for|worth it)\b/i;
+const FIT_PROMO=/\b(i (?:built|made|created|launched)|we (?:built|made|launched)|just launched|check out my|my new (?:app|tool|saas)|case study|here(?:\'s| is) (?:how|what|my)|ultimate guide|step[- ]by[- ]step guide|free (?:tool|template|download)|ama\b|hiring|for hire)/i;
+function fitVocab(topics,about){const w=new Map();const add=(t,v)=>String(t||'').toLowerCase().split(/[^a-z0-9]+/).forEach(x=>{if(x.length>2&&!FIT_STOP.has(x))w.set(x,Math.max(w.get(x)||0,v))});
+ topics.forEach(t=>add(t,2));add(about,1);return w}
+function apiFit(p,o){const title=String(p.title||''),body=String(p.selftext||'').slice(0,2500),tl=title.toLowerCase(),bl=body.toLowerCase(),why=[];
+ let topic=0,inT=0,inB=0;o.vocab.forEach((v,w)=>{const rx=new RegExp('(^|[^a-z0-9])'+w.replace(/[.*+?^${}()|[\]\\]/g,'\\$&')+'s?([^a-z0-9]|$)');if(rx.test(tl)){topic+=3*v;inT++}else if(rx.test(bl)){topic+=1*v;inB++}});
+ topic=Math.min(40,topic*2.2);
+ let intent=0;
+ if(FB_ASK.test(title)||/\?/.test(title)){intent+=18;why.push('asks for help or a recommendation')}else if(FB_ASK.test(body.slice(0,600))||/\?/.test(body.slice(0,600))){intent+=9;why.push('looks like a question or request')}
+ if(FIT_PROBLEM.test(title)){intent+=12;why.push('describes a problem you can solve')}else if(FIT_PROBLEM.test(body.slice(0,800))){intent+=6;why.push('mentions a problem')}
+ if(FIT_PROMO.test(title)){intent-=14;why.push('looks like a promotion or guide (ranked lower)')}
+ if(inT)why.push('title is on your topic');else if(inB)why.push('post text is on your topic');
+ const hits=p._h||1;if(hits>1)why.push(hits+' of your keywords found it');
+ const rank=Math.max(0,12-(p._r>=1000?10:Math.min(12,(p._r||0)*0.5)));
+ let s=topic+intent+Math.min(12,(hits-1)*5)+rank;
+ const n=+p.num_comments||0;s+=Math.min(6,Math.round(Math.log2(n+1)*1.2));
+ const ex=(o.exclude||[]).filter(x=>fbRx(x).test(title+' '+body));if(ex.length){s-=35;why.push('has a word to avoid')}
+ const bm=(o.brand||[]).some(x=>fbRx(x).test(title+' '+body));if(bm)why.push('your brand is already named');
+ return{score:Math.max(1,Math.min(100,Math.round(s))),why,brandMentioned:bm}}
 function fbScore(p,o){const title=String(p.title||''),body=String(p.selftext||''),why=[];let topical=0,matched=0,inTitle=0;
  for(const t of o.topics){const rx=fbRx(t),words=t.split(/\s+/).filter(w=>w.length>2);
   if(rx.test(title)){topical+=inTitle===0?30:10;inTitle++;matched++;why.push('title has "'+t+'"')}
@@ -2137,7 +2160,7 @@ async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed
  const one=async(k,sort,cursor)=>{if(acc.reqs>=HARD||Date.now()>o.deadline)return '';
   try{const d=await apiCall({op:'search',query:kw[k],sort,timeframe:o.T,cursor:cursor||''},acc);ok++;
    if(!d.posts.length&&d.shape&&!found.size)shape=d.shape;
-   d.posts.forEach((p,i)=>{if(!found.has(p.id)){p._k=k;p._r=i+(cursor?30:0)+(sort==='new'?1000:0);found.set(p.id,p)}});return d.posts.length>=5?(d.next||''):''}
+   d.posts.forEach((p,i)=>{const h=found.get(p.id);if(h){if(!(h._ks||(h._ks=new Set([h._k]))).has(k)){h._ks.add(k);h._h=h._ks.size}}else{p._k=k;p._h=1;p._r=i+(cursor?30:0)+(sort==='new'?1000:0);found.set(p.id,p)}});return d.posts.length>=5?(d.next||''):''}
   catch(e){failed++;lastErr=String((e&&e.message)||e).slice(0,140);if(e&&e.apiFatal)throw e;return ''}};
  const pass=async(sort,curs,tick)=>{let qi=0;const next={};const wk=async()=>{for(;;){const k=qi++;if(k>=kw.length)return;if(curs&&!curs[k])continue;next[k]=await one(k,sort,curs?curs[k]:'');if(tick){doneQ++;o.tick&&o.tick(Math.min(1,doneQ/kw.length))}}};await Promise.all([wk(),wk()]);return next};
  const c1=await pass('relevance',null,true);
@@ -2235,12 +2258,15 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
   if(!usedApi){done=0;await Promise.all([worker(),worker()])}
   if(netFail||!ok)return hand((apiFail?'The Reddit API could not do this search ('+String(apiFail).replace(/^The Reddit API said:\s*/i,'').slice(0,200)+'). ':'')+(netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
-  let nOld=0,nDead=0;
+  let nOld=0,nDead=0;const vocab=fitVocab(topics,k.about);
   for(const p of found.values()){if(!inDates(p)){nOld++;continue}
    if(!isLive(p)){nDead++;continue}
-   const sc=fbScore(p,{topics,brand,exclude,subs,now});if(!usedApi&&sc.score<25)continue; // API results are already sorted by relevance: keep them even when the wording is not an exact keyword match
+   const sc=usedApi?apiFit(p,{vocab,brand,exclude}):fbScore(p,{topics,brand,exclude,subs,now});if(!usedApi&&sc.score<25)continue; // API results are already sorted by relevance: keep them even when the wording is not an exact keyword match
    res.push({_r:p._r||0,_k:p._k||0,_pref:!subSet.size||subSet.has(String(p.subreddit||'').toLowerCase()),title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:p.created_utc?new Date(p.created_utc*1000).toISOString():'',comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,usedApi?8000:1500),author:p.author||''})}
-  if(usedApi)res.sort((a,b)=>(b._pref-a._pref)||a._r-b._r||a._k-b._k); // your communities first, then Reddit's own order, taking turns between the keywords
+  if(usedApi)res.sort((a,b)=>(b._pref-a._pref)||b.relevance-a.relevance||a._r-b._r||a._k-b._k);
+  if(usedApi){const pool=res.slice(0,Math.max(want*4,80)),rest=res.slice(pool.length),cnt={},outp=[]; // mix the keywords: each extra post from the same keyword counts a little less
+   while(pool.length){let bi=0,bv=-1e9;for(let i=0;i<pool.length;i++){const r=pool[i],v=(r._pref?1000:0)+r.relevance-4*(cnt[r._k]||0)-i*0.001;if(v>bv){bv=v;bi=i}}const r=pool.splice(bi,1)[0];cnt[r._k]=(cnt[r._k]||0)+1;outp.push(r)}
+   res.length=0;outp.concat(rest).forEach(r=>res.push(r))} // your communities first, then Reddit's own order, taking turns between the keywords
   else res.sort((a,b)=>b.relevance-a.relevance||new Date(b.created)-new Date(a.created));
   const top=res.slice(0,want),nOther=top.filter(r=>!r._pref).length;top.forEach(r=>{if(!r._pref)r.other=true;delete r._r;delete r._k;delete r._pref});
   const rules={}; // community rules are not collected any more (they were slow and Reddit blocks them); add them by hand in the Community rules tab
