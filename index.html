@@ -1945,15 +1945,15 @@ function fqCsv(id){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;const
 function fqJobsHtml(){const q=FQ();if(q.jerr==='v16')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_16.sql</b> and press Run, then reload this page.</div>';
  if(q.jerr)return '<div class="warn">Could not load your searches: '+esc(q.jerr)+'</div>';if(q.jobs==null)return '<div class="s">Loading...</div>';
  if(!q.jobs.length)return '<div class="empty">No searches yet. Pick a brand, then make your first one.</div>';
- const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+(j.progress||0)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':'<span class="chip mut">Waiting to start</span>';
+ const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+(j.progress||0)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':(Date.now()-Date.parse(j.created_at)>12*60000?'<span class="chip bad">Waiting for over '+Math.floor((Date.now()-Date.parse(j.created_at))/60000)+' minutes</span>':'<span class="chip mut">Waiting to start</span>');
  const lab=n=>n>=60?'<span class="chip ok">High '+n+'</span>':n>=40?'<span class="chip warn">Medium '+n+'</span>':'<span class="chip mut">Low '+n+'</span>';
  const bnm=((gwBrand()||{}).name||'').toLowerCase(),JL=q.jobs.filter(j=>!q.bid||j.brand_id===q.bid||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===bnm));
  if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((rwAll().find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
  return JL.map(j=>{const R=Array.isArray(j.results)?j.results:[],kw=(j.keywords&&j.keywords.topics||[]),open=!!q.open[j.id];
   return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.brand_name)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.range_label||'')+' ('+D_(j.date_from)+' to '+D_(j.date_to)+') &middot; asked for '+j.want+' &middot; '+esc(clip(kw.join(', '),90))+'</div></div>'+st(j)+'</div><div class="row" style="margin:10px 0 0">'+(j.status==='done'&&R.length?'<button class="p sm" onclick="fqToggle(\''+j.id+'\')">'+(open?'Hide results':'View results')+'</button><button class="sm" onclick="fqLinks(\''+j.id+'\')">Download links</button><button class="sm" onclick="fqCsv(\''+j.id+'\')">Download CSV</button><button class="sm" onclick="fqPdf(\''+j.id+'\')" title="A numbered PDF with a screenshot of every ticked post">PDF with screenshots</button><button class="sm" onclick="fqCopy(\''+j.id+'\')">Copy links</button>':'')
-  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed')&&!j.retry_local?'<button class="sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
+  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='pending'&&!j.retry_local?'<button class="p sm" onclick="fqStartHere(\''+j.id+'\')" title="Search from this browser right now">Start now in this browser</button>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed')&&!j.retry_local?'<button class="sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
   +(j.status==='running'&&kw.length?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/kw.length*100)+'%"></i></div>':'')
-  +(j.note?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
+  +(j.note?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')+(j.status==='pending'&&!j.note?'<div class="s" style="margin-top:6px">Waiting for the background worker, which looks about every 5 minutes. '+(Date.now()-Date.parse(j.created_at)>12*60000?'It is taking too long. Press <b>Start now in this browser</b>, or check that the worker is on (GitHub > Actions > the reports workflow).':'Or press <b>Start now in this browser</b> to begin at once.')+'</div>':'')
   +(R.length&&(j.status==='done')?fqPdfHtml(j,R,open):'')+(open&&R.length?'<div class="scrollx" style="margin-top:10px"><table class="et"><tr><th></th><th>#</th><th>Fit</th><th>Post</th><th>Community</th><th>Posted</th></tr>'+R.map((r,i)=>'<tr><td><input type="checkbox" '+(fqSelOf(j)[i]?'checked':'')+' onchange="fqTick(\''+j.id+'\','+i+',this.checked)" aria-label="Include in the PDF"></td><td>'+(i+1)+'</td><td>'+lab(r.relevance)+'</td><td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(clip(r.title,110))+'</b></a>'+(r.snippet?'<div class="s">'+esc(clip(r.snippet,160))+'</div>':'')+'<div class="s rdw">'+esc((r.why||[]).join(' · '))+(r.brand_mentioned?' · already mentions the brand':'')+'</div></td><td>r/'+esc(r.sub)+'</td><td>'+D_(String(r.created||'').slice(0,10))+'</td></tr>').join('')+'</table></div>':'')+'</div>'}).join('')}
 function fqPdfHtml(j,R,open){const q=FQ(),P=q.pdfs[j.id]||[],m=fqSelOf(j),n=R.filter((r,i)=>m[i]).length;
  const st=x=>x.retry_local?'<span class="chip warn">'+(x.status==='done'?'Partly ready. Your computer will finish it':'Waiting for your computer')+'</span>':x.status==='done'?'<span class="chip ok">PDF ready</span>':x.status==='failed'?'<span class="chip bad">Failed</span>':x.status==='running'?'<span class="chip warn">Working: '+(x.progress||0)+' of '+(x.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
@@ -1974,7 +1974,7 @@ function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PR
   +'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label><span class="s">How many posts do you want?</span><input id="fq_w" type="number" min="1" max="200" style="width:110px" value="'+esc(q.want)+'" oninput="FQ().want=this.value"></label></div>'
   +'<div class="s" style="margin:14px 0 6px"><b>Search posts made between</b></div><div class="row" style="margin:0">'+pills+'</div>'
   +(q.preset==='custom'?'<div class="row" style="margin:10px 0 0"><label><span class="s">Start date</span><input type="date" value="'+esc(q.from)+'" onchange="FQ().from=this.value;fqDraw()"></label><label><span class="s">End date</span><input type="date" value="'+esc(q.to)+'" onchange="FQ().to=this.value;fqDraw()"></label></div>':'<div class="s" style="margin-top:8px">'+D_(a)+' to '+D_(z)+'</div>')
-  +'<div class="row" style="margin-top:16px"><button class="p" onclick="fqGo()"'+(q.busy?' disabled':'')+'>Find posts</button><span class="s">Only live posts are listed (not removed, locked or archived). It runs in the background, usually 2 to 10 minutes.</span></div></div>'}
+  +'<div class="row" style="margin-top:16px"><button class="p" onclick="fqGo()"'+(q.busy?' disabled':'')+'>Find posts</button><span class="s">Only live posts are listed (not removed, locked or archived). It starts at once from this browser and keeps going if you refresh. If Reddit refuses it here, the background worker does it (up to about 10 minutes).</span></div></div>'}
 function fqMain(){const q=FQ();let h=gwBrandBar();
  if(q.err)h+='<div class="warn" style="margin:0 0 14px">'+esc(q.err)+'</div>';if(q.msg)h+='<div class="hint" style="margin:0 0 14px">'+esc(q.msg)+'</div>';
  if(!q.bid)return h;
@@ -1985,6 +1985,7 @@ function findView(){const q=FQ();if(q.bid&&!gwBrand()){q.bid='';try{localStorage
 
 /* ---- fast search: runs in this browser first. If Reddit refuses it here, the background worker takes over. ---- */
 const FB_NOTE='Searching from your browser';
+async function fqStartHere(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;q.err='';q.msg='';if(q.runner&&q.runner!==id){q.msg='Another search is still running in this browser. This one starts after it.'}fqDraw();fqBrowserRun(j)}
 const FB_ASK=/\b(recommend\w*|suggest\w*|looking for|looking to|searching for|where (?:can|do|should|to) (?:i|we)|which (?:one|is|are|should)|best|advice|help|need(?:ed)?|anyone (?:know|tried|used|have|recommend)|has anyone|does anyone|worth it|alternatives?|how (?:do|to|can|should) (?:i|we)|any tips|thoughts|experiences?|reviews?)\b/i;
 const FB_NEG=/\b(hiring|for hire|we are hiring|sponsored|giveaway|promo code|discount code)\b/i;
 const fbRx=t=>new RegExp('(?<![a-z0-9])'+String(t).trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+')+'(?![a-z0-9])','i');
@@ -2008,7 +2009,8 @@ function fbScore(p,o){const title=String(p.title||''),body=String(p.selftext||''
  if(n)why.push(n+' comment'+(n===1?'':'s'));else why.push('no comments yet');
  return{score:Math.max(0,Math.min(100,Math.round(s))),why,brandMentioned}}
 async function fbGet(path){for(let a=0;;a++){let r;
-  try{r=await fetch('https://www.reddit.com'+path,{headers:{Accept:'application/json'},credentials:'omit',cache:'no-store'})}catch(e){const x=new Error('This browser could not reach Reddit');x.net=1;throw x}
+  const ac=new AbortController(),tm=setTimeout(()=>ac.abort(),20000);
+  try{r=await fetch('https://www.reddit.com'+path,{headers:{Accept:'application/json'},credentials:'omit',cache:'no-store',signal:ac.signal})}catch(e){clearTimeout(tm);if(e&&e.name==='AbortError'){const x=new Error('Reddit did not answer in time');throw x}const x=new Error('This browser is not allowed to read Reddit (blocked by the browser)');x.net=1;throw x}clearTimeout(tm);
   if(r.status===429||r.status===403){if(a<2){await fbSleep(5000*(a+1));continue}const x=new Error('HTTP '+r.status);x.slow=1;throw x}
   if(!r.ok)throw new Error('HTTP '+r.status);
   let j=null;try{j=await r.json()}catch(e){}
@@ -2019,12 +2021,16 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
    if(arr.length)out[s.toLowerCase()]={rules:arr.slice(0,20).map(x=>({n:String(x.short_name||'').slice(0,120),d:String(x.description||'').replace(/\s+/g,' ').trim().slice(0,500)}))}}catch(e){}};
  const L=list.slice(0,30);for(let i=0;i<L.length;i+=5)await Promise.all(L.slice(i,i+5).map(one));return out}
 function fqLocalJob(id,o){const j=(FQ().jobs||[]).find(x=>x.id===id);if(j){Object.assign(j,o);const e=$('fq_jobs');if(e&&ST.tab==='find')e.innerHTML=fqJobsHtml()}}
-async function fqBrowserRun(job,resume){const q=FQ();if(!job||q.runner)return;q.runner=job.id;const id=job.id,nowI=()=>new Date().toISOString();
- const hand=async(why)=>{await sb.from('find_jobs').update({status:'pending',progress:0,started_at:null,note:why}).eq('id',id);fqLocalJob(id,{status:'pending',progress:0,note:why})};
+async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
+ if(q.runner){if(q.runner!==job.id){(q.queue=q.queue||[]).push([job,resume]);fqLocalJob(job.id,{note:'Waiting: another search is running in this browser. This one starts when it is done.'})}return}
+ q.runner=job.id;const id=job.id,nowI=()=>new Date().toISOString();let beat=0,deadline=Date.now()+5*60000;
+ const hand=async(why)=>{await sb.from('find_jobs').update({status:'pending',progress:0,started_at:null,note:why}).eq('id',id);fqLocalJob(id,{status:'pending',progress:0,note:why});FQ().msg='';FQ().err=why;fqDraw()};
  try{
   let c=sb.from('find_jobs').update({status:'running',started_at:nowI(),progress:0,retry_local:false,note:FB_NOTE}).eq('id',id).eq('status',resume?'running':'pending');
   if(resume&&job.started_at)c=c.eq('started_at',job.started_at);
-  const cl=await c.select();if(cl.error||!cl.data||!cl.data.length)return; // the background worker already has it
+  const cl=await c.select();if(cl.error){return await hand('The browser could not start the search ('+String(cl.error.message||'').slice(0,100)+'), so the background search will do it instead. It starts within about 5 minutes.')}
+  if(!cl.data||!cl.data.length)return; // the background worker already has it
+  beat=setInterval(()=>{sb.from('find_jobs').update({started_at:nowI()}).eq('id',id).eq('status','running').then(()=>{})},20000);
   fqLocalJob(id,{status:'running',progress:0,note:FB_NOTE,started_at:nowI()});
   const k=job.keywords||{},list=a=>(Array.isArray(a)?a:[]).map(x=>String(x).trim()).filter(Boolean);
   const topics=list(k.topics).slice(0,15),exclude=list(k.exclude),brand=list(k.brand),subs=list(k.subs).map(x=>x.replace(/^\/?r\//i,'')).filter(x=>/^\w+$/.test(x));
@@ -2034,7 +2040,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job||q.runner)return;q.
   if(!topics.length){await sb.from('find_jobs').update({status:'failed',note:'There are no keywords to search for.',finished_at:nowI()}).eq('id',id);fqLocalJob(id,{status:'failed'});return}
   const base=subs.length?'/r/'+subs.join('+')+'/search.json?restrict_sr=1&':'/search.json?';
   const found=new Map();let ok=0,failed=0,reqs=0,done=0,lastErr='',netFail=false,idx=0;
-  const worker=async()=>{while(!netFail){const ti=idx++;if(ti>=topics.length)return;const t=topics[ti],qs=encodeURIComponent(/\s/.test(t)?'"'+t+'"':t);
+  const worker=async()=>{while(!netFail&&Date.now()<deadline){const ti=idx++;if(ti>=topics.length)return;const t=topics[ti],qs=encodeURIComponent(/\s/.test(t)?'"'+t+'"':t);
     const plans=[{sort:'relevance',pages:1},...(windowDays<=31?[{sort:'new',pages:2}]:[])];
     for(const pl of plans){let after='';for(let pg=0;pg<pl.pages;pg++){if(reqs>=45)break;reqs++;
       try{const d=(await fbGet(base+'q='+qs+'&sort='+pl.sort+'&t='+T+'&type=link&limit=100&raw_json=1'+(after?'&after='+after:''))).data||{};ok++;
@@ -2044,7 +2050,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job||q.runner)return;q.
       await fbSleep(500)}}
     done++;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
   await Promise.all([worker(),worker()]);
-  if(netFail||!ok)return hand((netFail?'Your browser could not reach Reddit':'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
+  if(netFail||!ok)return hand((netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
   for(const p of found.values()){if(p.created_utc<fromTs||p.created_utc>toTs)continue;
    if(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine)continue;
@@ -2059,7 +2065,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job||q.runner)return;q.
   if(r.error)return hand('The browser search finished but could not be saved ('+String(r.error.message||'').slice(0,80)+'), so the background search will do it instead.');
   FQ().msg='Search finished: '+top.length+' post'+(top.length===1?'':'s')+' found.';await fqJobs();fqDraw();
  }catch(e){try{await hand('The browser search stopped ('+String((e&&e.message)||e).slice(0,80)+'), so the background search will do it instead. It starts within about 5 minutes.')}catch(x){}}
- finally{q.runner=''}}
+ finally{clearInterval(beat);q.runner='';const nx=(q.queue||[]).shift();if(nx)setTimeout(()=>fqBrowserRun(nx[0],nx[1]),300)}}
 // a search that was running in this browser and was interrupted (page closed or refreshed) carries on when the page is opened again
 function fqResume(){const q=FQ();if(q.runner||!(q.jobs||[]).length)return;
  const j=q.jobs.find(x=>x.status==='running'&&x.note===FB_NOTE&&x.started_at&&Date.now()-Date.parse(x.started_at)>60000);if(j)fqBrowserRun(j,true)}
