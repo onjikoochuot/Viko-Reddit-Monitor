@@ -349,7 +349,27 @@ async function shoot(page, pair, words, layout, tag) {
 
 /* ---------------- the PDF ---------------- */
 const pngSize = (b64) => { try { const b = Buffer.from(b64.slice(0, 64), 'base64'); return { w: b.readUInt32BE(16) || 1, h: b.readUInt32BE(20) || 1 }; } catch { return { w: 1, h: 1 }; } };
+const REPORT_CSS = `
+  @page{size:Letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"Liberation Sans",sans-serif;color:#1e2a25}
+  .pg{width:8.5in;height:11in;padding:.72in .75in .62in;position:relative;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
+  .topbar{position:absolute;left:0;right:0;top:0;height:6pt;background:#c26a1b}
+  .run{display:flex;justify-content:space-between;font-size:7.5pt;letter-spacing:.4px;color:#6b7068;border-bottom:1px solid #e6e2d9;padding-bottom:6pt;margin:-.38in 0 .36in}
+  .hero{background:#1e2a25;color:#fff;border-left:.12in solid #c26a1b;border-radius:.16in;padding:.26in .32in .24in;margin:-.28in 0 .3in}
+  .kick{color:#c26a1b;font-weight:700;font-size:8.5pt;letter-spacing:.5px}.hero h1{font-size:25pt;margin:.06in 0 .05in;line-height:1.1}.sb{color:#b0bbb5;font-size:10pt;margin:0 0 .12in;padding-bottom:.1in;border-bottom:1px solid #2f3d36}
+  .stats{display:flex}.stats div{flex:1;padding-left:.16in;border-left:1px solid #3a4a43;display:flex;flex-direction:column}.stats div:first-child{padding-left:0;border-left:0}
+  .stats b{font-size:22pt;line-height:1.1}.stats span{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#e4e5e3}
+  .eh{display:flex;align-items:center;gap:.16in;margin-bottom:.2in}.num{width:.52in;height:.52in;border-radius:.1in;background:#c26a1b;color:#fff;font-weight:700;font-size:15pt;display:flex;align-items:center;justify-content:center}
+  .et{flex:1}.et h2{margin:0;font-size:19pt;line-height:1.1}.rs{font-size:10pt;color:#6b7068;margin-top:2pt}
+  .pill{background:#fbebda;border:1px solid #f4d9b8;border-radius:999px;padding:5pt 10pt;font-size:8.5pt;font-weight:700;display:flex;align-items:center;gap:5pt;white-space:nowrap}.pill i{width:6pt;height:6pt;border-radius:50%;background:#c26a1b;display:block}
+  .links{background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #2f5d4a;border-radius:.12in;padding:.14in .2in;margin-bottom:.2in}
+  .lb{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#6b7068;margin-bottom:2pt}.lb.c{margin-top:.1in}.links a{display:block;font-size:8.5pt;color:#1a56d6;word-break:break-all;line-height:1.3}
+  .shots{flex:1;min-height:0;display:flex;flex-direction:column;gap:.1in;background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #c26a1b;border-radius:.12in;padding:.14in;margin-bottom:.42in}
+  .si{min-height:0;display:flex;align-items:flex-start;justify-content:center}.si img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;border-radius:.05in}
+  .ft{position:absolute;left:.75in;right:.75in;bottom:.3in;display:flex;justify-content:space-between;font-size:8pt;color:#6b7068;border-top:1px solid #e6e2d9;padding-top:.08in}
+  
+  .why{font-size:8.5pt;line-height:1.4;color:#1e2a25}.meta{font-size:8pt;color:#6b7068;margin-top:3pt}`;
 function reportHtml(job, items) {
+  if (job.source === 'posts') return postsHtml(job, items);
   const kws = String(job.keyword || '').split(',').map((s) => s.trim()).filter(Boolean);
   const brand = (job.brand_name || kws[0] || String(job.title || '').replace(/\s*Reddit.*$/i, '') || 'Reddit').trim();
   const nSub = new Set(items.map((i) => String(i.sub || '').toLowerCase()).filter(Boolean)).size || items.length;
@@ -371,24 +391,200 @@ function reportHtml(job, items) {
    <div class="shots"><div class="si" style="flex:${(sp.h / sp.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.postImg}"></div><div class="si" style="flex:${(sc.h / sc.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.comImg}"></div></div>
    <div class="ft"><span>${esc(brand)} &bull; Reddit Post Report</span><span>Page ${i + 1} of ${total}</span></div></section>`;
   }).join('');
-  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(job.title)}</title><style>
-  @page{size:Letter;margin:0}*{box-sizing:border-box}body{margin:0;font-family:Helvetica,Arial,"Liberation Sans",sans-serif;color:#1e2a25}
-  .pg{width:8.5in;height:11in;padding:.72in .75in .62in;position:relative;page-break-after:always;overflow:hidden;display:flex;flex-direction:column}
-  .topbar{position:absolute;left:0;right:0;top:0;height:6pt;background:#c26a1b}
-  .run{display:flex;justify-content:space-between;font-size:7.5pt;letter-spacing:.4px;color:#6b7068;border-bottom:1px solid #e6e2d9;padding-bottom:6pt;margin:-.38in 0 .36in}
-  .hero{background:#1e2a25;color:#fff;border-left:.12in solid #c26a1b;border-radius:.16in;padding:.26in .32in .24in;margin:-.28in 0 .3in}
-  .kick{color:#c26a1b;font-weight:700;font-size:8.5pt;letter-spacing:.5px}.hero h1{font-size:25pt;margin:.06in 0 .05in;line-height:1.1}.sb{color:#b0bbb5;font-size:10pt;margin:0 0 .12in;padding-bottom:.1in;border-bottom:1px solid #2f3d36}
-  .stats{display:flex}.stats div{flex:1;padding-left:.16in;border-left:1px solid #3a4a43;display:flex;flex-direction:column}.stats div:first-child{padding-left:0;border-left:0}
-  .stats b{font-size:22pt;line-height:1.1}.stats span{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#e4e5e3}
-  .eh{display:flex;align-items:center;gap:.16in;margin-bottom:.2in}.num{width:.52in;height:.52in;border-radius:.1in;background:#c26a1b;color:#fff;font-weight:700;font-size:15pt;display:flex;align-items:center;justify-content:center}
-  .et{flex:1}.et h2{margin:0;font-size:19pt;line-height:1.1}.rs{font-size:10pt;color:#6b7068;margin-top:2pt}
-  .pill{background:#fbebda;border:1px solid #f4d9b8;border-radius:999px;padding:5pt 10pt;font-size:8.5pt;font-weight:700;display:flex;align-items:center;gap:5pt;white-space:nowrap}.pill i{width:6pt;height:6pt;border-radius:50%;background:#c26a1b;display:block}
-  .links{background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #2f5d4a;border-radius:.12in;padding:.14in .2in;margin-bottom:.2in}
-  .lb{font-size:7.5pt;font-weight:700;letter-spacing:.3px;color:#6b7068;margin-bottom:2pt}.lb.c{margin-top:.1in}.links a{display:block;font-size:8.5pt;color:#1a56d6;word-break:break-all;line-height:1.3}
-  .shots{flex:1;min-height:0;display:flex;flex-direction:column;gap:.1in;background:#faf8f4;border:1px solid #e9e5dc;border-left:.06in solid #c26a1b;border-radius:.12in;padding:.14in;margin-bottom:.42in}
-  .si{min-height:0;display:flex;align-items:flex-start;justify-content:center}.si img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;border-radius:.05in}
-  .ft{position:absolute;left:.75in;right:.75in;bottom:.3in;display:flex;justify-content:space-between;font-size:8pt;color:#6b7068;border-top:1px solid #e6e2d9;padding-top:.08in}
-  </style></head><body>${pages}</body></html>`;
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(job.title)}</title><style>${REPORT_CSS}</style></head><body>${pages}</body></html>`;
+}
+
+/* ---------------- Find posts: searches Reddit for live posts that fit a brand, ranks them by keywords (no AI) ---------------- */
+const patchFind = (id, o) => sb('/rest/v1/find_jobs?id=eq.' + id, { method: 'PATCH', body: o, headers: { Prefer: 'return=minimal' } });
+const reEsc = (t) => t.trim().replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/\s+/g, '\\s+');
+const termRx = (t) => new RegExp('(?<![a-z0-9])' + reEsc(t) + '(?![a-z0-9])', 'i');
+const ASKING = /\b(recommend\w*|suggest\w*|looking for|looking to|searching for|where (?:can|do|should|to) (?:i|we)|which (?:one|is|are|should)|best|advice|help|need(?:ed)?|anyone (?:know|tried|used|have|recommend)|has anyone|does anyone|worth it|alternatives?|how (?:do|to|can|should) (?:i|we)|any tips|thoughts|experiences?|reviews?)\b/i;
+const NEG_TITLE = /\b(hiring|for hire|we are hiring|sponsored|giveaway|promo code|discount code)\b/i;
+function scorePost(p, o) { // o: {topics, brand, exclude, subs, now}
+  const title = String(p.title || ''), body = String(p.selftext || '');
+  const why = []; let topical = 0, matched = 0, inTitle = 0;
+  for (const t of o.topics) {
+    const rx = termRx(t), words = t.split(/\s+/).filter((w) => w.length > 2);
+    if (rx.test(title)) { topical += inTitle === 0 ? 30 : 10; inTitle++; matched++; why.push('title has "' + t + '"'); }
+    else if (words.length > 1 && words.every((w) => termRx(w).test(title))) { topical += inTitle === 0 ? 26 : 9; inTitle++; matched++; why.push('title has the words of "' + t + '"'); }
+    else if (rx.test(body)) { topical += matched === 0 ? 12 : 5; matched++; why.push('post text has "' + t + '"'); }
+    else if (words.length > 1 && words.every((w) => termRx(w).test(body))) { topical += 8; matched++; why.push('post text has the words of "' + t + '"'); }
+  }
+  if (!matched) return { score: 0, why: [], brandMentioned: false };
+  let s = Math.min(65, topical);
+  if (ASKING.test(title)) { s += 14; why.push('asks for help or a recommendation'); } else if (ASKING.test(body.slice(0, 500))) { s += 6; why.push('looks like a question or request'); }
+  if (/\?/.test(title)) s += 5;
+  const n = +p.num_comments || 0; s += Math.min(8, Math.round(Math.log2(n + 1) * 1.6)); if (n > 200) s -= 5;
+  const age = (o.now - p.created_utc) / 86400; if (age <= 2) s += 6; else if (age <= 7) s += 4; else if (age <= 30) s += 2;
+  if (o.subs.length && o.subs.some((x) => x.toLowerCase() === String(p.subreddit || '').toLowerCase())) { s += 6; why.push('in a community you chose'); }
+  const text = title + ' ' + body;
+  const ex = o.exclude.find((t) => termRx(t).test(text)); if (ex) { s -= 40; why.push('mentions "' + ex + '" (word to avoid)'); }
+  if (NEG_TITLE.test(title)) s -= 25;
+  const brandMentioned = o.brand.some((t) => termRx(t).test(text));
+  if (n) why.push(n + ' comment' + (n === 1 ? '' : 's')); else why.push('no comments yet');
+  return { score: Math.max(0, Math.min(100, Math.round(s))), why, brandMentioned };
+}
+async function redditListing(path) { // one search page, with patience when Reddit says slow down
+  for (let a = 0; ; a++) {
+    const r = await curl(BASE + path);
+    if (r.status === 429 || (r.status === 403 && /blocked|too many|rate/i.test(r.body))) {
+      if (a < 2) { if (!(await rotate())) await sleep((+process.env.SLOW_WAIT_MS || 20000) * (a + 1)); continue; }
+      const e = new Error('HTTP ' + r.status); e.slow = 1; throw e;
+    }
+    let j = null; try { j = JSON.parse(r.body); } catch {}
+    if (!j || !j.data) throw new Error('HTTP ' + r.status + (j ? ' unexpected answer' : ' got a web page instead of search results'));
+    return j.data;
+  }
+}
+async function runFind(job) {
+  const k = job.keywords || {}, list = (a) => (Array.isArray(a) ? a : []).map((x) => String(x).trim()).filter(Boolean);
+  const topics = list(k.topics).slice(0, 15), exclude = list(k.exclude), subs = list(k.subs).map((x) => x.replace(/^\/?r\//i, '')).filter((x) => /^\w+$/.test(x)), brand = list(k.brand);
+  const want = Math.max(1, Math.min(200, +job.want || 20));
+  const now = Math.floor(Date.now() / 1000);
+  const fromTs = Date.parse((job.date_from || '1970-01-01') + 'T00:00:00Z') / 1000, toTs = Date.parse((job.date_to || '2999-01-01') + 'T23:59:59Z') / 1000;
+  const ageDays = (now - fromTs) / 86400, T = ageDays <= 1.5 ? 'day' : ageDays <= 8 ? 'week' : ageDays <= 32 ? 'month' : ageDays <= 370 ? 'year' : 'all';
+  const windowDays = Math.max(1, (Math.min(toTs, now) - fromTs) / 86400);
+  const found = new Map(); let reqs = 0, ok = 0, failed = 0, lastErr = '';
+  const bump = (n) => patchFind(job.id, { progress: n }).catch(() => {});
+  if (!topics.length) { await patchFind(job.id, { status: 'failed', retry_local: false, note: 'There are no keywords to search for.', finished_at: new Date().toISOString() }); return; }
+  const ipt = await curl('https://api.ipify.org', { json: false }).catch(() => null); if (ipt) log('exit IP seen by the internet:', ipt.body.trim(), PROXY ? '(through proxy)' : '(NO proxy set)');
+  const base = subs.length ? '/r/' + subs.join('+') + '/search.json?restrict_sr=1&' : '/search.json?';
+  for (let ti = 0; ti < topics.length; ti++) {
+    const t = topics[ti], q = encodeURIComponent(/\s/.test(t) ? '"' + t + '"' : t);
+    const plans = [{ sort: 'relevance', pages: 1 }, ...(windowDays <= 31 ? [{ sort: 'new', pages: 2 }] : [])];
+    log((ti + 1) + '/' + topics.length, 'searching', t);
+    for (const pl of plans) {
+      let after = '';
+      for (let pg = 0; pg < pl.pages; pg++) {
+        if (reqs >= (+process.env.MAX_REQS || 90)) break;
+        reqs++;
+        try {
+          const d = await redditListing(base + 'q=' + q + '&sort=' + pl.sort + '&t=' + T + '&type=link&limit=100&raw_json=1' + (after ? '&after=' + after : ''));
+          ok++;
+          const kids = d.children || [];
+          for (const c of kids) if (c.kind === 't3' && c.data && !found.has(c.data.id)) found.set(c.data.id, c.data);
+          const oldest = kids.length ? Math.min(...kids.map((c) => c.data.created_utc || now)) : 0;
+          after = d.after || ''; if (!after || !kids.length || (pl.sort === 'new' && oldest < fromTs)) break;
+        } catch (e) { failed++; lastErr = String(e.message || e).slice(0, 120); log('search problem:', lastErr); if (e.net) throw e; break; }
+        await sleep(GAP_MS);
+      }
+    }
+    bump(ti + 1);
+  }
+  log('collected', found.size, 'posts from', ok, 'searches,', failed, 'problems');
+  const bad = [], res = [];
+  for (const p of found.values()) {
+    if (p.created_utc < fromTs || p.created_utc > toTs) continue;
+    const gone = p.removed_by_category || GONE.includes(String(p.selftext || '').trim()) || p.author === '[deleted]' || p.locked || p.archived || p.over_18 || p.quarantine;
+    if (gone) { bad.push(p.id); continue; }
+    const sc = scorePost(p, { topics, brand, exclude, subs, now });
+    if (sc.score < (+process.env.MIN_SCORE || 25)) continue;
+    res.push({ title: String(p.title || '').slice(0, 220), url: 'https://www.reddit.com' + p.permalink, sub: p.subreddit, created: new Date(p.created_utc * 1000).toISOString(), comments: p.num_comments || 0, upvotes: p.score || 0, relevance: sc.score, why: sc.why.slice(0, 4), brand_mentioned: sc.brandMentioned, snippet: String(p.selftext || '').replace(/\s+/g, ' ').trim().slice(0, 220), body: String(p.selftext || '').replace(/\r/g, '').trim().slice(0, 1500), author: p.author || '' });
+  }
+  res.sort((a, b) => b.relevance - a.relevance || new Date(b.created) - new Date(a.created));
+  const top = res.slice(0, want);
+  if (!ok) { // nothing could be searched at all
+    const esc2 = !LOCAL && process.env.ESCALATE !== '0';
+    await patchFind(job.id, { status: 'failed', retry_local: esc2, note: 'Reddit would not answer the search (' + lastErr + ').' + (esc2 ? ' Your computer will try next. It needs the Keep_running window open.' : ' Try again in a few minutes.'), finished_at: new Date().toISOString() });
+    return;
+  }
+  const note = top.length ? (top.length < want ? 'Found ' + top.length + ' fitting posts in this period (you asked for ' + want + '). Try wider dates or more keywords for more.' : null) : 'No live posts fitted these keywords in this period. Try wider dates or more keywords.';
+  const rules = top.length ? await fetchRules(top.map((r) => r.sub)) : {};
+  const doneRow = { status: 'done', retry_local: false, results: top, found: top.length, progress: topics.length, note: (note || '') + (failed ? (note ? ' ' : '') + failed + ' search' + (failed === 1 ? '' : 'es') + ' could not be completed, so some posts may be missing.' : '') || null, finished_at: new Date().toISOString() };
+  try { await patchFind(job.id, Object.keys(rules).length ? { ...doneRow, rules } : doneRow); }
+  catch (e) { log('saving the community rules failed (is supabase_update_20.sql run?), saving the posts without them:', String(e.message || e).slice(0, 100)); await patchFind(job.id, doneRow); }
+  log('find saved:', top.length, 'posts');
+}
+async function fetchRules(subs) { // the written rules of each community, so they can be added to the downloads
+  const out = {}, seen = new Set(), list = [];
+  for (const s of subs) { const k = String(s || '').toLowerCase(); if (k && /^\w+$/.test(k) && !seen.has(k)) { seen.add(k); list.push(String(s)); } }
+  let n = 0;
+  for (const s of list.slice(0, 30)) {
+    try {
+      const r = await curl(BASE + '/r/' + s + '/about/rules.json?raw_json=1');
+      let j = null; try { j = JSON.parse(r.body); } catch {}
+      const arr = j && Array.isArray(j.rules) ? j.rules : [];
+      if (arr.length) { out[s.toLowerCase()] = { rules: arr.slice(0, 20).map((x) => ({ n: String(x.short_name || '').slice(0, 120), d: String(x.description || '').replace(/\s+/g, ' ').trim().slice(0, 500) })) }; n++; }
+    } catch (e) { log('rules for r/' + s + ' not available:', String(e.message || e).slice(0, 60)); }
+    await sleep(Math.min(GAP_MS, 1000));
+  }
+  log('community rules collected for', n, 'of', list.length, 'communities');
+  return out;
+}
+async function claimFind() {
+  const hdr = { Prefer: 'return=representation' };
+  const rows = LOCAL
+    ? await sb('/rest/v1/find_jobs?retry_local=eq.true&order=created_at.asc&limit=1').catch(() => [])
+    : await (async () => {
+      const stale = new Date(Date.now() - 45 * 60000).toISOString();
+      await sb('/rest/v1/find_jobs?status=eq.running&started_at=lt.' + stale, { method: 'PATCH', body: { status: 'pending' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
+      return sb('/rest/v1/find_jobs?status=eq.pending&order=created_at.asc&limit=1').catch(() => []);
+    })();
+  if (!rows || !rows[0]) return null;
+  const cond = LOCAL ? '&retry_local=eq.true' : '&status=eq.pending';
+  const got = await sb('/rest/v1/find_jobs?id=eq.' + rows[0].id + cond, { method: 'PATCH', body: { status: 'running', retry_local: false, started_at: new Date().toISOString(), progress: 0, note: LOCAL ? 'Your computer is searching.' : null }, headers: hdr });
+  return got && got[0] ? got[0] : null;
+}
+
+
+const fitLabel = (n) => (n >= 60 ? 'High' : n >= 40 ? 'Medium' : 'Low');
+function postsHtml(job, items) {
+  const brand = String(job.brand_name || job.title || 'Reddit').trim();
+  const nSub = new Set(items.map((i) => String(i.sub || '').toLowerCase()).filter(Boolean)).size || items.length;
+  const high = items.filter((i) => i.relevance >= 60).length, total = items.length;
+  const comments = items.reduce((a, i) => a + (+i.comments || 0), 0);
+  const sub = 'Live Reddit posts where people are asking for what ' + brand + ' offers' + (job.range_label ? ' (' + job.range_label + ')' : '') + '.';
+  const fmt = (d) => { try { return new Date(d).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' }); } catch { return ''; } };
+  const pages = items.map((it, i) => `<section class="pg${i === 0 ? ' p1' : ''}"><div class="topbar"></div>
+   ${i === 0 ? `<div class="hero"><div class="kick">REDDIT POSTS TO ENGAGE</div><h1>${esc(brand)}</h1><p class="sb">${esc(sub)}</p>
+     <div class="stats"><div><b>${total}</b><span>LIVE POSTS</span></div><div><b>${nSub}</b><span>COMMUNITIES</span></div><div><b>${high}</b><span>HIGH FIT</span></div><div><b>${comments}</b><span>COMMENTS SO FAR</span></div></div></div>`
+       : `<div class="run"><span>${esc(brand.toUpperCase())}</span><span>REDDIT POSTS TO ENGAGE</span></div>`}
+   <div class="eh"><div class="num">${String(i + 1).padStart(2, '0')}</div><div class="et"><h2>POST ${i + 1}</h2><div class="rs">${it.sub ? 'r/' + esc(it.sub) : ''}${it.created ? ' &middot; posted ' + esc(fmt(it.created)) : ''}</div></div>${it.relevance ? `<div class="pill"><i></i>Fit: ${fitLabel(it.relevance)} ${esc(it.relevance)}</div>` : ''}</div>
+   <div class="links"><div class="lb">POST LINK</div><a href="${esc(it.post)}">${esc(it.post)}</a>${(it.why && it.why.length) ? `<div class="lb c">WHY IT FITS</div><div class="why">${esc(it.why.join(' \u00b7 '))}</div>` : ''}</div>
+   <div class="shots"><div class="si" style="flex:1 1 0"><img src="data:image/png;base64,${it.postImg}"></div></div>
+   <div class="ft"><span>${esc(brand)} &bull; Reddit Posts to Engage</span><span>Page ${i + 1} of ${total}</span></div></section>`).join('');
+  return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(job.title)}</title><style>${REPORT_CSS}${RULES_CSS}</style></head><body>${pages}${rulesPages(job, items, brand)}</body></html>`;
+}
+const RULES_CSS = `.ap{width:8.5in;min-height:11in;padding:.72in .75in .62in;position:relative;page-break-after:always}.ap h1{font-size:20pt;margin:0 0 4pt}.ap .sbt{font-size:9.5pt;color:#6b7068;margin:0 0 14pt}.ap h3{font-size:12pt;margin:14pt 0 4pt;color:#c26a1b}.ap ol{margin:0 0 6pt 16pt;padding:0;font-size:9pt;line-height:1.45}.ap li{margin:0 0 3pt}.ap .mine{font-size:9pt;background:#fbf3e6;border-left:3pt solid #c26a1b;padding:5pt 7pt;margin:4pt 0}.ap .none{font-size:9pt;color:#6b7068}`;
+function rulesPages(job, items, brand) { // appendix: the rules of every community in this PDF
+  const R = job.rules && typeof job.rules === 'object' ? job.rules : {};
+  const subs = [], seen = new Set();
+  for (const it of items) { const k = String(it.sub || '').toLowerCase(); if (k && !seen.has(k)) { seen.add(k); subs.push(String(it.sub)); } }
+  if (!subs.length) return '';
+  const block = (s) => {
+    const o = R[s.toLowerCase()] || {}, rl = Array.isArray(o.rules) ? o.rules : [], mine = String(o.mine || '').trim();
+    return `<h3>r/${esc(s)}</h3>` + (rl.length ? `<ol>${rl.map((x) => `<li><b>${esc(x.n)}</b>${x.d ? ' - ' + esc(x.d) : ''}</li>`).join('')}</ol>` : `<div class="none">The written rules could not be collected. Read them at reddit.com/r/${esc(s)}/about/rules before posting.</div>`) + (mine ? `<div class="mine"><b>Our notes:</b> ${esc(mine)}</div>` : '');
+  };
+  return `<section class="ap"><h1>Appendix: community rules</h1><p class="sbt">${esc(brand)} - the rules of each community in this report. Check them again before posting, because moderators change them.</p>${subs.map(block).join('')}</section>`;
+}
+async function shootPost(page, url, words, tag) { // one post, on its own, in the modern Reddit page
+  const L = LAYOUTS.modern, target = BASE + new URL(url).pathname;
+  const go = async () => { await page.goto(target, { waitUntil: 'domcontentloaded', timeout: 60000 }); };
+  try { await go(); } catch (e) { log('page was slow, trying once more'); await go(); }
+  await page.waitForTimeout(1500);
+  const snap = await page.evaluate(() => (document.title + ' ' + (document.body ? document.body.innerText.slice(0, 400) : ''))).catch(() => '');
+  if (BLOCKED.test(snap) && !/shreddit-post/.test(await page.content().catch(() => ''))) {
+    const d = await diag(page, tag); const e = new Error('Reddit blocked the browser (' + (d.title || d.text).slice(0, 90) + ')'); e.diag = d; throw e;
+  }
+  let postEl;
+  try { postEl = await pick(page, L.post, 45000); }
+  catch (e) { const d = await diag(page, tag); e.diag = d; e.message = 'post not found on the page; page says: "' + (d.title + ' | ' + d.text).slice(0, 140) + '"'; throw e; }
+  await page.waitForLoadState('networkidle', { timeout: 8000 }).catch(() => {});
+  await prep(page);
+  await page.waitForTimeout(600);
+  const hp = await postEl.evaluateHandle((e) => e);
+  const hits = words.length ? await page.evaluate(([e, w, f]) => (new Function('return ' + f))()(e, w), [hp, words, highlightFn.toString()]) : 0;
+  await page.waitForTimeout(250);
+  const postText = await postEl.innerText().catch(() => '');
+  await page.evaluate(() => (document.fonts && document.fonts.ready) || null).catch(() => {});
+  let buf;
+  try { buf = await postEl.screenshot({ type: 'png', timeout: 20000 }); }
+  catch (e) {
+    const bb = await postEl.boundingBox(); if (!bb) throw e;
+    const sy = await page.evaluate(() => window.scrollY), sx = await page.evaluate(() => window.scrollX);
+    buf = await page.screenshot({ type: 'png', fullPage: true, clip: { x: bb.x + sx, y: bb.y + sy, width: Math.min(bb.width, 1400), height: Math.min(bb.height, 6000) }, timeout: 40000 });
+  }
+  return { post: buf, postText, hits };
 }
 
 /* ---------------- main ---------------- */
@@ -456,6 +652,21 @@ async function runJob(job) {
       const pair = { post: raw.post || '', comment: raw.comment || '', sub: raw.sub || '' };
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
+        if (job.source === 'posts') { // Find posts: one screenshot of each post, no comment
+          const pu = String(raw.post || '').trim(); pair.post = pu;
+          if (!pu || !ids(pu)) { skip('Link is not a Reddit post link'); continue; }
+          log(n + '/' + pairs.length, 'opening', pu.replace(/^https?:\/\/[^/]+/, '').slice(0, 70));
+          const lp = LOCAL ? { unknown: true } : await lookSoft(pu, 'post'); if (!LOCAL) await sleep(GAP_MS);
+          if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
+          let sh;
+          try { sh = await shootPost(page, pu, kws, n + '_post'); }
+          catch (e) { log(n + '/' + pairs.length, 'post failed:', String(e.message).split('\n')[0]); skip('Could not capture the post. ' + String(e.message).split('\n')[0].slice(0, 200), true); continue; }
+          if (GONE_TXT.test(sh.postText.slice(0, 300))) { skip('Post is no longer live (checked on the page)'); continue; }
+          if (!sh.postText.trim()) { skip('Could not read the post on the page (it may still be loading)', true); continue; }
+          items.push({ post: pu, sub: raw.sub || subOf(pu), title: raw.title || '', relevance: raw.relevance || 0, created: raw.created || '', comments: raw.comments || 0, why: raw.why || [], postImg: sh.post.toString('base64') });
+          bump(n); log(n + '/' + pairs.length, 'captured');
+          continue;
+        }
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
           try { pair.comment = LOCAL ? await resolveShortInBrowser(page, pair.comment, true) : await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
         }
@@ -511,7 +722,7 @@ async function runJob(job) {
     const objPath = job.id + '/report.pdf';
     await sb('/storage/v1/object/reports/' + objPath, { method: 'POST', raw: true, body: pdf, headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
     let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
-    if (escalate) note = 'Partly ready: ' + retryable + ' engagement' + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
+    if (escalate) note = 'Partly ready: ' + retryable + (job.source === 'posts' ? ' post' : ' engagement') + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
     await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: objPath, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');
   } finally {
@@ -562,7 +773,7 @@ async function main() {
     }
   }
   const any = await once();
-  if (!any) log('no report waiting');
+  if (!any) log('nothing waiting');
 }
 async function once() {
   let any = false;
@@ -573,6 +784,14 @@ async function once() {
     log('making report', job.id, '-', job.title, '-', (job.pairs || []).length, 'engagements');
     try { await runJob(job); }
     catch (e) { console.error(e); await patchJob(job.id, { status: 'failed', retry_local: !LOCAL && process.env.ESCALATE !== '0', note: 'The report stopped: ' + String(e.message || e).slice(0, 200) + (LOCAL ? '' : ' Your computer will try next.'), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
+  }
+  for (let i = 0; i < 20; i++) { // then the searches from Find posts
+    const fj = await claimFind();
+    if (!fj) break;
+    any = true;
+    log('finding posts', fj.id, '-', fj.brand_name, '-', (fj.keywords && fj.keywords.topics || []).length, 'keywords');
+    try { await runFind(fj); }
+    catch (e) { console.error(e); await patchFind(fj.id, { status: 'failed', retry_local: !LOCAL && process.env.ESCALATE !== '0', note: 'The search stopped: ' + String(e.message || e).slice(0, 200) + (LOCAL ? '' : ' Your computer will try next.'), finished_at: new Date().toISOString() }).catch(() => {}); process.exitCode = 1; }
   }
   return any;
 }
