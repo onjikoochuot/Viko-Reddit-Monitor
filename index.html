@@ -2044,7 +2044,7 @@ async function fqPostPdf(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!
  q.ppBusy='';fqDraw()}
 function fqPdfHtml(j,R,open){const q=FQ(),m=fqSelOf(j),n=R.filter((r,i)=>m[i]).length;
  return '<div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>Post pages (PDF)</b><span class="s">'+n+' post'+(n==1?'':'s')+' ticked'+(open?'':' (open the results to change this)')+'. Each post is typed up with its wording, upvotes, comments and first 5 comments.</span><span style="flex:1"></span>'+(open?'<button class="sm" onclick="fqTickAll(\''+j.id+'\',1)">Tick all</button><button class="sm" onclick="fqTickAll(\''+j.id+'\',0)">Clear</button>':'')+'<button class="p sm" onclick="fqPostPdf(\''+j.id+'\')"'+(q.ppBusy?' disabled':'')+'>'+(q.ppBusy===j.id?'Making...':'Make post pages (PDF)')+'</button></div>'+'<div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>Work on the ticked posts</b><span class="s">'+n+' ticked'+(open?'':' (open the results to change this)')+'</span><span style="flex:1"></span><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'comment\')">Write comments on them</button><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'post\')">Write new posts inspired by them</button></div>'}
-function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeElement&&document.activeElement.id,pos=document.activeElement&&document.activeElement.selectionStart;e.innerHTML=fqMain();{const q=FQ(),w=$('fq_jw');if(w){w.style.display=(!q.bid||q.view==='find')?'':'none';const h=w.querySelector('h3');if(h)h.textContent=q.bid?'Your searches':'Your searches (all brands)'}}
+function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeElement&&document.activeElement.id,pos=document.activeElement&&document.activeElement.selectionStart;e.innerHTML=fqMain();{const q=FQ(),w=$('fq_jw');if(w){w.style.display=(q.bid&&q.view==='find')?'':'none';const h=w.querySelector('h3');if(h)h.textContent=q.bid?'Your searches':'Your searches (all brands)'}}
  if(keep&&$(keep)&&/INPUT|TEXTAREA/.test($(keep).tagName)){const el=$(keep);el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}}
 function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PRE.map(p=>'<button class="tb'+(q.preset===p[0]?' on':'')+'" onclick="FQ().preset=\''+p[0]+'\';fqDraw()">'+p[1]+'</button>').join('');
  return '<div class="cb"><label><span class="s"><b>Keywords to search for</b>: what people write when they need '+esc(b?b.name:'this brand')+'. One per line.</span><textarea id="fq_t" rows="6" style="width:100%" placeholder="spanish classes online&#10;learn spanish&#10;spanish school in madrid" oninput="FQ().topics=this.value">'+esc(q.topics)+'</textarea></label>'
@@ -2060,7 +2060,7 @@ function fqMain(){const q=FQ();let h=gwBrandBar();
  if(q.prof==null&&!q.perr)return h+'<div class="s">Loading...</div>';
  return h+(q.view==='info'?gwInfoHtml():q.view==='drafts'?gwDraftsHtml():q.view==='batch'?gwBatchHtml():q.view==='rules'?gwRulesHtml():fqFormHtml())}
 function findView(){const q=FQ();if(API().on===null)setTimeout(apiPing,60);if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);if(!q.bid&&q.counts==null&&!q.cbusy){q.cbusy=true;setTimeout(()=>rwCounts().finally(()=>{q.cbusy=false}),40)}
- return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(!q.bid||q.view==='find'?'':'none')+'"><h3>'+(q.bid?'Your searches':'Your searches (all brands)')+'</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
+ return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(q.bid&&q.view==='find'?'':'none')+'"><h3>'+(q.bid?'Your searches':'Your searches (all brands)')+'</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
 
 /* ---- fast search: runs in this browser first. If Reddit refuses it here, the background worker takes over. ---- */
 const FB_NOTE='Searching from your browser';
@@ -2120,8 +2120,12 @@ const apiOff=e=>{API().on=false;API().msg=String((e&&e.message)||e||'').slice(0,
 async function apiPing(){const a=API();if(a.on!==null||a.pinging)return;a.pinging=true;
  try{const d=await apiCall({op:'ping'});if(d.key_set){a.on=true;a.msg=''}else{a.on=false;a.msg='The Reddit API key is not saved in Supabase yet.'}}catch(e){apiOff(e)}
  a.pinging=false;if(ST.tab==='find')fqDraw()}
-const apiLine=()=>{const a=API();if(a.on===true)return '<b style="color:var(--ok,#0a7a4b)">Reddit API is on.</b> Searches use it first (fast, and no Reddit blocking). It costs a fraction of a cent per search.';
- if(a.on===false)return 'Reddit API is off'+(a.msg?' ('+esc(a.msg)+')':'')+'. The other ways still work. To turn it on, follow REDDIT_API_STEPS.txt.';return ''};
+async function apiTest(){const a=API();a.diag='Testing the Reddit API...';if(ST.tab==='find')fqDraw();
+ try{const d=await apiCall({op:'diag'});a.diag=d.text||'No details came back.';a.on=null;a.pinging=false;await apiPing()}catch(e){a.diag='The test failed: '+String((e&&e.message)||e).slice(0,200)}
+ if(ST.tab==='find')fqDraw()}
+const apiTestHtml=()=>' <a href="#" onclick="apiTest();return false">Test the Reddit API</a>'+(API().diag?'<span style="display:block;white-space:pre-wrap;margin-top:6px;font-family:ui-monospace,Consolas,monospace;font-size:12px">'+esc(API().diag)+'</span>':'');
+const apiLine=()=>{const a=API();if(a.on===true)return '<b style="color:var(--ok,#0a7a4b)">Reddit API is on.</b> Searches use it first (fast, and no Reddit blocking). It costs a fraction of a cent per search.'+apiTestHtml();
+ if(a.on===false)return 'Reddit API is off'+(a.msg?' ('+esc(a.msg)+')':'')+'. The other ways still work. To turn it on, follow REDDIT_API_STEPS.txt.'+apiTestHtml();return ''};
 // gather posts through the Reddit API: a few combined queries, relevance order, 2 pages each, hard cap on requests
 async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed=0,ok=0,lastErr='',shape='';
  const MAXREQ=o.maxReq||12,PG=o.want>40?3:2,subSet=new Set(o.subs.map(x=>x.toLowerCase()));
@@ -2234,7 +2238,7 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
     else{apiFail=ar.err||'no answer'}
    }catch(e){apiFail=String((e&&e.message)||e);if(e&&e.apiFatal)apiOff(e)}}
   if(!usedApi)await Promise.all([worker(),worker()]);
-  if(netFail||!ok)return hand((netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
+  if(netFail||!ok)return hand((apiFail?'The Reddit API could not do this search ('+String(apiFail).replace(/^The Reddit API said:\s*/i,'').slice(0,200)+'). ':'')+(netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
   for(const p of found.values()){if(p.created_utc&&(p.created_utc<fromTs||p.created_utc>toTs))continue;
    if(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine)continue;
