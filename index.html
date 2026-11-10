@@ -407,19 +407,21 @@ async function refresh(){await load();draw(true)}
 
 /* ---------- checking (admin page fallback, same schedule as the server) ---------- */
 async function rcheck(url,kind){
+ const apiR=await apiLiveOne(url,kind);if(apiR)return apiR;
  const r=await fetch(url+'.json?raw_json=1&limit=1');if(r.status===404)return{s:'removed'};if(!r.ok)throw new Error(r.status);
  const j=await r.json(),po=j[0].data.children[0].data,G=['[removed]','[deleted]'];
  if(kind==='comment'){const c=j[1].data.children[0];if(!c||c.kind!=='t1')return{s:'removed'};const d=c.data;return{s:G.includes(d.body)||d.author==='[deleted]'?'removed':'live',score:d.score,replies:d.replies&&d.replies.data?d.replies.data.children.filter(x=>x.kind==='t1').length:0,title:po.title}}
  return{s:po.removed_by_category||G.includes(po.selftext)||po.author==='[deleted]'?'removed':'live',score:po.score,replies:po.num_comments,title:po.title};
 }
-async function runCheck(p){
+async function runCheck(p,pre){
  const now=Date.now(),OFF=[1,30,60,480];let u;
- try{const r=await rcheck(p.url,p.kind),stage=(p.stage||0)+1,pub=+new Date(p.published_at);
+ try{const r=pre||await rcheck(p.url,p.kind),stage=(p.stage||0)+1,pub=+new Date(p.published_at);
   u={status:r.s,stage,hist:(p.hist||[]).concat([{t:now,s:r.s}]).slice(-400),score:r.score==null?p.score:r.score,replies:r.replies==null?p.replies:r.replies,title:r.title||p.title,last_check:new Date(now).toISOString(),next_check:r.s==='removed'?null:new Date(stage<4?pub+OFF[stage]*6e4:now+DAY).toISOString()}}
  catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error',m:'browser: '+String(e&&e.message||e).slice(0,60)}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
  await sb.from('pieces').update(u).eq('id',p.id);
 }
 async function chkP(id){const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t=>{$('who').textContent=t};
+ if(p0&&p0.url){w('Checking with the Reddit API...');const a=await apiLiveOne(p0.url,p0.kind);w(me.name);if(a){await runCheck(p0,a);await load();draw(true);alert(a.s==='removed'?'Checked: this item is deleted.':'Checked: this item is live.');return}}
  const{error}=await sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id);
  if(error){alert('Could not queue the check: '+error.message);return}
  for(let i=0;i<24;i++){w('Waiting for your Reddit checker... '+(i*4)+'s');await new Promise(r=>setTimeout(r,4000));await load();const p=pieceOf(id);
@@ -428,7 +430,7 @@ async function chkP(id){const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t
 async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
 let due=0;
 async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live']).lte('next_check',new Date().toISOString()).limit(20);
- for(const p of data||[]){await runCheck(p);await new Promise(r=>setTimeout(r,1200))}if(data&&data.length&&!ed()){await load();draw(true)}}catch(e){}due=0}
+ for(const p of data||[]){const cl=await sb.from('pieces').update({next_check:new Date(Date.now()+18e4).toISOString()}).eq('id',p.id).eq('next_check',p.next_check).select('id');if(!cl.data||!cl.data.length)continue;await runCheck(p);await new Promise(r=>setTimeout(r,600))}if(data&&data.length&&!ed()){await load();draw(true)}}catch(e){}due=0}
 
 /* ---------- excel ---------- */
 function items(bid,all){const o=[];ST.tasks.filter(t=>t.brand_id===bid).forEach(t=>{const ps=ST.pieces.filter(p=>p.task_id===t.id),post=ps.find(p=>p.kind==='post'&&p.url);
@@ -1838,10 +1840,10 @@ function rqMain(){const q=RQ(),brandSrc=q.src==='brand';
   +'<div class="cb"><div id="rq_rows">'+rqRowsHtml()+'</div><div class="row" style="margin-top:14px"><button class="p" onclick="rqGo()">Generate report</button><span class="s">It is made in the background (usually 5 to 15 minutes) and appears under Your reports.</span></div></div>'}
 function reportsView(){const q=RQ();if(q.jobs==null&&!q.jerr)setTimeout(rqJobs,30);else rqPoll();
  if(q.src==='brand'&&q.bid&&!q.rows.length)q.rows=rqBrandRows();
- return '<div class="row pagehead"><h1 style="margin:0;flex:1">Make reports</h1></div><p class="mu" style="margin-top:6px">Turn live Reddit posts and comments into a PDF report with a full screenshot of each post, a screenshot of your comment, your brand name highlighted, and links to both. Only admins see this page.</p><div id="rq_main">'+rqMain()+'</div><h3>Your reports</h3><div id="rq_jobs">'+rqJobsHtml()+'</div>'}
+ return '<div class="row pagehead"><h1 style="margin:0;flex:1">Make reports</h1></div><p class="mu" style="margin-top:6px">Turn live Reddit posts and comments into a PDF report with a screenshot of each post, a screenshot of your comment, your brand name highlighted, and links to both. If Reddit will not show a page, that item is typed up instead (the wording, upvotes and comment numbers copied as they are, marked "typed-up copy"). Only admins see this page.</p><div id="rq_main">'+rqMain()+'</div><h3>Your reports</h3><div id="rq_jobs">'+rqJobsHtml()+'</div>'}
 
 /* ---- Find posts (admin only): searches Reddit for live posts that fit a brand, ranked by keywords (no AI) ---- */
-const FQ=()=>ST.fq||(ST.fq={name:'',mode:'text',info:'',url:'',topics:'',exclude:'',subs:'',want:20,preset:'month',from:'',to:'',msg:'',err:'',jobs:null,jerr:'',timer:0,busy:false,open:{},sel:{},pdfs:{},pdferr:'',suggested:false,bid:(()=>{try{return localStorage.getItem('rw_bid')||''}catch(e){return ''}})(),flOpen:false,runner:'',view:'',prof:null,drafts:null,perr:'',derr:'',prefilled:'',df:null,dopen:{},fileText:'',fileName:''});
+const FQ=()=>ST.fq||(ST.fq={name:'',mode:'text',info:'',url:'',topics:'',exclude:'',subs:'',want:20,preset:'month',from:'',to:'',msg:'',err:'',jobs:null,jerr:'',timer:0,busy:false,open:{},sel:{},suggested:false,bid:(()=>{try{return localStorage.getItem('rw_bid')||''}catch(e){return ''}})(),flOpen:false,runner:'',view:'',prof:null,drafts:null,perr:'',derr:'',prefilled:'',df:null,dopen:{},fileText:'',fileName:''});
 const FQ_STOP=new Set('a an the and or but if of to in on at by for with from as is are was were be been being it its this that these those we you your our their they he she i me my us them his her not no yes can will would should could may might do does did done have has had having so than then too very just also more most such other any all each both about into over after before between through during without within up down out off again further once here there when where why how what which who whom whose get got make made use used using need needs help helps provide provides offer offers including include based like well one two three new best top great good high per via etc www http https com org net offering offered run runs running small book books today moving working helping helps live lives take takes give gives want wants look looks find finds start starts come comes make makes keep keeps change changes call free every many much even still back own same different really always often next last first long full real open set sets see sees know knows team company business services service people year years day days time contact home page click learn read more menu login sign privacy terms cookies policy copyright rights reserved'.split(' '));
 function fqSuggest(text,brand,boost){
  const bw=new Set(String(brand||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)),cnt={};
@@ -1901,10 +1903,8 @@ async function fqGo(){if(needV16())return;const q=FQ(),b=gwBrand(),topics=fqList
 const fqErr=m=>{FQ().err=m;fqDraw()};
 async function fqJobs(){const q=FQ();const{data,error}=await sb.from('find_jobs').select('*').order('created_at',{ascending:false}).limit(30);
  if(error){q.jerr=/find_jobs|schema cache|relation/i.test(error.message||'')?'v16':(error.message||'error')}else{q.jerr='';q.jobs=data||[]}
- if(!error&&(data||[]).length){const r=await sb.from('report_jobs').select('id,find_id,created_at,status,total,progress,included,skipped,note,file_path,retry_local,title').eq('source','posts').in('find_id',data.map(j=>j.id)).order('created_at',{ascending:false});
-  if(r.error){q.pdferr=/find_id|source|schema cache|check/i.test(r.error.message||'')?'v17':(r.error.message||'error');q.pdfs={}}else{q.pdferr='';q.pdfs={};(r.data||[]).forEach(x=>{(q.pdfs[x.find_id]=q.pdfs[x.find_id]||[]).push(x)})}}
  const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml();fqPoll();fqResume()}
-function fqPoll(){const q=FQ();clearTimeout(q.timer);if(ST.tab!=='find')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running')||Object.values(q.pdfs||{}).some(a=>a.some(x=>x.status==='pending'||x.status==='running')))q.timer=setTimeout(fqJobs,8000)}
+function fqPoll(){const q=FQ();clearTimeout(q.timer);if(ST.tab!=='find')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running'))q.timer=setTimeout(fqJobs,8000)}
 function fqReuse(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;const k=j.keywords||{};q.topics=(k.topics||[]).join('\n');q.exclude=(k.exclude||[]).join(', ');q.subs=(k.subs||[]).join(', ');q.want=j.want;
  const pr=FQ_PRE.find(p=>p[1]===j.range_label&&p[0]!=='custom');if(pr&&pr[0]!=='custom'){q.preset=pr[0]}else{q.preset='custom';q.from=j.date_from;q.to=j.date_to}
  q.msg='Keywords and dates from that search are filled in below. Change what you like, then press Find posts.';q.view='find';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
@@ -1915,20 +1915,6 @@ const fqToggle=id=>{const q=FQ();q.open[id]=!q.open[id];const e=$('fq_jobs');if(
 const fqSelOf=j=>{const q=FQ();if(!q.sel[j.id]){const m={};(j.results||[]).forEach((r,i)=>{m[i]=i<25});q.sel[j.id]=m}return q.sel[j.id]};
 function fqTick(id,i,on){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;fqSelOf(j)[i]=on;const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
 function fqTickAll(id,on){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;const m=fqSelOf(j);(j.results||[]).forEach((r,i)=>{m[i]=on});const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
-async function fqPdf(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;if(q.pdferr==='v17')return alert('Run supabase_update_17.sql in Supabase first (SQL Editor), then reload this page.');
- const m=fqSelOf(j),use=(j.results||[]).filter((r,i)=>m[i]);if(!use.length)return alert('Tick at least one post first.');
- if(use.length>40&&!confirm('That is '+use.length+' posts. Screenshots take roughly 20 seconds each, so it may take a long while. Continue?'))return;
- const row={created_by:me&&me.id||null,title:(j.brand_name+' posts to engage').trim(),brand_name:j.brand_name,keyword:((j.keywords&&j.keywords.topics)||[]).join(', '),source:'posts',find_id:j.id,range_label:j.range_label||'',layout:'modern',total:use.length,
-  pairs:use.map(r=>({post:r.url,sub:r.sub,title:r.title,relevance:r.relevance,created:r.created,comments:r.comments,why:r.why||[]}))};
- const rl=gwRulesMap(use.map(r=>r.sub));if(Object.keys(rl).length)row.rules=rl;
- let ins=await sb.from('report_jobs').insert(row),noRules=false;if(ins.error&&row.rules&&/\brules\b/i.test(ins.error.message||'')){delete row.rules;noRules=true;ins=await sb.from('report_jobs').insert(row)}
- const error=ins.error;if(error&&/find_id|source|check|schema cache/i.test(error.message||''))return alert('Run supabase_update_17.sql in Supabase first (SQL Editor), then reload this page.');if(!noErr(error))return;
- q.open[id]=true;q.msg='PDF requested. It starts within about 5 minutes and appears under this search when it is ready.'+(noRules?' The community rules page was left out because supabase_update_20.sql has not been run yet.':'');await fqJobs();fqDraw()}
-async function fqPdfDl(id){const x=Object.values(FQ().pdfs).flat().find(y=>y.id===id);if(!x||!x.file_path)return;const nm=(x.title||'posts').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_'+ymd(x.created_at)+'.pdf';
- const{data,error}=await sb.storage.from('reports').createSignedUrl(x.file_path,300,{download:nm});if(error||!data)return alert('Could not open the file: '+((error&&error.message)||'try again'));const a=document.createElement('a');a.href=data.signedUrl;a.download=nm;document.body.appendChild(a);a.click();a.remove()}
-async function fqPdfRetry(id){const{error}=await sb.from('report_jobs').update({status:'pending',progress:0,included:0,skipped:[],note:null,started_at:null,finished_at:null,retry_local:false}).eq('id',id);if(!noErr(error))return;FQ().msg='Started again. It begins within about 5 minutes.';await fqJobs();fqDraw()}
-async function fqPdfLocal(id){const{error}=await sb.from('report_jobs').update({retry_local:true}).eq('id',id);if(error&&/retry_local/.test(error.message||''))return alert('Run supabase_update_15.sql in Supabase first, then reload this page.');if(!noErr(error))return;FQ().msg='Passed to your computer. It starts within a minute if the Keep_running window is open on your computer.';await fqJobs();fqDraw()}
-async function fqPdfDel(id){const x=Object.values(FQ().pdfs).flat().find(y=>y.id===id);if(!x||!confirm('Delete this PDF?'))return;if(x.file_path)await sb.storage.from('reports').remove([x.file_path]);const{error}=await sb.from('report_jobs').delete().eq('id',id);if(!noErr(error))return;await fqJobs()}
 function fqRuleSubs(subs){const seen=new Set(),out=[];(subs||[]).forEach(s=>{const k=gwSubKey(s);if(k&&!seen.has(k)){seen.add(k);out.push(String(s).replace(/^\/?r\//i,''))}});return out}
 function fqRulesAppendix(subs){const list=fqRuleSubs(subs);if(!list.length)return [];
  const L=['','','APPENDIX: COMMUNITY RULES','Check these again before posting. Moderators change the rules.',''];
@@ -1950,21 +1936,114 @@ function fqJobsHtml(){const q=FQ();if(q.jerr==='v16')return '<div class="warn"><
  const bnm=((gwBrand()||{}).name||'').toLowerCase(),JL=q.jobs.filter(j=>!q.bid||j.brand_id===q.bid||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===bnm));
  if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((rwAll().find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
  return JL.map(j=>{const R=Array.isArray(j.results)?j.results:[],kw=(j.keywords&&j.keywords.topics||[]),open=!!q.open[j.id];
-  return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.brand_name)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.range_label||'')+' ('+D_(j.date_from)+' to '+D_(j.date_to)+') &middot; asked for '+j.want+' &middot; '+esc(clip(kw.join(', '),90))+'</div></div>'+st(j)+'</div><div class="row" style="margin:10px 0 0">'+(j.status==='done'&&R.length?'<button class="p sm" onclick="fqToggle(\''+j.id+'\')">'+(open?'Hide results':'View results')+'</button><button class="sm" onclick="fqLinks(\''+j.id+'\')">Download links</button><button class="sm" onclick="fqCsv(\''+j.id+'\')">Download CSV</button><button class="sm" onclick="fqPdf(\''+j.id+'\')" title="A numbered PDF with a screenshot of every ticked post">PDF with screenshots</button><button class="sm" onclick="fqCopy(\''+j.id+'\')">Copy links</button>':'')
-  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='pending'&&!j.retry_local&&(fbBridgeOn()||!/not allowed to read Reddit|blocked by the browser/.test(j.note||''))?'<button class="p sm" onclick="fqStartHere(\''+j.id+'\')" title="Search from this browser right now">Start now in this browser</button>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed'||j.status==='pending')&&!j.retry_local?'<button class="'+(j.status==='pending'?'p ':'')+'sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">'+(j.status==='pending'?'Do it on my computer':'Redo on my computer')+'</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
+  return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.brand_name)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.range_label||'')+' ('+D_(j.date_from)+' to '+D_(j.date_to)+') &middot; asked for '+j.want+' &middot; '+esc(clip(kw.join(', '),90))+'</div></div>'+st(j)+'</div><div class="row" style="margin:10px 0 0">'+(j.status==='done'&&R.length?'<button class="p sm" onclick="fqToggle(\''+j.id+'\')">'+(open?'Hide results':'View results')+'</button><button class="sm" onclick="fqLinks(\''+j.id+'\')">Download links</button><button class="sm" onclick="fqCsv(\''+j.id+'\')">Download CSV</button><button class="sm" onclick="fqPostPdf(\''+j.id+'\')" title="A numbered PDF with every ticked post typed up: wording, upvotes, comments">Post pages (PDF)</button><button class="sm" onclick="fqCopy(\''+j.id+'\')">Copy links</button><button class="sm" onclick="fqLive(\''+j.id+'\')"'+(q.liveBusy?' disabled':'')+' title="Checks that the ticked posts are still live (not deleted or removed)">'+(q.liveBusy===j.id?'Checking...':'Check still live')+'</button><button class="sm" onclick="fqPack(\''+j.id+'\')" title="Every ticked post in full, with its top comments if you read them">Full text file</button>'+(API().on!==false?'<button class="p sm" onclick="fqDeep(\''+j.id+'\')"'+(q.deepBusy?' disabled':'')+' title="Reads the whole post and its first 5 comments for every ticked post (about 0.06 cents each)">'+(q.deepBusy===j.id?'Reading '+q.deepN+' of '+q.deepT+'...':'Read ticked posts in full')+'</button>':''):'')
+  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV, the full text file and the post pages all end with the written rules of each community (an appendix). The post pages and the full text file use the posts ticked under View results.</div>':'')+(j.status==='pending'&&!j.retry_local&&(fbBridgeOn()||!/not allowed to read Reddit|blocked by the browser/.test(j.note||''))?'<button class="p sm" onclick="fqStartHere(\''+j.id+'\')" title="Search from this browser right now">Start now in this browser</button>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed'||j.status==='pending')&&!j.retry_local?'<button class="'+(j.status==='pending'?'p ':'')+'sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">'+(j.status==='pending'?'Do it on my computer':'Redo on my computer')+'</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
   +(j.status==='running'&&kw.length?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/kw.length*100)+'%"></i></div>':'')
   +(j.note?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')+(j.status==='pending'&&!j.note?'<div class="s" style="margin-top:6px">Waiting for the background worker, which looks about every 5 minutes. '+(Date.now()-Date.parse(j.created_at)>12*60000?'It is taking too long. Press <b>Start now in this browser</b>, or check that the worker is on (GitHub > Actions > the reports workflow).':'Or press <b>Start now in this browser</b> to begin at once.')+'</div>':'')
-  +(R.length&&(j.status==='done')?fqPdfHtml(j,R,open):'')+(open&&R.length?'<div class="scrollx" style="margin-top:10px"><table class="et"><tr><th></th><th>#</th><th>Fit</th><th>Post</th><th>Community</th><th>Posted</th></tr>'+R.map((r,i)=>'<tr><td><input type="checkbox" '+(fqSelOf(j)[i]?'checked':'')+' onchange="fqTick(\''+j.id+'\','+i+',this.checked)" aria-label="Include in the PDF"></td><td>'+(i+1)+'</td><td>'+lab(r.relevance)+'</td><td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(clip(r.title,110))+'</b></a>'+(r.snippet?'<div class="s">'+esc(clip(r.snippet,160))+'</div>':'')+'<div class="s rdw">'+esc((r.why||[]).join(' · '))+(r.brand_mentioned?' · already mentions the brand':'')+'</div></td><td>r/'+esc(r.sub)+'</td><td>'+D_(String(r.created||'').slice(0,10))+'</td></tr>').join('')+'</table></div>':'')+'</div>'}).join('')}
-function fqPdfHtml(j,R,open){const q=FQ(),P=q.pdfs[j.id]||[],m=fqSelOf(j),n=R.filter((r,i)=>m[i]).length;
- const st=x=>x.retry_local?'<span class="chip warn">'+(x.status==='done'?'Partly ready. Your computer will finish it':'Waiting for your computer')+'</span>':x.status==='done'?'<span class="chip ok">PDF ready</span>':x.status==='failed'?'<span class="chip bad">Failed</span>':x.status==='running'?'<span class="chip warn">Working: '+(x.progress||0)+' of '+(x.total||0)+'</span>':'<span class="chip mut">Waiting to start</span>';
- let h='<div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>PDF with a screenshot of each post</b><span class="s">'+n+' post'+(n==1?'':'s')+' ticked'+(open?'':' (open the results to change this)')+'</span><span style="flex:1"></span>'+(open?'<button class="sm" onclick="fqTickAll(\''+j.id+'\',1)">Tick all</button><button class="sm" onclick="fqTickAll(\''+j.id+'\',0)">Clear</button>':'')+'<button class="p sm" onclick="fqPdf(\''+j.id+'\')">Make PDF of ticked posts</button></div><div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>Work on the ticked posts</b><span class="s">'+n+' ticked'+(open?'':' (open the results to change this)')+'</span><span style="flex:1"></span><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'comment\')">Write comments on them</button><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'post\')">Write new posts inspired by them</button></div>';
- if(q.pdferr&&q.pdferr!=='v17')h+='<div class="s" style="margin-top:6px">Could not load PDFs: '+esc(q.pdferr)+'</div>';
- h+=P.map(x=>{const sk=Array.isArray(x.skipped)?x.skipped:[];return '<div class="row" style="margin:8px 0 0;align-items:center;gap:8px;border-top:1px solid var(--hair);padding-top:8px"><div style="flex:1;min-width:0"><div class="s">PDF made '+D_(ymd(x.created_at))+' &middot; '+(x.status==='done'?(x.included||0)+' of '+x.total+' posts included':x.total+' posts requested')+'</div></div>'+st(x)
-  +(x.status==='done'&&x.file_path?'<button class="p sm" onclick="fqPdfDl(\''+x.id+'\')">Download PDF</button>':'')+(x.status==='failed'?'<button class="p sm" onclick="fqPdfRetry(\''+x.id+'\')">Try again</button>':x.status==='done'?'<button class="sm" onclick="fqPdfRetry(\''+x.id+'\')">Make again</button>':'')
-  +((x.status==='done'||x.status==='failed')&&!x.retry_local?'<button class="sm" onclick="fqPdfLocal(\''+x.id+'\')">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqPdfDel(\''+x.id+'\')">Delete</button></div>'
-  +(x.note&&(x.status!=='done'||x.retry_local)?'<div class="s" style="margin-top:4px">'+esc(x.note)+'</div>':'')
-  +(sk.length?'<details style="margin-top:4px"><summary>Not included ('+sk.length+')</summary><table class="et"><tr><th>Link</th><th>Why</th></tr>'+sk.map(s=>'<tr><td><a href="'+esc(s.post||'#')+'" target="_blank" rel="noopener">'+esc(clip(s.post||'',70))+'</a></td><td>'+esc(s.reason||'')+'</td></tr>').join('')+'</table></details>':'')}).join('');
- return h}
+  +(R.length&&(j.status==='done')?fqPdfHtml(j,R,open):'')+(open&&R.length?'<div class="scrollx" style="margin-top:10px"><table class="et"><tr><th></th><th>#</th><th>Fit</th><th>Post</th><th>Community</th><th>Posted</th></tr>'+R.map((r,i)=>'<tr><td><input type="checkbox" '+(fqSelOf(j)[i]?'checked':'')+' onchange="fqTick(\''+j.id+'\','+i+',this.checked)" aria-label="Include in the post pages"></td><td>'+(i+1)+'</td><td>'+lab(r.relevance)+'</td><td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(clip(r.title,110))+'</b></a>'+(r.live==='removed'?' <span class="chip bad">Deleted</span>':r.live==='live'?' <span class="chip ok" title="Checked '+esc(String(r.checked||'').slice(0,16).replace('T',' '))+'">Live</span>':'')+(r.snippet?'<div class="s">'+esc(clip(r.snippet,160))+'</div>':'')+(r.read?'<details class="s"><summary>Read in full'+(r.top&&r.top.length?' - top '+r.top.length+' comment'+(r.top.length===1?'':'s'):' - no comments yet')+'</summary>'+(r.body&&r.body.length>160?'<div style="white-space:pre-wrap;margin:6px 0">'+esc(clip(r.body,1200))+'</div>':'')+(r.top||[]).map((c,k)=>'<div style="margin:4px 0"><b>'+(k+1)+'.</b> '+(c.a?'u/'+esc(c.a)+': ':'')+esc(clip(c.t,400))+'</div>').join('')+'</details>':'')+'<div class="s rdw">'+esc((r.why||[]).join(' · '))+(r.brand_mentioned?' · already mentions the brand':'')+'</div></td><td>r/'+esc(r.sub)+'</td><td>'+D_(String(r.created||'').slice(0,10))+'</td></tr>').join('')+'</table></div>':'')+'</div>'}).join('')}
+/* ---- Post pages: every ticked post typed up as a page (the wording, upvotes, comment count and first 5 comments). Made in this browser in seconds. No Reddit, no screenshots. ---- */
+const PP_W=1240,PP_H=1754,PP_M=90,PP_FONT='"Segoe UI",system-ui,-apple-system,"Helvetica Neue",Arial,"Noto Sans","Liberation Sans",sans-serif';
+function ppBuild(job,list,opts){opts=opts||{};
+ const brand=String(job.brand_name||'Reddit').trim(),CW=PP_W-2*PP_M,LIMIT=PP_H-140,pages=[];let cv,cx,y;
+ const fmtD=d=>{try{return new Date(d).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'})}catch(e){return ''}};
+ const rr=(x,yy,w,h,r)=>{cx.beginPath();cx.moveTo(x+r,yy);cx.arcTo(x+w,yy,x+w,yy+h,r);cx.arcTo(x+w,yy+h,x,yy+h,r);cx.arcTo(x,yy+h,x,yy,r);cx.arcTo(x,yy,x+w,yy,r);cx.closePath()};
+ const np=()=>{cv=document.createElement('canvas');cv.width=PP_W;cv.height=PP_H;cx=cv.getContext('2d');cx.fillStyle='#ffffff';cx.fillRect(0,0,PP_W,PP_H);cx.fillStyle='#c26a1b';cx.fillRect(0,0,PP_W,14);
+  const pg={cv,cx,links:[]};pages.push(pg);y=PP_M+10;
+  if(pages.length>1){cx.font='600 20px '+PP_FONT;cx.fillStyle='#6b7068';cx.textBaseline='alphabetic';cx.textAlign='left';cx.fillText(brand.toUpperCase().slice(0,60),PP_M,70);cx.textAlign='right';cx.fillText('REDDIT POSTS TO ENGAGE (TYPED-UP COPIES)',PP_W-PP_M,70);cx.textAlign='left';cx.fillStyle='#e6e2d9';cx.fillRect(PP_M,84,CW,2);y=130}};
+ const font=(o)=>(o.weight||400)+' '+o.size+'px '+PP_FONT;
+ const wrap=(t,f,maxW)=>{cx.font=f;const out=[];String(t==null?'':t).replace(/\r/g,'').split('\n').forEach(par=>{if(!par.trim()){out.push('');return}
+   let line='';par.split(/ +/).forEach(w=>{if(!w)return;let cand=line?line+' '+w:w;if(cx.measureText(cand).width<=maxW){line=cand;return}
+    if(line){out.push(line);line=''}
+    while(cx.measureText(w).width>maxW){let k=w.length;while(k>1&&cx.measureText(w.slice(0,k)).width>maxW)k--;out.push(w.slice(0,k));w=w.slice(k)}
+    line=w});if(line)out.push(line)});return out};
+ // lines: [{t,f,c,lh,link}] ; drawn as one or more chunks if it runs over the page
+ const panel=(lines,o)=>{const pad=o.pad==null?22:o.pad,x=o.x==null?PP_M:o.x,w=o.w||CW;let i=0;
+  while(i<lines.length){let room=LIMIT-y-2*pad,h=0,n=0;while(i+n<lines.length&&h+lines[i+n].lh<=room){h+=lines[i+n].lh;n++}
+   if(n===0){np();continue}
+   const hh=h+2*pad;if(o.bg){cx.fillStyle=o.bg;rr(x,y,w,hh,16);cx.fill()}if(o.border){cx.strokeStyle=o.border;cx.lineWidth=2;rr(x,y,w,hh,16);cx.stroke()}if(o.bar){cx.fillStyle=o.bar;cx.fillRect(x,y+10,8,hh-20)}
+   let yy=y+pad;cx.textBaseline='alphabetic';cx.textAlign='left';
+   for(let k=0;k<n;k++){const L=lines[i+k];cx.font=L.f;cx.fillStyle=L.c;const sz=parseInt(/(\d+)px/.exec(L.f)[1],10);cx.fillText(L.t,x+pad+(o.bar?10:0),yy+Math.round(L.lh*0.5+sz*0.35));
+    if(L.link){const tw=cx.measureText(L.t).width;pages[pages.length-1].links.push({x:x+pad+(o.bar?10:0),y:yy,w:tw,h:L.lh,url:L.link});cx.fillRect(x+pad+(o.bar?10:0),yy+Math.round(L.lh*0.5+sz*0.35)+3,tw,2)}
+    yy+=L.lh}
+   i+=n;y+=hh;if(i<lines.length)np()}
+  y+=o.gap==null?18:o.gap};
+ const txt=(t,o)=>{const f=font(o),lh=o.lh||Math.round(o.size*1.45);return wrap(t,f,(o.w||CW)-2*(o.pad==null?22:o.pad)-(o.bar?10:0)).map(s=>({t:s,f,c:o.color||'#1e2a25',lh,link:o.link}))};
+ const need=h=>{if(y+h>LIMIT)np()};
+ np();
+ // ---- cover ----
+ const total=list.length,subsSeen=new Set(list.map(r=>String(r.sub||'').toLowerCase()).filter(Boolean)),high=list.filter(r=>r.relevance>=60).length,coms=list.reduce((a,r)=>a+(+r.comments||0),0),read=list.filter(r=>r.read).length;
+ y=60;cx.fillStyle='#1e2a25';rr(PP_M,y,CW,470,28);cx.fill();cx.fillStyle='#c26a1b';cx.fillRect(PP_M,y+28,14,414);
+ cx.textAlign='left';cx.font='700 24px '+PP_FONT;cx.fillStyle='#e08a3c';cx.fillText('REDDIT POSTS TO ENGAGE',PP_M+60,y+84);
+ let fs=84;cx.font='700 '+fs+'px '+PP_FONT;while(cx.measureText(brand).width>CW-120&&fs>34){fs-=4;cx.font='700 '+fs+'px '+PP_FONT}cx.fillStyle='#ffffff';cx.fillText(brand,PP_M+60,y+84+fs+14);
+ cx.font='400 28px '+PP_FONT;cx.fillStyle='#b0bbb5';const sub1=wrap('Live Reddit posts where people are asking for what '+brand+' offers'+(job.range_label?' ('+job.range_label+')':'')+(job.date_from?', '+fmtD(job.date_from+'T00:00:00')+' to '+fmtD(job.date_to+'T00:00:00'):'')+'.','400 28px '+PP_FONT,CW-120);sub1.slice(0,2).forEach((s,i)=>cx.fillText(s,PP_M+60,y+84+fs+66+i*38));
+ const st=[[total,'LIVE POSTS'],[subsSeen.size,'COMMUNITIES'],[high,'HIGH FIT'],[coms,'COMMENTS SO FAR']];st.forEach((s,i)=>{const sx=PP_M+60+i*(CW-100)/4;cx.fillStyle='#3a4a43';if(i)cx.fillRect(sx-24,y+318,2,100);cx.fillStyle='#ffffff';cx.font='700 56px '+PP_FONT;cx.fillText(String(s[0]),sx,y+372);cx.fillStyle='#e4e5e3';cx.font='700 19px '+PP_FONT;cx.fillText(s[1],sx,y+410)});
+ y=y+470+44;
+ panel(txt('What this is',{size:26,weight:700,color:'#c26a1b'}).concat(txt('Each page below is a typed-up copy of one Reddit post: the wording, the number of upvotes and comments, and the first comments when they were read. It is made from Reddit data on '+fmtD(new Date())+' and is not a screenshot. The link under each post opens the live post.',{size:24,color:'#3f4a44'})),{bg:'#faf8f4',bar:'#c26a1b',pad:26,gap:30});
+ const idx=[{t:'POSTS IN THIS DOCUMENT',f:'700 22px '+PP_FONT,c:'#6b7068',lh:46}];
+ list.forEach((r,i)=>{const f='400 24px '+PP_FONT;cx.font=f;let t=(i+1)+'.  '+String(r.title||'').replace(/\s+/g,' ');const tag='   r/'+r.sub;if(cx.measureText(t+tag).width>CW-60){while(t.length>10&&cx.measureText(t+'...'+tag).width>CW-60)t=t.slice(0,-1);t+='...'}idx.push({t:t+tag,f,c:'#1e2a25',lh:36})});
+ panel(idx,{pad:6,gap:0,x:PP_M,w:CW});
+ // ---- one section per post ----
+ list.forEach((r,i)=>{np();
+  cx.fillStyle='#c26a1b';rr(PP_M,y,76,76,16);cx.fill();cx.fillStyle='#fff';cx.font='700 34px '+PP_FONT;cx.textAlign='center';cx.fillText(String(i+1).padStart(2,'0'),PP_M+38,y+50);cx.textAlign='left';
+  cx.fillStyle='#1e2a25';cx.font='700 40px '+PP_FONT;cx.fillText('POST '+(i+1),PP_M+98,y+38);cx.font='400 24px '+PP_FONT;cx.fillStyle='#6b7068';cx.fillText('r/'+r.sub+(r.created?'  ·  posted '+fmtD(r.created):''),PP_M+98,y+70);
+  if(r.relevance){const lab=r.relevance>=60?'High':r.relevance>=40?'Medium':'Low',tx='Fit: '+lab+' '+r.relevance;cx.font='700 22px '+PP_FONT;const pw=cx.measureText(tx).width+50;cx.fillStyle='#fbebda';rr(PP_W-PP_M-pw,y+14,pw,48,24);cx.fill();cx.fillStyle='#c26a1b';cx.beginPath();cx.arc(PP_W-PP_M-pw+22,y+38,6,0,7);cx.fill();cx.fillStyle='#1e2a25';cx.fillText(tx,PP_W-PP_M-pw+38,y+46)}
+  y+=110;
+  const L=[];
+  L.push(...txt('r/'+r.sub+(r.author?'   ·   Posted by u/'+r.author:'')+(r.created?'   ·   '+fmtD(r.created):''),{size:22,color:'#6b7068',lh:34}));
+  L.push({t:'',f:'400 10px '+PP_FONT,c:'#000',lh:8});
+  L.push(...txt(r.title||'(no title)',{size:36,weight:700,color:'#14201a',lh:48}));
+  L.push({t:'',f:'400 10px '+PP_FONT,c:'#000',lh:10});
+  const body=String(r.body||r.snippet||'').trim();
+  if(body)L.push(...txt(body,{size:27,color:'#1e2a25',lh:40}));else L.push(...txt('(This post has no text. It may be a link or an image post.)',{size:24,color:'#6b7068',lh:36}));
+  L.push({t:'',f:'400 10px '+PP_FONT,c:'#000',lh:12});
+  L.push({t:'▲ '+(+r.upvotes||0).toLocaleString('en-US')+' upvotes        '+(+r.comments||0).toLocaleString('en-US')+' comment'+((r.comments||0)==1?'':'s'),f:'700 26px '+PP_FONT,c:'#c26a1b',lh:40});
+  panel(L,{bg:'#faf8f4',border:'#e6e2d9',pad:28,gap:14});
+  need(120);panel(txt('Link: '+r.url,{size:22,color:'#1a56d6',lh:32,pad:6}).map((l,k,a)=>Object.assign(l,{link:r.url})),{pad:6,gap:10});
+  if(r.why&&r.why.length)panel(txt('Why it fits: '+r.why.join(' · '),{size:22,color:'#6b7068',lh:32,pad:6}),{pad:6,gap:14});
+  if(r.read){const tc=r.top||[];panel([{t:tc.length?'TOP COMMENTS (first '+tc.length+')':'TOP COMMENTS',f:'700 22px '+PP_FONT,c:'#6b7068',lh:40}],{pad:4,gap:8});
+   if(!tc.length)panel(txt('No comments yet when this post was read.',{size:24,color:'#6b7068',lh:36}),{pad:8,gap:10});
+   tc.forEach((c,k)=>{const CL=[];CL.push(...txt((k+1)+'.  '+(c.a?'u/'+c.a:'a commenter')+'   ·   '+(c.s||0)+' point'+((c.s||0)==1?'':'s'),{size:21,weight:700,color:'#3f4a44',lh:32,pad:20,bar:true}));CL.push(...txt(c.t,{size:25,color:'#1e2a25',lh:37,pad:20,bar:true}));panel(CL,{bg:'#f3f1ec',bar:'#2f5d4a',pad:20,gap:12})})}
+  else if((r.comments||0)>0)panel(txt('The '+r.comments+' comment'+(r.comments==1?'':'s')+' on this post were not read. Use "Read ticked posts in full" before making these pages to include the first 5.',{size:21,color:'#8a8f86',lh:30,pad:6}),{pad:6,gap:8});
+ });
+ // ---- rules appendix ----
+ const subs=fqRuleSubs(list.map(r=>r.sub));
+ if(subs.length&&opts.rules!==false){np();panel([{t:'Appendix: community rules',f:'700 44px '+PP_FONT,c:'#14201a',lh:60}],{pad:0,gap:6});
+  panel(txt('Check these again before posting. Moderators change the rules.',{size:22,color:'#6b7068',lh:32,pad:0}),{pad:0,gap:20});
+  subs.forEach(s=>{const a=gwRulesAuto(s),m=gwRulesMine(s),L=[{t:'r/'+s,f:'700 30px '+PP_FONT,c:'#c26a1b',lh:46}];
+   if(a.length)a.forEach((x,k)=>L.push(...txt((k+1)+'.  '+x.n+(x.d?' - '+x.d:''),{size:22,color:'#1e2a25',lh:32,pad:0})));else L.push(...txt('The written rules were not collected. Read them at https://www.reddit.com/r/'+s+'/about/rules before posting.',{size:22,color:'#6b7068',lh:32,pad:0}));
+   if(String(m).trim())L.push(...txt('Our notes: '+String(m).trim(),{size:22,weight:700,color:'#3f4a44',lh:32,pad:0}));
+   panel(L,{pad:0,gap:22})})}
+ // ---- footers ----
+ pages.forEach((p,k)=>{const c=p.cx;c.font='400 19px '+PP_FONT;c.fillStyle='#6b7068';c.textBaseline='alphabetic';c.textAlign='left';c.fillStyle='#e6e2d9';c.fillRect(PP_M,PP_H-92,CW,2);c.fillStyle='#6b7068';c.fillText(brand.slice(0,50)+'  •  Typed-up copies of Reddit posts, read '+fmtD(new Date()),PP_M,PP_H-56);c.textAlign='right';c.fillText('Page '+(k+1)+' of '+pages.length,PP_W-PP_M,PP_H-56);c.textAlign='left'});
+ return pages}
+// a PDF made by hand: one JPEG per page, plus clickable links
+function ppPdf(pages){const enc=new TextEncoder(),parts=[],offs=[];let len=0;
+ const put=d=>{const b=typeof d==='string'?enc.encode(d):d;parts.push(b);len+=b.length};
+ const obj=(n,fn)=>{offs[n]=len;put(n+' 0 obj\n');fn();put('\nendobj\n')};
+ const N=pages.length,sc=72/150,Wp=(PP_W*sc).toFixed(2),Hp=(PP_H*sc).toFixed(2);
+ const jp=pages.map(p=>{const u=p.cv.toDataURL('image/jpeg',0.9),bin=atob(u.slice(u.indexOf(',')+1)),a=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)a[i]=bin.charCodeAt(i);return a});
+ put('%PDF-1.4\n%\xE2\xE3\xCF\xD3\n');
+ // object numbers: 1 catalog, 2 pages, then per page: page, content, image, annots(k each)
+ let next=3;const P=pages.map((p,i)=>{const o={page:next++,cont:next++,img:next++,ann:p.links.map(()=>next++)};return o});
+ obj(1,()=>put('<< /Type /Catalog /Pages 2 0 R >>'));
+ obj(2,()=>put('<< /Type /Pages /Kids ['+P.map(o=>o.page+' 0 R').join(' ')+'] /Count '+N+' >>'));
+ pages.forEach((p,i)=>{const o=P[i];
+  obj(o.page,()=>put('<< /Type /Page /Parent 2 0 R /MediaBox [0 0 '+Wp+' '+Hp+'] /Resources << /XObject << /Im0 '+o.img+' 0 R >> >> /Contents '+o.cont+' 0 R'+(o.ann.length?' /Annots ['+o.ann.map(a=>a+' 0 R').join(' ')+']':'')+' >>'));
+  const cs='q '+Wp+' 0 0 '+Hp+' 0 0 cm /Im0 Do Q';obj(o.cont,()=>put('<< /Length '+cs.length+' >>\nstream\n'+cs+'\nendstream'));
+  obj(o.img,()=>{put('<< /Type /XObject /Subtype /Image /Width '+PP_W+' /Height '+PP_H+' /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length '+jp[i].length+' >>\nstream\n');put(jp[i]);put('\nendstream')});
+  p.links.forEach((l,k)=>obj(o.ann[k],()=>{const x1=(l.x*sc).toFixed(2),x2=((l.x+l.w)*sc).toFixed(2),y1=((PP_H-l.y-l.h)*sc).toFixed(2),y2=((PP_H-l.y)*sc).toFixed(2);put('<< /Type /Annot /Subtype /Link /Rect ['+x1+' '+y1+' '+x2+' '+y2+'] /Border [0 0 0] /A << /S /URI /URI ('+String(l.url).replace(/[()\\]/g,'').replace(/[^\x20-\x7E]/g,'')+') >> >>')}))});
+ const xr=len;put('xref\n0 '+next+'\n0000000000 65535 f \n');for(let n=1;n<next;n++)put(String(offs[n]).padStart(10,'0')+' 00000 n \n');
+ put('trailer\n<< /Size '+next+' /Root 1 0 R >>\nstartxref\n'+xr+'\n%%EOF');
+ const out=new Uint8Array(len);let p=0;parts.forEach(b=>{out.set(b,p);p+=b.length});return out}
+async function fqPostPdf(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;const m=fqSelOf(j),use=(j.results||[]).filter((r,i)=>m[i]);
+ if(!use.length){q.err='Tick at least one post first (open View results).';q.msg='';return fqDraw()}
+ q.err='';q.msg='Making the post pages...';q.ppBusy=id;fqDraw();await new Promise(r=>setTimeout(r,30));
+ try{const pages=ppBuild(j,use),bytes=ppPdf(pages),b=new Blob([bytes],{type:'application/pdf'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(j.brand_name||'posts').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_post_pages_'+ymd(j.created_at)+'.pdf';document.body.appendChild(a);a.click();a.remove();
+  q.msg='Post pages ready: '+use.length+' post'+(use.length===1?'':'s')+', '+pages.length+' page'+(pages.length===1?'':'s')+'.'+(use.some(r=>!r.read&&(r.comments||0)>0)?' Tip: press "Read ticked posts in full" first to add the full text and first 5 comments.':'')}
+ catch(e){q.err='Could not make the pages: '+String((e&&e.message)||e).slice(0,120);q.msg=''}
+ q.ppBusy='';fqDraw()}
+function fqPdfHtml(j,R,open){const q=FQ(),m=fqSelOf(j),n=R.filter((r,i)=>m[i]).length;
+ return '<div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>Post pages (PDF)</b><span class="s">'+n+' post'+(n==1?'':'s')+' ticked'+(open?'':' (open the results to change this)')+'. Each post is typed up with its wording, upvotes, comments and first 5 comments.</span><span style="flex:1"></span>'+(open?'<button class="sm" onclick="fqTickAll(\''+j.id+'\',1)">Tick all</button><button class="sm" onclick="fqTickAll(\''+j.id+'\',0)">Clear</button>':'')+'<button class="p sm" onclick="fqPostPdf(\''+j.id+'\')"'+(q.ppBusy?' disabled':'')+'>'+(q.ppBusy===j.id?'Making...':'Make post pages (PDF)')+'</button></div>'+'<div class="row" style="margin:12px 0 0;align-items:center;gap:8px"><b>Work on the ticked posts</b><span class="s">'+n+' ticked'+(open?'':' (open the results to change this)')+'</span><span style="flex:1"></span><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'comment\')">Write comments on them</button><button class="p sm" onclick="gwFromPosts(\''+j.id+'\',\'post\')">Write new posts inspired by them</button></div>'}
 function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeElement&&document.activeElement.id,pos=document.activeElement&&document.activeElement.selectionStart;e.innerHTML=fqMain();{const q=FQ(),w=$('fq_jw');if(w){w.style.display=(!q.bid||q.view==='find')?'':'none';const h=w.querySelector('h3');if(h)h.textContent=q.bid?'Your searches':'Your searches (all brands)'}}
  if(keep&&$(keep)&&/INPUT|TEXTAREA/.test($(keep).tagName)){const el=$(keep);el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}}
 function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PRE.map(p=>'<button class="tb'+(q.preset===p[0]?' on':'')+'" onclick="FQ().preset=\''+p[0]+'\';fqDraw()">'+p[1]+'</button>').join('');
@@ -1974,13 +2053,13 @@ function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PR
   +'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label><span class="s">How many posts do you want?</span><input id="fq_w" type="number" min="1" max="200" style="width:110px" value="'+esc(q.want)+'" oninput="FQ().want=this.value"></label></div>'
   +'<div class="s" style="margin:14px 0 6px"><b>Search posts made between</b></div><div class="row" style="margin:0">'+pills+'</div>'
   +(q.preset==='custom'?'<div class="row" style="margin:10px 0 0"><label><span class="s">Start date</span><input type="date" value="'+esc(q.from)+'" onchange="FQ().from=this.value;fqDraw()"></label><label><span class="s">End date</span><input type="date" value="'+esc(q.to)+'" onchange="FQ().to=this.value;fqDraw()"></label></div>':'<div class="s" style="margin-top:8px">'+D_(a)+' to '+D_(z)+'</div>')
-  +'<div class="row" style="margin-top:16px"><button class="p" onclick="fqGo()"'+(q.busy?' disabled':'')+'>Find posts</button><span class="s">Only live posts are listed (not removed, locked or archived). '+(fbBridgeOn()?'<b style="color:var(--ok,#0a7a4b)">Fast search add-on is on.</b> The search runs from your own browser, starts at once and keeps going if you refresh.':'It starts at once from this browser if the Viko Reddit Search add-on is installed. Without it the background worker does it (up to about 10 minutes).')+'</span></div></div>'}
+  +'<div class="row" style="margin-top:16px"><button class="p" onclick="fqGo()"'+(q.busy?' disabled':'')+'>Find posts</button><span class="s">Only live posts are listed (not removed, locked or archived). '+(API().on===true?apiLine():fbBridgeOn()?'<b style="color:var(--ok,#0a7a4b)">Fast search add-on is on.</b> The search runs from your own browser, starts at once and keeps going if you refresh.':'It starts at once from this browser if the Viko Reddit Search add-on is installed. Without it the background worker does it (up to about 10 minutes).')+'</span></div>'+(API().on===false?'<div class="s" style="margin-top:8px">'+apiLine()+'</div>':'')+'</div>'}
 function fqMain(){const q=FQ();let h=gwBrandBar();
  if(q.err)h+='<div class="warn" style="margin:0 0 14px">'+esc(q.err)+'</div>';if(q.msg)h+='<div class="hint" style="margin:0 0 14px">'+esc(q.msg)+'</div>';
  if(!q.bid)return h;
  if(q.prof==null&&!q.perr)return h+'<div class="s">Loading...</div>';
  return h+(q.view==='info'?gwInfoHtml():q.view==='drafts'?gwDraftsHtml():q.view==='batch'?gwBatchHtml():q.view==='rules'?gwRulesHtml():fqFormHtml())}
-function findView(){const q=FQ();if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);if(!q.bid&&q.counts==null&&!q.cbusy){q.cbusy=true;setTimeout(()=>rwCounts().finally(()=>{q.cbusy=false}),40)}
+function findView(){const q=FQ();if(API().on===null)setTimeout(apiPing,60);if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);if(!q.bid&&q.counts==null&&!q.cbusy){q.cbusy=true;setTimeout(()=>rwCounts().finally(()=>{q.cbusy=false}),40)}
  return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(!q.bid||q.view==='find'?'':'none')+'"><h3>'+(q.bid?'Your searches':'Your searches (all brands)')+'</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
 
 /* ---- fast search: runs in this browser first. If Reddit refuses it here, the background worker takes over. ---- */
@@ -2028,6 +2107,95 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
  const one=async s=>{try{const j=await fbGet('/r/'+s+'/about/rules.json?raw_json=1'),arr=j&&Array.isArray(j.rules)?j.rules:[];
    if(arr.length)out[s.toLowerCase()]={rules:arr.slice(0,20).map(x=>({n:String(x.short_name||'').slice(0,120),d:String(x.description||'').replace(/\s+/g,' ').trim().slice(0,500)}))}}catch(e){}};
  const L=list.slice(0,30);for(let i=0;i<L.length;i+=5)await Promise.all(L.slice(i,i+5).map(one));return out}
+/* ---- Reddit API (AnyAPI, reached through the reddit-api function in Supabase; the key never reaches the browser) ---- */
+const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
+const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
+async function apiCall(body,acc){let r;try{r=await sb.functions.invoke('reddit-api',{body})}catch(e){r={error:e}}
+ let d=r.data;
+ if(r.error){const c=r.error.context;let j=null;if(c&&typeof c.json==='function'){try{j=await c.json()}catch(x){}}
+  if(j&&j.message)d=j;else{const nf=c&&c.status===404,x=new Error(nf?'The Reddit API is not set up yet (the reddit-api function is missing in Supabase).':'Could not reach the Reddit API function.');x.code=nf?'no_function':'net';x.apiFatal=1;throw x}}
+ if(!d||d.ok===false){const x=new Error((d&&d.message)||'The Reddit API did not answer.');x.code=(d&&d.code)||'';x.apiFatal=API_FATAL.includes(x.code);throw x}
+ if(acc){acc.reqs=(acc.reqs||0)+1;acc.cost=(acc.cost||0)+(+d.cost||0)}return d}
+const apiOff=e=>{API().on=false;API().msg=String((e&&e.message)||e||'').slice(0,160)};
+async function apiPing(){const a=API();if(a.on!==null||a.pinging)return;a.pinging=true;
+ try{const d=await apiCall({op:'ping'});if(d.key_set){a.on=true;a.msg=''}else{a.on=false;a.msg='The Reddit API key is not saved in Supabase yet.'}}catch(e){apiOff(e)}
+ a.pinging=false;if(ST.tab==='find')fqDraw()}
+const apiLine=()=>{const a=API();if(a.on===true)return '<b style="color:var(--ok,#0a7a4b)">Reddit API is on.</b> Searches use it first (fast, and no Reddit blocking). It costs a fraction of a cent per search.';
+ if(a.on===false)return 'Reddit API is off'+(a.msg?' ('+esc(a.msg)+')':'')+'. The other ways still work. To turn it on, follow REDDIT_API_STEPS.txt.';return ''};
+// gather posts through the Reddit API: a few combined queries, relevance order, 2 pages each, hard cap on requests
+async function fqApiFind(o){const acc={reqs:0,cost:0},found=new Map();let failed=0,ok=0,lastErr='',shape='';
+ const MAXREQ=o.maxReq||12,PG=o.want>40?3:2,subSet=new Set(o.subs.map(x=>x.toLowerCase()));
+ const phrase=t=>{t=String(t).replace(/["()]/g,' ').replace(/\s+/g,' ').trim();return !t||t.length>70?'':(/\s/.test(t)?'"'+t+'"':t)};
+ const ph=o.topics.map(phrase).filter(Boolean);if(!ph.length)return{found,ok:0,failed:0,acc,shape:'',err:'no keywords'};
+ const mk=(arr,subQ)=>(arr.length>1?'('+arr.join(' OR ')+')':arr[0])+(subQ||'');
+ const chunk=(arr,n)=>{const r=[];for(let i=0;i<arr.length;i+=n)r.push(arr.slice(i,i+n));return r};
+ let queries=chunk(ph,4).map(g=>mk(g)),mode='plain';
+ if(subSet.size){const sq=o.subs.slice(0,8).map(x=>'subreddit:'+x);queries=chunk(ph,4).map(g=>mk(g,' ('+sq.join(' OR ')+')'));mode='combined'}
+ let total=queries.length,doneQ=0;
+ const one=async(query)=>{let cursor='',n=0;
+  for(let pg=0;pg<PG;pg++){if(acc.reqs>=MAXREQ||Date.now()>o.deadline)break;
+   try{const d=await apiCall({op:'search',query,sort:'relevance',timeframe:o.T,cursor},acc);ok++;
+    if(!d.posts.length&&d.shape&&!found.size)shape=d.shape;
+    d.posts.forEach(p=>{if(!found.has(p.id))found.set(p.id,p)});n+=d.posts.length;cursor=d.next||'';if(!cursor||d.posts.length<5)break}
+   catch(e){failed++;lastErr=String((e&&e.message)||e).slice(0,140);if(e&&e.apiFatal)throw e;break}}
+  doneQ++;o.tick&&o.tick(Math.min(1,doneQ/Math.max(1,total)));return n};
+ // first query alone: checks that the "only these communities" syntax worked
+ const first=await one(queries[0]);
+ if(mode==='combined'){const inSub=[...found.values()].some(p=>subSet.has(String(p.subreddit).toLowerCase()));
+  if(!inSub&&acc.reqs<MAXREQ&&o.subs.length<=8){mode='each';found.clear();const per=chunk(ph,6);queries=[];o.subs.slice(0,6).forEach(sb_=>per.forEach(g=>queries.push(mk(g,' subreddit:'+sb_))));total=queries.length;doneQ=0;await one(queries.shift())}}
+ let qi=0;const wk=async()=>{while(Date.now()<o.deadline&&acc.reqs<MAXREQ){const qq=queries[qi++];if(qq===undefined)return;await one(qq)}};
+ if(mode!=='each')qi=1;
+ await Promise.all([wk(),wk()]);
+ if(subSet.size)for(const [k,p] of [...found])if(!subSet.has(String(p.subreddit).toLowerCase()))found.delete(k);
+ return{found,ok,failed,acc,shape,err:lastErr}}
+const apiMoney=c=>{c=+c||0;return c<0.0095?'under 1 cent':'about $'+c.toFixed(2)};
+/* ---- read the ticked posts in full: post text + the first 5 top-level comments (Reddit API, 1 request per post) ---- */
+const fqFull=r=>{let t=String(r.body||r.snippet||'');if(r.top&&r.top.length)t+='\n\nTop comments on this post:\n'+r.top.map((c,i)=>(i+1)+'. '+(c.a?'u/'+c.a+': ':'')+c.t).join('\n');return t};
+async function fqDeep(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;const R=Array.isArray(j.results)?j.results:[],m=fqSelOf(j);
+ if(q.deepBusy)return;const todo=R.map((r,i)=>i).filter(i=>m[i]&&!R[i].read).slice(0,40);
+ if(!R.filter((r,i)=>m[i]).length){q.err='Tick at least one post under View results first.';q.msg='';return fqDraw()}
+ if(!todo.length){q.err='';q.msg='The ticked posts were already read in full.';return fqDraw()}
+ q.err='';q.msg='';q.deepBusy=id;q.deepN=0;q.deepT=todo.length;const acc={reqs:0,cost:0};fqDraw();let err='',fatal=false,q2=0;
+ const wk=async()=>{while(!fatal){const k=q2++;if(k>=todo.length)return;const r=R[todo[k]];
+   try{const d=await apiCall({op:'comments',url:r.url},acc);
+    const good=(d.comments||[]).filter(c=>c.top&&!/^\[(deleted|removed)\]$/i.test(String(c.body).trim())&&!/^(automoderator)$/i.test(c.author||'')).slice(0,5);
+    r.top=good.map(c=>({a:c.author||'',s:c.score||0,t:String(c.body).replace(/\r/g,'').trim().slice(0,1500)}));r.read=1;
+    if(d.post&&d.post.selftext&&d.post.selftext.length>String(r.body||'').length)r.body=String(d.post.selftext).slice(0,8000);
+    q.deepN++;}
+   catch(e){err=String((e&&e.message)||e);if(e&&e.apiFatal){fatal=true;if(e.code!=='net')apiOff(e)}}
+   const el=$('fq_jobs');if(el&&ST.tab==='find')el.innerHTML=fqJobsHtml()}};
+ await Promise.all([wk(),wk(),wk()]);
+ const n=q.deepN;q.deepBusy='';
+ if(n){const r2=await sb.from('find_jobs').update({results:R}).eq('id',id);if(r2.error){q.err='Read '+n+' posts, but could not save them: '+(r2.error.message||'')}}
+ q.msg=n?'Read '+n+' post'+(n===1?'':'s')+' in full with their top comments ('+apiMoney(acc.cost||acc.reqs*0.0006)+'). They are saved and used when you draft comments.':'';
+ if(err&&!q.err)q.err=(n?'Some posts could not be read: ':'')+err;
+ fqDraw()}
+function fqPack(id){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;const R=Array.isArray(j.results)?j.results:[],m=fqSelOf(j);let L=R.filter((r,i)=>m[i]);if(!L.length)L=R;
+ const t=[j.brand_name+' - full text of Reddit posts ('+D_(j.date_from)+' to '+D_(j.date_to)+')','Posts: '+L.length+(L.some(r=>!r.read)?'. Posts marked "not read in full" only have the text saved by the search; use "Read ticked posts in full" to add all of it and the top 5 comments.':''),''];
+ L.forEach((r,i)=>{t.push('=== '+(i+1)+'. '+r.title,r.url,'r/'+r.sub+' - posted '+String(r.created||'').slice(0,10)+' - '+(r.upvotes||0)+' upvotes - '+(r.comments||0)+' comments - fit '+r.relevance+(r.read?'':' - not read in full'),'','POST TEXT:',String(r.body||r.snippet||'(no text, link or image post)'),'');
+  if(r.read){t.push('TOP COMMENTS:');if(r.top&&r.top.length)r.top.forEach((c,k)=>t.push((k+1)+'. '+(c.a?'u/'+c.a:'')+' ('+(c.s||0)+' points): '+c.t));else t.push('(no comments yet)');t.push('')}});
+ const b=new Blob([t.join('\r\n')+fqRulesAppendix(L.map(r=>r.sub)).join('\r\n')],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(j.brand_name||'posts').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_full_text_'+ymd(j.created_at)+'.txt';document.body.appendChild(a);a.click();a.remove()}
+/* ---- live or deleted: the Reddit API first, the old ways as back-up ---- */
+async function apiLiveMany(items){const none=()=>items.map(()=>null);if(API().on===false||!items.length)return none();
+ try{const out=[];for(let i=0;i<items.length;i+=20){const d=await apiCall({op:'check',items:items.slice(i,i+20)});(d.results||[]).forEach(r=>out.push(r&&r.s&&r.s!=='unknown'?r:null))}
+  while(out.length<items.length)out.push(null);return out}
+ catch(e){if(e&&e.apiFatal)apiOff(e);return none()}}
+const apiLiveOne=async(u,k)=>(await apiLiveMany([{url:u,kind:k}]))[0];
+// back-up: read the post page from this browser through the add-on (if it is installed)
+async function fbLiveOne(url){if(!fbBridgeOn())return null;try{const path=new URL(url).pathname.replace(/\/+$/,'');const j=await fbGet(path+'.json?raw_json=1&limit=1');const po=j[0].data.children[0].data,G=['[removed]','[deleted]'];
+  const gone=!!po.removed_by_category||G.includes(String(po.selftext||'').trim())||po.author==='[deleted]';return{s:gone?'removed':'live',score:po.score,replies:po.num_comments,title:po.title}}catch(e){return null}}
+async function fqLive(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j||q.liveBusy)return;const R=Array.isArray(j.results)?j.results:[],m=fqSelOf(j);
+ let idx=R.map((r,i)=>i).filter(i=>m[i]);if(!idx.length)idx=R.map((r,i)=>i);idx=idx.slice(0,60);
+ q.err='';q.msg='';q.liveBusy=id;fqDraw();
+ let res=await apiLiveMany(idx.map(i=>({url:R[i].url,kind:'post'}))),via=res.filter(Boolean).length?'the Reddit API':'';
+ for(let k=0;k<idx.length;k++){if(res[k])continue;const b=await fbLiveOne(R[idx[k]].url);if(b){res[k]=b;via=via||'your browser add-on'}}
+ let live=0,gone=0,unk=0;const at=new Date().toISOString();
+ idx.forEach((i,k)=>{const r=res[k],p=R[i];if(!r){unk++;return}p.checked=at;if(r.s==='removed'){p.live='removed';gone++;m[i]=false}else{p.live='live';live++;if(r.score!=null)p.upvotes=r.score;if(r.replies!=null)p.comments=r.replies}});
+ if(live+gone){const r2=await sb.from('find_jobs').update({results:R}).eq('id',id);if(r2.error)q.err='Checked, but could not save: '+(r2.error.message||'')}
+ q.liveBusy='';
+ q.msg=(live+gone)?'Checked '+(live+gone)+' post'+(live+gone===1?'':'s')+' with '+via+': '+live+' live, '+gone+' deleted'+(gone?' (unticked)':'')+'.'+(unk?' '+unk+' could not be checked here.':''):'';
+ if(!live&&!gone&&!q.err)q.err='Could not check these posts from here. '+(API().on===false?'Turn on the Reddit API (REDDIT_API_STEPS.txt) or install the Viko Reddit Search add-on.':'The Reddit API gave no answer for them.');
+ fqDraw()}
 function fqLocalJob(id,o){const j=(FQ().jobs||[]).find(x=>x.id===id);if(j){Object.assign(j,o);const e=$('fq_jobs');if(e&&ST.tab==='find')e.innerHTML=fqJobsHtml()}}
 async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
  if(q.runner){if(q.runner!==job.id){(q.queue=q.queue||[]).push([job,resume]);fqLocalJob(job.id,{note:'Waiting: another search is running in this browser. This one starts when it is done.'})}return}
@@ -2057,16 +2225,24 @@ async function fqBrowserRun(job,resume){const q=FQ();if(!job)return;
       catch(e){failed++;lastErr=String(e.message||e).slice(0,120);if(e.net){netFail=true;return}break}
       await fbSleep(500)}}
     done++;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
-  await Promise.all([worker(),worker()]);
+  let usedApi=false,apiAcc=null,apiFail='';
+  if(API().on!==false){try{
+    const ar=await fqApiFind({topics,subs,T,want,deadline,maxReq:subs.length?14:12,tick:f=>{const p=Math.round(f*topics.length);if(p>done){done=p;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}}});
+    apiAcc=ar.acc;
+    if(ar.ok&&(ar.found.size||!ar.shape)){ar.found.forEach((v,k)=>found.set(k,v));ok=ar.ok;failed+=ar.failed;usedApi=true;API().on=true;API().msg=''}
+    else if(ar.ok&&ar.shape){apiOff(new Error('the Reddit API answered in a form this page does not understand'));console.warn('reddit-api shape',ar.shape)}
+    else{apiFail=ar.err||'no answer'}
+   }catch(e){apiFail=String((e&&e.message)||e);if(e&&e.apiFatal)apiOff(e)}}
+  if(!usedApi)await Promise.all([worker(),worker()]);
   if(netFail||!ok)return hand((netFail?(lastErr||'Your browser could not reach Reddit'):'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
   const res=[];
-  for(const p of found.values()){if(p.created_utc<fromTs||p.created_utc>toTs)continue;
+  for(const p of found.values()){if(p.created_utc&&(p.created_utc<fromTs||p.created_utc>toTs))continue;
    if(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine)continue;
    const sc=fbScore(p,{topics,brand,exclude,subs,now});if(sc.score<25)continue;
-   res.push({title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:new Date(p.created_utc*1000).toISOString(),comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,1500),author:p.author||''})}
+   res.push({title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:p.created_utc?new Date(p.created_utc*1000).toISOString():'',comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,usedApi?8000:1500),author:p.author||''})}
   res.sort((a,b)=>b.relevance-a.relevance||new Date(b.created)-new Date(a.created));const top=res.slice(0,want);
   const rules=top.length?await fbRules(top.map(r=>r.sub)).catch(()=>({})):{};
-  const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'');
+  const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'')+(usedApi&&apiAcc?' Reddit API: '+apiAcc.reqs+' request'+(apiAcc.reqs===1?'':'s')+', '+apiMoney(apiAcc.cost||apiAcc.reqs*0.00035)+'.':'')+(!usedApi&&API().on===false&&API().msg?' (Reddit API not used: '+API().msg+')':'');
   const row={status:'done',retry_local:false,results:top,found:top.length,progress:topics.length,note:note.trim()||null,finished_at:nowI()};
   let r=await sb.from('find_jobs').update(Object.keys(rules).length?{...row,rules}:row).eq('id',id);
   if(r.error&&/rules/i.test(r.error.message||''))r=await sb.from('find_jobs').update(row).eq('id',id);
@@ -2143,7 +2319,7 @@ async function gwFromPosts(jobId,kind){if(needV18())return;const q=FQ(),j=(q.job
  if(use.length>30&&!confirm('That creates '+use.length+' drafts. Continue?'))return;let n=0,dup=0;
  for(const r of use){
   if(kind==='comment'){if((q.drafts||[]).some(d=>d.kind==='comment'&&d.status!=='archived'&&d.thread_url&&rqPid(d.thread_url)===rqPid(r.url))){dup++;continue}
-   await gwNew('comment',{sub:r.sub||'',thread_url:r.url,thread_title:r.title||'',thread_body:r.body||r.snippet||'',topics:(j.keywords&&j.keywords.topics||[]).slice(0,3),find_id:j.id})}
+   await gwNew('comment',{sub:r.sub||'',thread_url:r.url,thread_title:r.title||'',thread_body:fqFull(r),topics:(j.keywords&&j.keywords.topics||[]).slice(0,3),find_id:j.id})}
   else await gwNew('post',{sub:r.sub||'',title:'',body:'',topics:(j.keywords&&j.keywords.topics||[]).slice(0,3),find_id:j.id,inspired_by:[{url:r.url,title:r.title||'',sub:r.sub||''}],notes:'Inspired by: '+(r.title||r.url)});
   n++}
  q.view='drafts';q.msg='Created '+n+' '+kind+' draft'+(n==1?'':'s')+(dup?' ('+dup+' skipped: already drafted)':'')+'. Write each one, then mark it ready for review.';fqDraw()}
@@ -2426,7 +2602,7 @@ function gwFlowHtml(open){
   +st(1,'Choose or add a brand','Pick a brand you already have, or add one. A new brand can get its client, its team member and its pricing right here.')+ar
   +st(2,'Brand info','Describe the brand, add the website, upload a document and write down any real experiences you can use. Keywords and communities are suggested and saved.')+ar
   +st(3,'Find live posts','Pick how many posts and the dates. Posts are ranked by your keywords. The written rules of each community are collected too.')+ar
-  +st(4,'Download what was found','Links, a CSV, or a numbered PDF with a screenshot of every post. Each one ends with an appendix of the community rules.')+ar
+  +st(4,'Download what was found','Links, a CSV, a full text file, or post pages: a numbered PDF with every post typed up (wording, upvotes, comments, first 5 comments). Each one ends with an appendix of the community rules.')+ar
   +'<div class="fl-s fl-b"><span class="fl-n">5</span><div><b>Choose what to write</b><div class="fl-br"><div>Comments on posts you ticked</div><div>New posts inspired by posts you ticked</div><div>New posts from your keywords</div><div>A whole batch at once (your numbers)</div></div></div></div>'+ar
   +st(6,'Write the drafts','Copy the ready-made instructions into ChatGPT or Claude, then paste the answer back. It turns into drafts. Add images or video links. Mark samples as Training only.')+ar
   +st(7,'Review and approve','Tick the review questions, check the community rules, edit the wording, then approve. Only approved drafts can move on.')+ar
@@ -2518,7 +2694,7 @@ async function gwBatchMakeDrafts(){if(needV18())return;const q=FQ(),B=GWB(),b=gw
  for(const it of items){
   const place=plan[it.n-1]||'none';
   if(isC){const src=posts[it.n-1];if(!src||!it.comments.length){skip++;continue}
-   for(const c of it.comments){const d=await gwNew('comment',{sub:src.sub||it.sub||'',thread_url:src.url,thread_title:src.title||'',thread_body:src.body||src.snippet||'',body:c,topics,mention:place==='comment'?'yes':'none',find_id:B.job||null,training:!!B.training,notes:'Written from a batch'});if(d)made++}}
+   for(const c of it.comments){const d=await gwNew('comment',{sub:src.sub||it.sub||'',thread_url:src.url,thread_title:src.title||'',thread_body:fqFull(src),body:c,topics,mention:place==='comment'?'yes':'none',find_id:B.job||null,training:!!B.training,notes:'Written from a batch'});if(d)made++}}
   else{if(!it.title&&!it.body){skip++;continue}
    const extra=it.comments.slice(1);const d=await gwNew('post',{sub:it.sub||(p.subs||[])[0]||'',title:it.title,body:it.body,first_comment:it.comments[0]||'',topics,mention:({title:'title',body:'post',comment:'comment',none:'none'})[place]||'natural',training:!!B.training,notes:'Written from a batch'+(extra.length?'\n\nOther comments the AI wrote for this post (use them later as replies):\n'+extra.map((c,i)=>(i+2)+'. '+c).join('\n'):'')});if(d)made++}}
  B.busy=false;B.paste='';q.view='drafts';q.df={st:'draft',kind:'all',q:''};q.msg='Made '+made+' draft'+(made==1?'':'s')+' from the pasted text'+(skip?' ('+skip+' skipped because they had no usable text)':'')+'. Read each one, edit if you like, then mark it ready for review.';fqDraw()}
@@ -2759,7 +2935,9 @@ function msgListHtml(){const M=MSGD(),btn=(k,l,n,sub)=>'<button class="ml'+(M.se
  return h}
 function msgActs(m){const mine=m.sender_id===me.id,b=[];
  if(m.kind==='client'&&m.from_client&&can('client_msgs'))b.push('<button class="sm" onclick="msgDone(\''+m.id+'\','+(m.handled_at?0:1)+')">'+(m.handled_at?'Done. Undo':'Mark done')+'</button>');
+ if(m.kind==='client'&&m.from_client&&m.brand_id&&can('client_msgs')&&ST.brands.some(x=>x.id===m.brand_id)&&typeof tabOk==='function'&&tabOk('brands')){const rm=m.category==='Removed or deleted';b.push('<button class="sm'+(rm?' p':'')+'" onclick="msgToBrand(\''+m.brand_id+'\','+(rm?1:0)+')" title="'+(rm?'Opens this brand with only its deleted links':'Opens this brand')+'">'+(rm?'Check deleted links':'Open brand')+'</button>')}
  if(mine||isAdminU())b.push('<button class="sm dng" onclick="msgDel(\''+m.id+'\')">Delete</button>');return b.join('')}
+function msgToBrand(id,removed){ST.tab='brands';ST.bid=id;ST.panel='';ST.asUser=null;if(removed)ST.tf='removed';draw();setTimeout(()=>{const h=Array.from(document.querySelectorAll('h3')).find(x=>/^Tracking/.test(x.textContent));if(h)h.scrollIntoView({behavior:'smooth'});else window.scrollTo({top:0})},120)}
 function msgBub(m,full){const mine=m.sender_id===me.id,cl=m.from_client,nm=cl?(m.client_name||m.sender_name||'Client'):(m.sender_name||msgPName(m.sender_id));
  const catSel=m.kind==='client'&&can('client_msgs')?'<select class="mcs" aria-label="Category" onchange="msgCat(\''+m.id+'\',this.value)">'+MSG_CATS.map(c=>'<option'+(m.category===c?' selected':'')+'>'+c+'</option>').join('')+'</select>':'<span class="chip '+(MSG_CHIP[m.category]||'mut')+'">'+esc(m.category||'General')+'</span>';
  const brSel=m.kind==='client'&&can('client_msgs')&&full?'<select class="mcs" aria-label="Brand" onchange="msgBrand(\''+m.id+'\',this.value)"><option value="">No brand</option>'+ST.brands.filter(b=>!b.trashed_at).map(b=>'<option value="'+b.id+'"'+(m.brand_id===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select>':(m.brand_id&&m.kind==='client'?'<span class="chip mut">'+esc(msgBName(m.brand_id))+'</span>':'');
