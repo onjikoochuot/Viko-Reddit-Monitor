@@ -563,7 +563,7 @@ async function runFind(job) {
     return;
   }
   const note = top.length ? (top.length < want ? 'Found ' + top.length + ' fitting posts in this period (you asked for ' + want + '). Try wider dates or more keywords for more.' : null) : 'No live posts fitted these keywords in this period. Try wider dates or more keywords.';
-  const rules = top.length ? await fetchRules(top.map((r) => r.sub)) : {};
+  const rules = {}; // community rules are not collected any more (slow, and Reddit blocks them)
   const doneRow = { status: 'done', retry_local: false, results: top, found: top.length, progress: topics.length, note: (note || '') + (failed ? (note ? ' ' : '') + failed + ' search' + (failed === 1 ? '' : 'es') + ' could not be completed, so some posts may be missing.' : '') || null, finished_at: new Date().toISOString() };
   try { await patchFind(job.id, Object.keys(rules).length ? { ...doneRow, rules } : doneRow); }
   catch (e) { log('saving the community rules failed (is supabase_update_20.sql run?), saving the posts without them:', String(e.message || e).slice(0, 100)); await patchFind(job.id, doneRow); }
