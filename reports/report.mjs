@@ -520,7 +520,7 @@ async function claimFind() {
       const stale = new Date(Date.now() - 45 * 60000).toISOString(), staleWeb = new Date(Date.now() - 4 * 60000).toISOString();
       await sb('/rest/v1/find_jobs?status=eq.running&started_at=lt.' + stale, { method: 'PATCH', body: { status: 'pending' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
       // a search that was running in the website's own browser and was left (page closed) is taken over after 4 minutes without a sign of life
-      await sb('/rest/v1/find_jobs?status=eq.running&note=like.' + encodeURIComponent('Searching from your browser*') + '&started_at=lt.' + staleWeb, { method: 'PATCH', body: { status: 'pending', progress: 0, note: null }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
+      await sb('/rest/v1/find_jobs?status=eq.running&note=like.' + encodeURIComponent('Searching from your browser*') + '&started_at=lt.' + staleWeb, { method: 'PATCH', body: { status: 'pending', progress: 0, note: 'The search in your browser was interrupted, so the background worker took it over.' }, headers: { Prefer: 'return=minimal' } }).catch(() => {});
       return sb('/rest/v1/find_jobs?status=eq.pending&order=created_at.asc&limit=1').catch(() => []);
     })();
   if (!rows || !rows[0]) return null;
