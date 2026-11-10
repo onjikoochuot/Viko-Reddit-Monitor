@@ -349,10 +349,10 @@ async function load(){
  let pd=p.data||[];if(stf&&p.error){pd=(await fetchAll('pieces','*',['id'])).data}
  pd.sort((a,b)=>(a.sort||0)-(b.sort||0));
  if(stf)pd.forEach(x=>{x.att=ST.attCache[x.id]||x.att||[]});
- const allB=b.data||[],allT=t.data||[];
+ let allB=b.data||[];const allT=t.data||[];
  ST.v6=allB.length?('archived_at' in allB[0]):true;
  const trB=new Set(allB.filter(x=>x.trashed_at).map(x=>x.id));
- ST.allB=allB;ST.allT=allT;ST.allP=pd;ST.trashB=allB.filter(x=>x.trashed_at);ST.brands=allB.filter(x=>!x.trashed_at);
+ ST.v21=allB.length?('rw_state' in allB[0]):true;ST.rbrands=allB.filter(x=>!x.trashed_at&&x.rw_state==='only');const allB0=allB;allB=allB0.filter(x=>x.rw_state!=='only');ST.allB=allB;ST.allT=allT;ST.allP=pd;ST.trashB=allB.filter(x=>x.trashed_at);ST.brands=allB.filter(x=>!x.trashed_at);
  ST.trashT=allT.filter(x=>x.trashed_at&&!trB.has(x.brand_id));ST.tasks=allT.filter(x=>!x.trashed_at&&!trB.has(x.brand_id));
  ST.tmap={};ST.tasks.forEach(x=>{ST.tmap[x.id]=x});ST.bmap={};ST.brands.forEach(x=>{ST.bmap[x.id]=x});
  const trI=new Set(ST.trashT.map(x=>x.id));ST.pieces=pd.filter(x=>ST.tmap[x.task_id]);ST.trashP=pd.filter(x=>trI.has(x.task_id));
@@ -1948,7 +1948,7 @@ function fqJobsHtml(){const q=FQ();if(q.jerr==='v16')return '<div class="warn"><
  const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+(j.progress||0)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':'<span class="chip mut">Waiting to start</span>';
  const lab=n=>n>=60?'<span class="chip ok">High '+n+'</span>':n>=40?'<span class="chip warn">Medium '+n+'</span>':'<span class="chip mut">Low '+n+'</span>';
  const bnm=((gwBrand()||{}).name||'').toLowerCase(),JL=q.jobs.filter(j=>!q.bid||j.brand_id===q.bid||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===bnm));
- if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((ST.brands.find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
+ if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((rwAll().find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
  return JL.map(j=>{const R=Array.isArray(j.results)?j.results:[],kw=(j.keywords&&j.keywords.topics||[]),open=!!q.open[j.id];
   return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.brand_name)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.range_label||'')+' ('+D_(j.date_from)+' to '+D_(j.date_to)+') &middot; asked for '+j.want+' &middot; '+esc(clip(kw.join(', '),90))+'</div></div>'+st(j)+'</div><div class="row" style="margin:10px 0 0">'+(j.status==='done'&&R.length?'<button class="p sm" onclick="fqToggle(\''+j.id+'\')">'+(open?'Hide results':'View results')+'</button><button class="sm" onclick="fqLinks(\''+j.id+'\')">Download links</button><button class="sm" onclick="fqCsv(\''+j.id+'\')">Download CSV</button><button class="sm" onclick="fqPdf(\''+j.id+'\')" title="A numbered PDF with a screenshot of every ticked post">PDF with screenshots</button><button class="sm" onclick="fqCopy(\''+j.id+'\')">Copy links</button>':'')
   +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed')&&!j.retry_local?'<button class="sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
@@ -1980,7 +1980,7 @@ function fqMain(){const q=FQ();let h=gwBrandBar();
  if(!q.bid)return h;
  if(q.prof==null&&!q.perr)return h+'<div class="s">Loading...</div>';
  return h+(q.view==='info'?gwInfoHtml():q.view==='drafts'?gwDraftsHtml():q.view==='batch'?gwBatchHtml():q.view==='rules'?gwRulesHtml():fqFormHtml())}
-function findView(){const q=FQ();if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);
+function findView(){const q=FQ();if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);if(!q.bid&&q.counts==null&&!q.cbusy){q.cbusy=true;setTimeout(()=>rwCounts().finally(()=>{q.cbusy=false}),40)}
  return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(!q.bid||q.view==='find'?'':'none')+'"><h3>'+(q.bid?'Your searches':'Your searches (all brands)')+'</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
 
 /* ---- fast search: runs in this browser first. If Reddit refuses it here, the background worker takes over. ---- */
@@ -2070,13 +2070,13 @@ const GW_ST=[['draft','Draft'],['review','Ready for review'],['approved','Approv
 const GW_MEN_C=[['natural','Mention the brand only if it fits naturally'],['none','Do not mention the brand'],['yes','Mention the brand']];
 const GW_MEN_P=[['natural','Mention the brand only if it fits naturally'],['none','Do not mention the brand'],['title','Mention it in the title'],['post','Mention it in the post'],['comment','Mention it in the first comment'],['both','Mention it in both']];
 const GW_CHK={comment:['It answers the post','It adds something useful','Any brand mention feels natural','It does not sound like an advert','It does not repeat another comment','The post really fits this brand'],post:['It fits the community','The title reads like a real discussion','The post gives real value','It is conversational, not an advert','Any brand mention feels natural','It does not repeat an earlier post']};
-const gwBrand=()=>ST.brands.find(b=>b.id===FQ().bid);
+const gwBrand=()=>(ST.brands.concat(ST.rbrands||[])).find(b=>b.id===FQ().bid);
 const gwNowS=()=>new Date().toISOString();
 const gwErrTxt=e=>/brand_profiles|reddit_drafts|brand_id|schema cache|relation/i.test((e&&e.message)||'')?'v18':((e&&e.message)||'error');
 const needV18=()=>{const q=FQ();if(q.perr==='v18'||q.derr==='v18'){alert('Run supabase_update_18.sql in Supabase first (SQL Editor), then reload this page.');return true}return false};
 /* brand */
 function gwOpenJob(id){gwSetBrand(id);FQ().view='find';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
-function gwSetBrand(id){const q=FQ();q.bid=id;try{if(id)localStorage.setItem('rw_bid',id);else localStorage.removeItem('rw_bid')}catch(e){}q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';q.topics='';q.exclude='';q.subs='';q.view='';if(id)gwLoad();fqDraw();const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
+function gwSetBrand(id){const q=FQ();if(!id)q.counts=null;q.nb=null;q.conn=null;q.addEx=false;q.bid=id;try{if(id)localStorage.setItem('rw_bid',id);else localStorage.removeItem('rw_bid')}catch(e){}q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';q.topics='';q.exclude='';q.subs='';q.view='';if(id)gwLoad();fqDraw();const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
 const gwNewBrand=gwNbOpen;
 async function gwLoad(){const q=FQ(),id=q.bid;if(!id)return;
  const a=await sb.from('brand_profiles').select('*').eq('brand_id',id).maybeSingle();
@@ -2170,7 +2170,7 @@ function gwDup(d){const q=FQ();if(d.kind!=='comment'||!d.thread_url)return '';co
  if((q.drafts||[]).some(x=>x.id!==d.id&&x.kind==='comment'&&x.status!=='archived'&&x.thread_url&&rqPid(x.thread_url)===pid))return 'Another draft for this post already exists.';
  if((ST.tasks||[]).some(t=>t.brand_id===d.brand_id&&t.thread&&rqPid(t.thread)===pid))return 'This brand already has a task under this post.';return ''}
 /* push to the brand's tasks */
-async function gwPush(ids){const q=FQ(),b=gwBrand();if(!b)return;if(!can('reddit_push'))return alert('You are not allowed to push drafts into brand tasks.');const all=(q.drafts||[]).filter(d=>ids.includes(d.id)&&d.status==='approved'),ds=all.filter(d=>!d.training);if(all.length&&!ds.length)return alert('These drafts are marked Training only, so they cannot be pushed into tasks. Untick Training only on a draft if it is really meant to be posted.');if(!ds.length)return alert('Approve a draft first. Only approved drafts can be pushed.');
+async function gwPush(ids){const q=FQ(),b=gwBrand();if(!b)return;if(rwOn()&&b.rw_state==='only'){if(confirm('"'+b.name+'" is only in Reddit work so far. To push drafts into brand tasks it has to be connected to your Brands page first.\n\nConnect it now?'))gwConnOpen();return}if(!can('reddit_push'))return alert('You are not allowed to push drafts into brand tasks.');const all=(q.drafts||[]).filter(d=>ids.includes(d.id)&&d.status==='approved'),ds=all.filter(d=>!d.training);if(all.length&&!ds.length)return alert('These drafts are marked Training only, so they cannot be pushed into tasks. Untick Training only on a draft if it is really meant to be posted.');if(!ds.length)return alert('Approve a draft first. Only approved drafts can be pushed.');
  if(!confirm('Push '+ds.length+' approved draft'+(ds.length==1?'':'s')+' into "'+b.name+'" as tasks?\n\nThey appear under the brand\'s Drafts, ready to assign to a team member, download for AdsPower, and track once published.'))return;let n=0;
  for(const d of ds){
   const isPost=d.kind==='post';
@@ -2211,11 +2211,11 @@ function gwDraftsHtml(){const q=FQ();if(q.derr==='v18')return '<div class="warn"
   +'<div class="row" style="margin:10px 0 0"><select onchange="FQ().df.st=this.value;fqDraw()">'+opts([['open','Still working on'],['all','Everything'],['draft','Draft'],['review','Ready for review'],['approved','Approved'],['pushed','In brand tasks'],['archived','Archived']],F.st)+'</select><select onchange="FQ().df.kind=this.value;fqDraw()">'+opts([['all','Posts and comments'],['post','Posts'],['comment','Comments']],F.kind)+'</select><input id="gw_q" placeholder="Search drafts" value="'+esc(F.q)+'" style="flex:1;min-width:160px" oninput="FQ().df.q=this.value;fqDraw()"></div></div>'
   +(list.length?list.map(gwDraftHtml).join(''):'<div class="empty">No drafts here yet.</div>')}
 /* page */
-function gwBrandBar(){const q=FQ(),bs=ST.brands.filter(b=>!b.archived_at).slice().sort((a,b)=>a.name.localeCompare(b.name)),b0=gwBrand(),optB=b=>'<option value="'+b.id+'"'+(q.bid===b.id?' selected':'')+'>'+esc(b.name)+'</option>',drafts=bs.filter(b=>b.status!=='live');
+function gwBrandBar(){const q=FQ(),b0=gwBrand();
  const tabs=[['info','Brand info',can('reddit_find')||can('reddit_draft')],['find','Find posts',can('reddit_find')],['batch','Write a batch',can('reddit_draft')],['drafts','Drafts'+(q.drafts?' ('+q.drafts.filter(d=>!['archived','pushed'].includes(d.status)).length+')':''),can('reddit_draft')],['rules','Community rules',can('reddit_find')||can('reddit_draft')]].filter(x=>x[2]);
- return gwFlowHtml(!!q.flOpen)+(q.nb?gwNbHtml():'')+'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Work for this brand</span><select id="gw_b" onchange="gwSetBrand(this.value)"><option value="">Choose a brand...</option>'+(bs.some(b=>b.status!=='live')?'<optgroup label="Saved as drafts (not live yet)">'+bs.filter(b=>b.status!=='live').map(optB).join('')+'</optgroup>':'')+(bs.some(b=>b.status==='live')?'<optgroup label="Live brands">'+bs.filter(b=>b.status==='live').map(optB).join('')+'</optgroup>':'')+'</select></label>'+G('brand_add','<button onclick="gwNbOpen()">+ New brand</button>')+(q.bid?'<button onclick="gwOpenBrandTasks()">Open this brand\'s tasks</button>':'')+'</div>'
-  +(b0?gwSetupHtml(b0):(drafts.length?'<div class="row" style="margin:12px 0 0;align-items:center"><span class="s"><b>Saved as drafts (not live yet):</b></span>'+drafts.map(b=>'<button class="sm" onclick="gwSetBrand(\''+b.id+'\')">'+esc(b.name)+'</button>').join('')+'</div>':''))
-  +(q.bid?'<div class="row" style="margin:14px 0 0">'+tabs.map(t=>'<button class="tb'+(q.view===t[0]?' on':'')+'" onclick="FQ().view=\''+t[0]+'\';fqDraw()">'+t[1]+'</button>').join('')+'</div>':'<p class="s" style="margin:10px 0 0">Choose an existing brand, or add a new one. Everything below (keywords, searches, drafts) then belongs to that brand, and approved drafts become that brand\'s tasks for your team.</p>')+'</div>'}
+ const top=gwFlowHtml(!!q.flOpen)+(q.nb?gwNbHtml():'')+(q.conn&&b0?gwConnHtml(b0):'');
+ if(!b0)return top+rwHomeHtml();
+ return top+rwHeadHtml(b0)+'<div class="row" style="margin:14px 0 0">'+tabs.map(t=>'<button class="tb'+(q.view===t[0]?' on':'')+'" onclick="FQ().view=\''+t[0]+'\';fqDraw()">'+t[1]+'</button>').join('')+'</div>'}
 function gwOpenBrandTasks(){const b=gwBrand();if(!b)return;ST.tab='brands';ST.bid=b.id;ST.panel='';draw()}
 
 /* ---- Upload work done (brand page): match the links your team published to the tasks you downloaded, send matches to tracking ---- */
@@ -2328,30 +2328,77 @@ function gwRulesHtml(){const q=FQ(),subs=gwRuleSubsAll();
     +'<label style="margin-top:8px"><span class="s">Your notes for r/'+esc(k)+'</span><textarea rows="2" style="width:100%" oninput="gwRuleSet(\''+k+'\',this.value)">'+esc(gwRulesMine(k))+'</textarea></label></div>'}).join(''):'<div class="empty">No communities yet. Run a search, add communities in Brand info, or add one above.</div>')}
 /* brand setup */
 const gwNb=()=>FQ().nb;
-function gwNbOpen(){FQ().nb={name:'',client:'',newClient:'',access:'admin',assignee:'',price:false,busy:false};fqDraw()}
+function gwNbOpen(){const q=FQ();q.conn=null;q.addEx=false;q.nb={name:'',busy:false};fqDraw();setTimeout(()=>{const e=$('nb_name');if(e)e.focus()},50)}
 function gwNbSet(k,v){const n=gwNb();if(n)n[k]=v}
-function gwNbHtml(){const n=gwNb();if(!n)return '';
- const mem=ST.profiles.filter(u=>u.status==='active'&&u.role==='member'),cl=ST.clients,canAsg=can('brand_assign'),canCl=can('brand_edit')||can('client_edit');
- return '<div class="cb tvp"><div class="row" style="margin:0"><b>Add a brand</b><span style="flex:1"></span><button onclick="FQ().nb=null;fqDraw()">Cancel</button></div>'
-  +'<p class="s">The brand is saved as a draft. It shows in the list on this page and on your Brands page, and nobody on your team sees it until you go live. You can fill in the rest later.</p>'
-  +'<div class="row" style="align-items:flex-end"><label style="flex:2;min-width:220px"><span class="s">Brand name</span><input id="nb_name" style="width:100%" value="'+esc(n.name)+'" oninput="gwNbSet(\'name\',this.value)"></label>'
-  +(canCl?'<label style="flex:1;min-width:200px"><span class="s">Client</span><select onchange="gwNbSet(\'client\',this.value)"><option value="">No client yet</option>'+cl.map(c=>'<option value="'+c.id+'"'+(n.client===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+(can('client_edit')?'<label style="flex:1;min-width:200px"><span class="s">or a new client</span><input style="width:100%" placeholder="Client name" value="'+esc(n.newClient)+'" oninput="gwNbSet(\'newClient\',this.value)"></label>':''):'')+'</div>'
-  +(canAsg?'<div class="row" style="align-items:flex-end"><label style="flex:1;min-width:220px"><span class="s">Who will do the work?</span><select onchange="gwNbSet(\'access\',this.value);fqDraw()"><option value="admin"'+(n.access==='admin'?' selected':'')+'>Not decided yet</option><option value="member"'+(n.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(n.access==='open'?' selected':'')+'>Anyone with the work link</option></select></label>'
-   +(n.access==='member'?'<label style="flex:1;min-width:220px"><span class="s">Team member</span><select onchange="gwNbSet(\'assignee\',this.value)"><option value="">Choose...</option>'+mem.map(u=>'<option value="'+u.id+'"'+(n.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label>':'')+'</div>':'')
-  +(isAdminU()?'<label style="flex-direction:row;align-items:center;gap:8px;font-weight:400;margin-top:8px"><input type="checkbox" '+(n.price?'checked':'')+' onchange="gwNbSet(\'price\',this.checked)"><span>Set up pricing for this brand right after (admin only)</span></label>':'')
-  +'<p class="s">The brand stays a draft until you add work and press Go live on its page. Nothing reaches your team before that.</p>'
-  +'<div class="row"><button class="p" '+(n.busy?'disabled':'')+' onclick="gwNbCreate()">'+(n.busy?'Saving...':'Save brand as draft')+'</button></div></div>'}
+function gwNbHtml(){const n=gwNb();if(!n)return '';const on=rwOn();
+ return '<div class="cb tvp"><div class="row" style="margin:0"><b>New brand for Reddit work</b><span style="flex:1"></span><button onclick="FQ().nb=null;fqDraw()">Cancel</button></div>'
+  +(on?'<p class="s">It is saved here, in Reddit work only. It does not appear on your Brands page, to clients or to your team until you press <b>Connect to Brands page</b>. Research, searches and drafts all stay here.</p>':'<p class="s">The brand is saved as a draft on your Brands page. Nothing reaches your team until you go live.</p>')
+  +'<div class="row" style="align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Brand name</span><input id="nb_name" style="width:100%" value="'+esc(n.name)+'" oninput="gwNbSet(\'name\',this.value)" onkeydown="if(event.key===\'Enter\')gwNbCreate()"></label>'
+  +'<button class="p" '+(n.busy?'disabled':'')+' onclick="gwNbCreate()">'+(n.busy?'Saving...':(on?'Save in Reddit work':'Save brand as draft'))+'</button></div></div>'}
 async function gwNbCreate(){const q=FQ(),n=gwNb();if(!n||n.busy)return;const name=String(n.name||'').trim();if(!name)return alert('Type the brand name first.');
- if(ST.brands.some(b=>b.name.toLowerCase()===name.toLowerCase())&&!confirm('A brand called "'+name+'" already exists. Add another one with the same name?'))return;
+ if(rwAll().some(b=>b.name.toLowerCase()===name.toLowerCase())&&!confirm('A brand called "'+name+'" already exists. Add another one with the same name?'))return;
+ n.busy=true;fqDraw();
+ try{const row={name};if(rwOn())row.rw_state='only';
+  const{data,error}=await sb.from('brands').insert(row).select().single();if(error)throw error;
+  q.nb=null;await load();gwSetBrand(data.id);q.view='info';q.msg=rwOn()?'Brand "'+name+'" saved in Reddit work. It is separate from your Brands page until you press Connect to Brands page. Fill in the brand info, then find posts.':'Brand "'+name+'" saved as a draft. Fill in the brand info, then find posts.';fqDraw()}
+ catch(e){n.busy=false;fqDraw();alert((e&&e.message)||'Could not add the brand')}}
+/* the Reddit work brand list: its own list, separate from the Brands page until a brand is connected */
+function gwAddExOpen(){const q=FQ();q.nb=null;q.conn=null;q.addEx=!q.addEx;q.exId='';fqDraw()}
+async function gwAddEx(){const q=FQ(),id=q.exId;if(!id)return alert('Choose a brand first.');
+ const{error}=await sb.from('brands').update({rw_state:'linked'}).eq('id',id);if(!noErr(error))return;q.addEx=false;await load();gwSetBrand(id);q.msg='Added to Reddit work. This brand is already on your Brands page. Nothing from Reddit work reaches its tasks until you press Push on approved drafts.';fqDraw()}
+function gwConnOpen(){const q=FQ();q.conn={client:'',newClient:'',access:'admin',assignee:'',price:false,busy:false};fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
+function gwConnSet(k,v){const c=FQ().conn;if(c)c[k]=v}
+function gwConnHtml(b){const n=FQ().conn;if(!n)return '';
+ const mem=ST.profiles.filter(u=>u.status==='active'&&u.role==='member'),cl=ST.clients,canAsg=can('brand_assign'),canCl=can('brand_edit')||can('client_edit');
+ return '<div class="cb tvp"><div class="row" style="margin:0"><b>Connect "'+esc(b.name)+'" to your Brands page</b><span style="flex:1"></span><button onclick="FQ().conn=null;fqDraw()">Cancel</button></div>'
+  +'<p class="s">The brand then appears on your Brands page like any other brand, as a draft. Its Reddit research and drafts stay here. Choose what you want to set now. You can change all of it later.</p>'
+  +(canCl?'<div class="row" style="align-items:flex-end"><label style="flex:1;min-width:200px"><span class="s">Client</span><select onchange="gwConnSet(\'client\',this.value)"><option value="">No client yet</option>'+cl.map(c=>'<option value="'+c.id+'"'+(n.client===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+(can('client_edit')?'<label style="flex:1;min-width:200px"><span class="s">or a new client</span><input style="width:100%" placeholder="Client name" value="'+esc(n.newClient)+'" oninput="gwConnSet(\'newClient\',this.value)"></label>':'')+'</div>':'')
+  +(canAsg?'<div class="row" style="align-items:flex-end"><label style="flex:1;min-width:220px"><span class="s">Who will do the work?</span><select onchange="gwConnSet(\'access\',this.value);fqDraw()"><option value="admin"'+(n.access==='admin'?' selected':'')+'>Not decided yet</option><option value="member"'+(n.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(n.access==='open'?' selected':'')+'>Anyone with the work link</option></select></label>'
+   +(n.access==='member'?'<label style="flex:1;min-width:220px"><span class="s">Team member</span><select onchange="gwConnSet(\'assignee\',this.value)"><option value="">Choose...</option>'+mem.map(u=>'<option value="'+u.id+'"'+(n.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label>':'')+'</div>':'')
+  +(isAdminU()?'<label style="flex-direction:row;align-items:center;gap:8px;font-weight:400;margin-top:8px"><input type="checkbox" '+(n.price?'checked':'')+' onchange="gwConnSet(\'price\',this.checked)"><span>Set up pricing for this brand right after (admin only)</span></label>':'')
+  +'<p class="s">It stays a draft on the Brands page until you press Go live there. Nothing reaches your team before that.</p>'
+  +'<div class="row"><button class="p" '+(n.busy?'disabled':'')+' onclick="gwConnDo()">'+(n.busy?'Connecting...':'Connect to Brands page')+'</button></div></div>'}
+async function gwConnDo(){const q=FQ(),n=q.conn,b=gwBrand();if(!n||!b||n.busy)return;
  n.busy=true;fqDraw();let cid=n.client||null;
  try{
   if(!cid&&String(n.newClient||'').trim()&&can('client_edit')){const r=await sb.from('clients').insert({name:n.newClient.trim()}).select().single();if(r.error)throw r.error;cid=r.data.id}
-  const row={name};if(cid&&(can('brand_edit')||can('client_edit')))row.client_id=cid;
+  const row={rw_state:'linked'};if(cid&&(can('brand_edit')||can('client_edit')))row.client_id=cid;
   if(can('brand_assign')&&n.access!=='admin'){if(n.access==='member'&&!n.assignee)throw new Error('Choose the team member, or pick Not decided yet.');row.access=n.access;row.assignee=n.access==='member'?n.assignee:null}
-  const{data,error}=await sb.from('brands').insert(row).select().single();if(error)throw error;
-  const wantPrice=n.price&&isAdminU();q.nb=null;await load();gwSetBrand(data.id);q.view='info';q.msg='Brand "'+name+'" saved as a draft. It is listed under "Saved as drafts" here and stays hidden from your team until you go live. Fill in the brand info, then find posts.';fqDraw();
-  if(wantPrice)setTimeout(()=>bpOpen(data.id),50)}
- catch(e){n.busy=false;fqDraw();alert((e&&e.message)||'Could not add the brand')}}
+  const{error}=await sb.from('brands').update(row).eq('id',b.id);if(error)throw error;
+  const wantPrice=n.price&&isAdminU();q.conn=null;await load();q.msg='"'+b.name+'" is now on your Brands page as a draft. Its research and drafts are still here.';fqDraw();
+  if(wantPrice)setTimeout(()=>bpOpen(b.id),50)}
+ catch(e){n.busy=false;fqDraw();alert((e&&e.message)||'Could not connect the brand')}}
+async function gwRemoveRw(){const b=gwBrand();if(!b)return;
+ if(b.rw_state==='only'){if(!confirm('Delete "'+b.name+'" from Reddit work?\n\nIts brand info, searches and drafts are deleted too. This cannot be undone.'))return;
+  await sb.from('find_jobs').delete().eq('brand_id',b.id);const{error}=await sb.from('brands').delete().eq('id',b.id);if(!noErr(error))return}
+ else{if(!confirm('Remove "'+b.name+'" from the Reddit work list?\n\nThe brand stays on your Brands page. Its searches and drafts are kept, and come back if you add the brand again.'))return;
+  const{error}=await sb.from('brands').update({rw_state:null}).eq('id',b.id);if(!noErr(error))return}
+ await load();gwSetBrand('');FQ().counts=null;FQ().msg='';fqDraw()}
+const rwAll=()=>ST.brands.concat(ST.rbrands||[]);
+const rwOn=()=>ST.v21!==false;
+const rwList=()=>rwOn()?rwAll().filter(b=>!b.archived_at&&(b.rw_state==='only'||b.rw_state==='linked')):ST.brands.filter(b=>!b.archived_at);
+async function rwCounts(){const q=FQ();const r=await sb.from('reddit_drafts').select('brand_id,status');q.counts={};(r.data||[]).forEach(d=>{const c=q.counts[d.brand_id]=q.counts[d.brand_id]||{d:0,a:0};if(!['archived','pushed'].includes(d.status))c.d++;if(d.status==='approved')c.a++});if(ST.tab==='find'&&!q.bid)fqDraw()}
+function rwHomeHtml(){const q=FQ(),on=rwOn(),L=rwList().slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))),s=String(q.rwq||'').trim().toLowerCase(),F=L.filter(b=>!s||b.name.toLowerCase().includes(s));
+ const nJ=b=>(q.jobs||[]).filter(j=>j.brand_id===b.id||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===b.name.toLowerCase())).length;
+ const cand=on?ST.brands.filter(b=>!b.archived_at&&b.rw_state!=='linked').sort((a,b)=>a.name.localeCompare(b.name)):[];
+ let h='<div class="cb"><div class="row" style="margin:0;align-items:center"><b style="font-size:16px">Reddit brands</b><span class="s">'+L.length+' in Reddit work</span><span style="flex:1"></span><input id="rw_q" placeholder="Search brands" value="'+esc(q.rwq||'')+'" style="min-width:180px" oninput="FQ().rwq=this.value;fqDraw()">'+G('brand_add','<button class="p" onclick="gwNbOpen()">+ New brand</button>')+(on&&cand.length?'<button onclick="gwAddExOpen()">+ Add a brand from your Brands page</button>':'')+'</div>'
+  +(on?'':'<div class="warn" style="margin:10px 0 0"><b>One more database update is needed to keep Reddit work separate.</b> Open Supabase > SQL Editor, paste <b>supabase_update_21.sql</b> and press Run, then reload this page. Until then every brand shows here.</div>')
+  +(q.addEx?'<div class="row" style="margin:12px 0 0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Choose a brand that is already on your Brands page</span><select onchange="FQ().exId=this.value"><option value="">Choose...</option>'+cand.map(b=>'<option value="'+b.id+'"'+(q.exId===b.id?' selected':'')+'>'+esc(b.name)+(b.status==='live'?' (live)':' (draft)')+'</option>').join('')+'</select></label><button class="p" onclick="gwAddEx()">Add to Reddit work</button><button onclick="FQ().addEx=false;fqDraw()">Cancel</button></div><p class="s" style="margin:6px 0 0">It stays on your Brands page. Reddit research and drafts stay here. Nothing reaches its tasks until you press Push on approved drafts.</p>':'')
+  +'</div>';
+ if(!L.length)return h+'<div class="empty">No brands in Reddit work yet. Press <b>+ New brand</b> to start, or add a brand you already have.</div>';
+ if(!F.length)return h+'<div class="empty">No brand matches "'+esc(q.rwq)+'".</div>';
+ return h+F.map(b=>{const c=(q.counts||{})[b.id]||{d:0,a:0},only=on&&b.rw_state==='only';
+  return '<div class="task rwrow" style="cursor:pointer" onclick="gwSetBrand(\''+b.id+'\')"><div class="row" style="margin:0;align-items:center"><div style="flex:1;min-width:0"><div class="t">'+esc(b.name)+'</div><div class="s">'+(q.counts?c.d+' draft'+(c.d===1?'':'s')+(c.a?' ('+c.a+' approved)':'')+' &middot; ':'')+(q.jobs?nJ(b)+' search'+(nJ(b)===1?'':'es'):'')+'</div></div>'
+   +(only?'<span class="chip mut">Reddit work only</span>':on?'<span class="chip ok">On Brands page: '+(b.status==='live'?'Live':'Draft')+'</span>':'')
+   +'<button class="p sm" onclick="event.stopPropagation();gwSetBrand(\''+b.id+'\')">Open</button></div></div>'}).join('')}
+function rwHeadHtml(b){const on=rwOn(),only=on&&b.rw_state==='only';
+ return '<div class="cb"><div class="row" style="margin:0;align-items:center"><button onclick="gwSetBrand(\'\')">&larr; All Reddit brands</button><h2 style="margin:0">'+esc(b.name)+'</h2>'
+  +(only?'<span class="chip mut">Reddit work only</span>':on?'<span class="chip ok">On Brands page: '+(b.status==='live'?'Live':'Draft')+'</span>':'')+'<span style="flex:1"></span>'
+  +(only&&(can('brand_edit')||can('brand_add')||isAdminU())?'<button class="p" onclick="gwConnOpen()">Connect to Brands page</button>':'')
+  +(on&&!only?'<button onclick="gwOpenBrandTasks()">Open on Brands page</button>':'')
+  +(on&&(only||isAdminU()||can('brand_edit'))?'<button class="sm" onclick="gwRemoveRw()">'+(only?'Delete this Reddit brand':'Remove from Reddit work')+'</button>':'')+'</div>'
+  +(only?'<p class="s" style="margin:10px 0 0">This brand lives only in Reddit work: research, searches and drafts. It is not on your Brands page, and your team and clients cannot see it. Press <b>Connect to Brands page</b> when you want it there, for example before you push drafts as tasks.</p>':'')
+  +(on&&!only?gwSetupHtml(b):'')+(!on?gwSetupHtml(b):'')+'</div>'}
 async function gwSetClient(v){const q=FQ();if(!q.bid)return;const{error}=await sb.from('brands').update({client_id:v||null}).eq('id',q.bid);if(error)return alert(error.message);await load();fqDraw()}
 function gwSetupHtml(b){const q=FQ(),cl=ST.clients.find(c=>c.id===b.client_id),pl=typeof planned==='function'?planned(b.id):null;
  return '<div class="row" style="margin:12px 0 0;align-items:center;gap:10px"><label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><span class="s">Client</span><select '+(can('brand_edit')?'':'disabled')+' onchange="gwSetClient(this.value)"><option value="">No client yet</option>'+ST.clients.map(c=>'<option value="'+c.id+'"'+(b.client_id===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'
