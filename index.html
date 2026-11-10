@@ -1841,7 +1841,7 @@ function reportsView(){const q=RQ();if(q.jobs==null&&!q.jerr)setTimeout(rqJobs,3
  return '<div class="row pagehead"><h1 style="margin:0;flex:1">Make reports</h1></div><p class="mu" style="margin-top:6px">Turn live Reddit posts and comments into a PDF report with a full screenshot of each post, a screenshot of your comment, your brand name highlighted, and links to both. Only admins see this page.</p><div id="rq_main">'+rqMain()+'</div><h3>Your reports</h3><div id="rq_jobs">'+rqJobsHtml()+'</div>'}
 
 /* ---- Find posts (admin only): searches Reddit for live posts that fit a brand, ranked by keywords (no AI) ---- */
-const FQ=()=>ST.fq||(ST.fq={name:'',mode:'text',info:'',url:'',topics:'',exclude:'',subs:'',want:20,preset:'month',from:'',to:'',msg:'',err:'',jobs:null,jerr:'',timer:0,busy:false,open:{},sel:{},pdfs:{},pdferr:'',suggested:false,bid:'',view:'',prof:null,drafts:null,perr:'',derr:'',prefilled:'',df:null,dopen:{},fileText:'',fileName:''});
+const FQ=()=>ST.fq||(ST.fq={name:'',mode:'text',info:'',url:'',topics:'',exclude:'',subs:'',want:20,preset:'month',from:'',to:'',msg:'',err:'',jobs:null,jerr:'',timer:0,busy:false,open:{},sel:{},pdfs:{},pdferr:'',suggested:false,bid:(()=>{try{return localStorage.getItem('rw_bid')||''}catch(e){return ''}})(),flOpen:false,runner:'',view:'',prof:null,drafts:null,perr:'',derr:'',prefilled:'',df:null,dopen:{},fileText:'',fileName:''});
 const FQ_STOP=new Set('a an the and or but if of to in on at by for with from as is are was were be been being it its this that these those we you your our their they he she i me my us them his her not no yes can will would should could may might do does did done have has had having so than then too very just also more most such other any all each both about into over after before between through during without within up down out off again further once here there when where why how what which who whom whose get got make made use used using need needs help helps provide provides offer offers including include based like well one two three new best top great good high per via etc www http https com org net offering offered run runs running small book books today moving working helping helps live lives take takes give gives want wants look looks find finds start starts come comes make makes keep keeps change changes call free every many much even still back own same different really always often next last first long full real open set sets see sees know knows team company business services service people year years day days time contact home page click learn read more menu login sign privacy terms cookies policy copyright rights reserved'.split(' '));
 function fqSuggest(text,brand,boost){
  const bw=new Set(String(brand||'').toLowerCase().split(/[^a-z0-9]+/).filter(Boolean)),cnt={};
@@ -1894,21 +1894,21 @@ async function fqGo(){if(needV16())return;const q=FQ(),b=gwBrand(),topics=fqList
  const[a,z]=fqRange();if(!a||!z||a>z)return fqErr('Choose a start date and an end date (the start must not be after the end).');
  const want=Math.max(1,Math.min(200,parseInt(q.want,10)||20));
  const row={created_by:me&&me.id||null,brand_id:b.id,brand_name:b.name,keywords:{topics,brand:[b.name],exclude:fqList(q.exclude),subs:fqList(q.subs).map(x=>x.replace(/^\/?r\//i,''))},want,range_label:(FQ_PRE.find(p=>p[0]===q.preset)||[0,''])[1],date_from:a,date_to:z};
- q.busy=true;fqDraw();const{error}=await sb.from('find_jobs').insert(row);q.busy=false;
+ q.busy=true;fqDraw();const ins=await sb.from('find_jobs').insert(row).select().single(),error=ins.error;q.busy=false;
  if(error&&/brand_id|schema cache/i.test(error.message||'')){fqDraw();return alert('Run supabase_update_18.sql in Supabase first (SQL Editor), then reload this page.')}
  if(!noErr(error)){fqDraw();return}
- q.msg='Search requested. It starts within about 5 minutes and the posts appear below when it is done.';await fqJobs();fqDraw()}
+ q.msg='Search started. It is saved, so you can leave or refresh this page. It stays in "Your searches" and keeps going.';await fqJobs();fqDraw();if(ins.data&&ins.data.id)fqBrowserRun(ins.data)}
 const fqErr=m=>{FQ().err=m;fqDraw()};
-async function fqJobs(){const q=FQ();const{data,error}=await sb.from('find_jobs').select('*').order('created_at',{ascending:false}).limit(15);
+async function fqJobs(){const q=FQ();const{data,error}=await sb.from('find_jobs').select('*').order('created_at',{ascending:false}).limit(30);
  if(error){q.jerr=/find_jobs|schema cache|relation/i.test(error.message||'')?'v16':(error.message||'error')}else{q.jerr='';q.jobs=data||[]}
  if(!error&&(data||[]).length){const r=await sb.from('report_jobs').select('id,find_id,created_at,status,total,progress,included,skipped,note,file_path,retry_local,title').eq('source','posts').in('find_id',data.map(j=>j.id)).order('created_at',{ascending:false});
   if(r.error){q.pdferr=/find_id|source|schema cache|check/i.test(r.error.message||'')?'v17':(r.error.message||'error');q.pdfs={}}else{q.pdferr='';q.pdfs={};(r.data||[]).forEach(x=>{(q.pdfs[x.find_id]=q.pdfs[x.find_id]||[]).push(x)})}}
- const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml();fqPoll()}
+ const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml();fqPoll();fqResume()}
 function fqPoll(){const q=FQ();clearTimeout(q.timer);if(ST.tab!=='find')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running')||Object.values(q.pdfs||{}).some(a=>a.some(x=>x.status==='pending'||x.status==='running')))q.timer=setTimeout(fqJobs,8000)}
 function fqReuse(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;const k=j.keywords||{};q.topics=(k.topics||[]).join('\n');q.exclude=(k.exclude||[]).join(', ');q.subs=(k.subs||[]).join(', ');q.want=j.want;
  const pr=FQ_PRE.find(p=>p[1]===j.range_label&&p[0]!=='custom');if(pr&&pr[0]!=='custom'){q.preset=pr[0]}else{q.preset='custom';q.from=j.date_from;q.to=j.date_to}
  q.msg='Keywords and dates from that search are filled in below. Change what you like, then press Find posts.';q.view='find';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
-async function fqRetry(id){const{error}=await sb.from('find_jobs').update({status:'pending',progress:0,found:0,results:[],note:null,retry_local:false,started_at:null,finished_at:null}).eq('id',id);if(!noErr(error))return;FQ().msg='Started again. It begins within about 5 minutes.';await fqJobs();fqDraw()}
+async function fqRetry(id){const{error}=await sb.from('find_jobs').update({status:'pending',progress:0,found:0,results:[],note:null,retry_local:false,started_at:null,finished_at:null}).eq('id',id);if(!noErr(error))return;FQ().msg='Started again.';await fqJobs();fqDraw();const j=(FQ().jobs||[]).find(x=>x.id===id);if(j)fqBrowserRun(j)}
 async function fqLocal(id){const{error}=await sb.from('find_jobs').update({retry_local:true}).eq('id',id);if(!noErr(error))return;FQ().msg='Passed to your computer. It starts within a minute if the Keep_running window is open on your computer.';await fqJobs();fqDraw()}
 async function fqDel(id){if(!confirm('Delete this search and its results?'))return;const{error}=await sb.from('find_jobs').delete().eq('id',id);if(!noErr(error))return;await fqJobs()}
 const fqToggle=id=>{const q=FQ();q.open[id]=!q.open[id];const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()};
@@ -1944,14 +1944,14 @@ function fqCsv(id){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;const
  const b=new Blob(['﻿'+rows.map(r=>r.map(c).join(',')).join('\r\n')],{type:'text/csv'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(j.brand_name||'posts').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_posts_'+ymd(j.created_at)+'.csv';document.body.appendChild(a);a.click();a.remove()}
 function fqJobsHtml(){const q=FQ();if(q.jerr==='v16')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_16.sql</b> and press Run, then reload this page.</div>';
  if(q.jerr)return '<div class="warn">Could not load your searches: '+esc(q.jerr)+'</div>';if(q.jobs==null)return '<div class="s">Loading...</div>';
- if(!q.jobs.length)return '<div class="empty">No searches yet. Make your first one above.</div>';
+ if(!q.jobs.length)return '<div class="empty">No searches yet. Pick a brand, then make your first one.</div>';
  const st=j=>j.retry_local?'<span class="chip warn">Waiting for your computer</span>':j.status==='done'?'<span class="chip ok">'+(j.found||0)+' post'+((j.found||0)==1?'':'s')+' found</span>':j.status==='failed'?'<span class="chip bad">Failed</span>':j.status==='running'?'<span class="chip warn">Searching: '+(j.progress||0)+' of '+((j.keywords&&j.keywords.topics||[]).length)+' keywords</span>':'<span class="chip mut">Waiting to start</span>';
  const lab=n=>n>=60?'<span class="chip ok">High '+n+'</span>':n>=40?'<span class="chip warn">Medium '+n+'</span>':'<span class="chip mut">Low '+n+'</span>';
  const bnm=((gwBrand()||{}).name||'').toLowerCase(),JL=q.jobs.filter(j=>!q.bid||j.brand_id===q.bid||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===bnm));
- if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';
+ if(!JL.length)return '<div class="empty">No searches for this brand yet. Make your first one above.</div>';const brandId=j=>j.brand_id||((ST.brands.find(b=>b.name.toLowerCase()===String(j.brand_name||'').toLowerCase())||{}).id)||'';
  return JL.map(j=>{const R=Array.isArray(j.results)?j.results:[],kw=(j.keywords&&j.keywords.topics||[]),open=!!q.open[j.id];
   return '<div class="task"><div class="row" style="margin:0"><div style="flex:1;min-width:0"><div class="t">'+esc(j.brand_name)+'</div><div class="s">'+D_(ymd(j.created_at))+' &middot; '+esc(j.range_label||'')+' ('+D_(j.date_from)+' to '+D_(j.date_to)+') &middot; asked for '+j.want+' &middot; '+esc(clip(kw.join(', '),90))+'</div></div>'+st(j)+'</div><div class="row" style="margin:10px 0 0">'+(j.status==='done'&&R.length?'<button class="p sm" onclick="fqToggle(\''+j.id+'\')">'+(open?'Hide results':'View results')+'</button><button class="sm" onclick="fqLinks(\''+j.id+'\')">Download links</button><button class="sm" onclick="fqCsv(\''+j.id+'\')">Download CSV</button><button class="sm" onclick="fqPdf(\''+j.id+'\')" title="A numbered PDF with a screenshot of every ticked post">PDF with screenshots</button><button class="sm" onclick="fqCopy(\''+j.id+'\')">Copy links</button>':'')
-  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed')&&!j.retry_local?'<button class="sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
+  +(j.status==='done'&&R.length?'<div class="s" style="flex-basis:100%;margin:0">The links file, the CSV and the PDF all end with the written rules of each community (an appendix). The PDF uses the posts ticked under View results.</div>':'')+(j.status==='failed'?'<button class="p sm" onclick="fqRetry(\''+j.id+'\')">Try again</button>':j.status==='done'?'<button class="sm" onclick="fqRetry(\''+j.id+'\')">Search again</button>':'')+(!q.bid&&brandId(j)?'<button class="p sm" onclick="gwOpenJob(\''+brandId(j)+'\')">Open this brand</button>':'')+'<button class="sm" onclick="fqReuse(\''+j.id+'\')" title="Fill the form with this search so you can change the keywords">Change keywords</button>'+((j.status==='done'||j.status==='failed')&&!j.retry_local?'<button class="sm" onclick="fqLocal(\''+j.id+'\')" title="Your computer does the search">Redo on my computer</button>':'')+'<button class="sm dng" onclick="fqDel(\''+j.id+'\')">Delete</button></div>'
   +(j.status==='running'&&kw.length?'<div class="bar" style="margin-top:8px"><i style="width:'+Math.round((j.progress||0)/kw.length*100)+'%"></i></div>':'')
   +(j.note?'<div class="s" style="margin-top:6px">'+esc(j.note)+'</div>':'')
   +(R.length&&(j.status==='done')?fqPdfHtml(j,R,open):'')+(open&&R.length?'<div class="scrollx" style="margin-top:10px"><table class="et"><tr><th></th><th>#</th><th>Fit</th><th>Post</th><th>Community</th><th>Posted</th></tr>'+R.map((r,i)=>'<tr><td><input type="checkbox" '+(fqSelOf(j)[i]?'checked':'')+' onchange="fqTick(\''+j.id+'\','+i+',this.checked)" aria-label="Include in the PDF"></td><td>'+(i+1)+'</td><td>'+lab(r.relevance)+'</td><td><a href="'+esc(r.url)+'" target="_blank" rel="noopener"><b>'+esc(clip(r.title,110))+'</b></a>'+(r.snippet?'<div class="s">'+esc(clip(r.snippet,160))+'</div>':'')+'<div class="s rdw">'+esc((r.why||[]).join(' · '))+(r.brand_mentioned?' · already mentions the brand':'')+'</div></td><td>r/'+esc(r.sub)+'</td><td>'+D_(String(r.created||'').slice(0,10))+'</td></tr>').join('')+'</table></div>':'')+'</div>'}).join('')}
@@ -1965,7 +1965,7 @@ function fqPdfHtml(j,R,open){const q=FQ(),P=q.pdfs[j.id]||[],m=fqSelOf(j),n=R.fi
   +(x.note&&(x.status!=='done'||x.retry_local)?'<div class="s" style="margin-top:4px">'+esc(x.note)+'</div>':'')
   +(sk.length?'<details style="margin-top:4px"><summary>Not included ('+sk.length+')</summary><table class="et"><tr><th>Link</th><th>Why</th></tr>'+sk.map(s=>'<tr><td><a href="'+esc(s.post||'#')+'" target="_blank" rel="noopener">'+esc(clip(s.post||'',70))+'</a></td><td>'+esc(s.reason||'')+'</td></tr>').join('')+'</table></details>':'')}).join('');
  return h}
-function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeElement&&document.activeElement.id,pos=document.activeElement&&document.activeElement.selectionStart;e.innerHTML=fqMain();{const q=FQ(),w=$('fq_jw');if(w)w.style.display=(q.bid&&q.view==='find')?'':'none'}
+function fqDraw(){const e=$('fq_main');if(!e)return;const keep=document.activeElement&&document.activeElement.id,pos=document.activeElement&&document.activeElement.selectionStart;e.innerHTML=fqMain();{const q=FQ(),w=$('fq_jw');if(w){w.style.display=(!q.bid||q.view==='find')?'':'none';const h=w.querySelector('h3');if(h)h.textContent=q.bid?'Your searches':'Your searches (all brands)'}}
  if(keep&&$(keep)&&/INPUT|TEXTAREA/.test($(keep).tagName)){const el=$(keep);el.focus();try{el.setSelectionRange(pos,pos)}catch(_){}}}
 function fqFormHtml(){const q=FQ(),b=gwBrand();const [a,z]=fqRange(),pills=FQ_PRE.map(p=>'<button class="tb'+(q.preset===p[0]?' on':'')+'" onclick="FQ().preset=\''+p[0]+'\';fqDraw()">'+p[1]+'</button>').join('');
  return '<div class="cb"><label><span class="s"><b>Keywords to search for</b>: what people write when they need '+esc(b?b.name:'this brand')+'. One per line.</span><textarea id="fq_t" rows="6" style="width:100%" placeholder="spanish classes online&#10;learn spanish&#10;spanish school in madrid" oninput="FQ().topics=this.value">'+esc(q.topics)+'</textarea></label>'
@@ -1980,8 +1980,89 @@ function fqMain(){const q=FQ();let h=gwBrandBar();
  if(!q.bid)return h;
  if(q.prof==null&&!q.perr)return h+'<div class="s">Loading...</div>';
  return h+(q.view==='info'?gwInfoHtml():q.view==='drafts'?gwDraftsHtml():q.view==='batch'?gwBatchHtml():q.view==='rules'?gwRulesHtml():fqFormHtml())}
-function findView(){const q=FQ();if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);
- return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(q.bid&&q.view==='find'?'':'none')+'"><h3>Your searches</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
+function findView(){const q=FQ();if(q.bid&&!gwBrand()){q.bid='';try{localStorage.removeItem('rw_bid')}catch(e){}}if(q.jobs==null&&!q.jerr)setTimeout(fqJobs,30);else fqPoll();if(q.bid&&q.prof==null&&!q.perr)setTimeout(gwLoad,30);
+ return '<div class="row pagehead"><h1 style="margin:0;flex:1">Reddit work</h1></div><p class="mu" style="margin-top:6px">Pick a brand, find live Reddit posts where people are asking for what it offers, then write comments or posts for them. Approved drafts are pushed into the brand\'s tasks for your team. Ranking uses your keywords (no AI).</p><div id="fq_main">'+fqMain()+'</div><div id="fq_jw" style="display:'+(!q.bid||q.view==='find'?'':'none')+'"><h3>'+(q.bid?'Your searches':'Your searches (all brands)')+'</h3><div id="fq_jobs">'+fqJobsHtml()+'</div></div>'}
+
+/* ---- fast search: runs in this browser first. If Reddit refuses it here, the background worker takes over. ---- */
+const FB_NOTE='Searching from your browser';
+const FB_ASK=/\b(recommend\w*|suggest\w*|looking for|looking to|searching for|where (?:can|do|should|to) (?:i|we)|which (?:one|is|are|should)|best|advice|help|need(?:ed)?|anyone (?:know|tried|used|have|recommend)|has anyone|does anyone|worth it|alternatives?|how (?:do|to|can|should) (?:i|we)|any tips|thoughts|experiences?|reviews?)\b/i;
+const FB_NEG=/\b(hiring|for hire|we are hiring|sponsored|giveaway|promo code|discount code)\b/i;
+const fbRx=t=>new RegExp('(?<![a-z0-9])'+String(t).trim().replace(/[.*+?^${}()|[\]\\]/g,'\\$&').replace(/\s+/g,'\\s+')+'(?![a-z0-9])','i');
+const fbSleep=ms=>new Promise(r=>setTimeout(r,ms));
+function fbScore(p,o){const title=String(p.title||''),body=String(p.selftext||''),why=[];let topical=0,matched=0,inTitle=0;
+ for(const t of o.topics){const rx=fbRx(t),words=t.split(/\s+/).filter(w=>w.length>2);
+  if(rx.test(title)){topical+=inTitle===0?30:10;inTitle++;matched++;why.push('title has "'+t+'"')}
+  else if(words.length>1&&words.every(w=>fbRx(w).test(title))){topical+=inTitle===0?26:9;inTitle++;matched++;why.push('title has the words of "'+t+'"')}
+  else if(rx.test(body)){topical+=matched===0?12:5;matched++;why.push('post text has "'+t+'"')}
+  else if(words.length>1&&words.every(w=>fbRx(w).test(body))){topical+=8;matched++;why.push('post text has the words of "'+t+'"')}}
+ if(!matched)return{score:0,why:[],brandMentioned:false};
+ let s=Math.min(65,topical);
+ if(FB_ASK.test(title)){s+=14;why.push('asks for help or a recommendation')}else if(FB_ASK.test(body.slice(0,500))){s+=6;why.push('looks like a question or request')}
+ if(/\?/.test(title))s+=5;
+ const n=+p.num_comments||0;s+=Math.min(8,Math.round(Math.log2(n+1)*1.6));if(n>200)s-=5;
+ const age=(o.now-p.created_utc)/86400;if(age<=2)s+=6;else if(age<=7)s+=4;else if(age<=30)s+=2;
+ if(o.subs.length&&o.subs.some(x=>x.toLowerCase()===String(p.subreddit||'').toLowerCase())){s+=6;why.push('in a community you chose')}
+ const text=title+' '+body,ex=o.exclude.find(t=>fbRx(t).test(text));if(ex){s-=40;why.push('mentions "'+ex+'" (word to avoid)')}
+ if(FB_NEG.test(title))s-=25;
+ const brandMentioned=o.brand.some(t=>fbRx(t).test(text));
+ if(n)why.push(n+' comment'+(n===1?'':'s'));else why.push('no comments yet');
+ return{score:Math.max(0,Math.min(100,Math.round(s))),why,brandMentioned}}
+async function fbGet(path){for(let a=0;;a++){let r;
+  try{r=await fetch('https://www.reddit.com'+path,{headers:{Accept:'application/json'},credentials:'omit',cache:'no-store'})}catch(e){const x=new Error('This browser could not reach Reddit');x.net=1;throw x}
+  if(r.status===429||r.status===403){if(a<2){await fbSleep(5000*(a+1));continue}const x=new Error('HTTP '+r.status);x.slow=1;throw x}
+  if(!r.ok)throw new Error('HTTP '+r.status);
+  let j=null;try{j=await r.json()}catch(e){}
+  if(!j)throw new Error('got a web page instead of search results');return j}}
+async function fbRules(subs){const out={},seen=new Set(),list=[];
+ subs.forEach(s=>{const k=String(s||'').toLowerCase();if(k&&/^\w+$/.test(k)&&!seen.has(k)){seen.add(k);list.push(String(s))}});
+ const one=async s=>{try{const j=await fbGet('/r/'+s+'/about/rules.json?raw_json=1'),arr=j&&Array.isArray(j.rules)?j.rules:[];
+   if(arr.length)out[s.toLowerCase()]={rules:arr.slice(0,20).map(x=>({n:String(x.short_name||'').slice(0,120),d:String(x.description||'').replace(/\s+/g,' ').trim().slice(0,500)}))}}catch(e){}};
+ const L=list.slice(0,30);for(let i=0;i<L.length;i+=5)await Promise.all(L.slice(i,i+5).map(one));return out}
+function fqLocalJob(id,o){const j=(FQ().jobs||[]).find(x=>x.id===id);if(j){Object.assign(j,o);const e=$('fq_jobs');if(e&&ST.tab==='find')e.innerHTML=fqJobsHtml()}}
+async function fqBrowserRun(job,resume){const q=FQ();if(!job||q.runner)return;q.runner=job.id;const id=job.id,nowI=()=>new Date().toISOString();
+ const hand=async(why)=>{await sb.from('find_jobs').update({status:'pending',progress:0,started_at:null,note:why}).eq('id',id);fqLocalJob(id,{status:'pending',progress:0,note:why})};
+ try{
+  let c=sb.from('find_jobs').update({status:'running',started_at:nowI(),progress:0,retry_local:false,note:FB_NOTE}).eq('id',id).eq('status',resume?'running':'pending');
+  if(resume&&job.started_at)c=c.eq('started_at',job.started_at);
+  const cl=await c.select();if(cl.error||!cl.data||!cl.data.length)return; // the background worker already has it
+  fqLocalJob(id,{status:'running',progress:0,note:FB_NOTE,started_at:nowI()});
+  const k=job.keywords||{},list=a=>(Array.isArray(a)?a:[]).map(x=>String(x).trim()).filter(Boolean);
+  const topics=list(k.topics).slice(0,15),exclude=list(k.exclude),brand=list(k.brand),subs=list(k.subs).map(x=>x.replace(/^\/?r\//i,'')).filter(x=>/^\w+$/.test(x));
+  const want=Math.max(1,Math.min(200,+job.want||20)),now=Math.floor(Date.now()/1000);
+  const fromTs=Date.parse((job.date_from||'1970-01-01')+'T00:00:00Z')/1000,toTs=Date.parse((job.date_to||'2999-01-01')+'T23:59:59Z')/1000;
+  const ageDays=(now-fromTs)/86400,T=ageDays<=1.5?'day':ageDays<=8?'week':ageDays<=32?'month':ageDays<=370?'year':'all',windowDays=Math.max(1,(Math.min(toTs,now)-fromTs)/86400);
+  if(!topics.length){await sb.from('find_jobs').update({status:'failed',note:'There are no keywords to search for.',finished_at:nowI()}).eq('id',id);fqLocalJob(id,{status:'failed'});return}
+  const base=subs.length?'/r/'+subs.join('+')+'/search.json?restrict_sr=1&':'/search.json?';
+  const found=new Map();let ok=0,failed=0,reqs=0,done=0,lastErr='',netFail=false,idx=0;
+  const worker=async()=>{while(!netFail){const ti=idx++;if(ti>=topics.length)return;const t=topics[ti],qs=encodeURIComponent(/\s/.test(t)?'"'+t+'"':t);
+    const plans=[{sort:'relevance',pages:1},...(windowDays<=31?[{sort:'new',pages:2}]:[])];
+    for(const pl of plans){let after='';for(let pg=0;pg<pl.pages;pg++){if(reqs>=45)break;reqs++;
+      try{const d=(await fbGet(base+'q='+qs+'&sort='+pl.sort+'&t='+T+'&type=link&limit=100&raw_json=1'+(after?'&after='+after:''))).data||{};ok++;
+        const kids=d.children||[];for(const ch of kids)if(ch.kind==='t3'&&ch.data&&!found.has(ch.data.id))found.set(ch.data.id,ch.data);
+        const oldest=kids.length?Math.min(...kids.map(ch=>ch.data.created_utc||now)):0;after=d.after||'';if(!after||!kids.length||(pl.sort==='new'&&oldest<fromTs))break}
+      catch(e){failed++;lastErr=String(e.message||e).slice(0,120);if(e.net){netFail=true;return}break}
+      await fbSleep(500)}}
+    done++;sb.from('find_jobs').update({progress:done,started_at:nowI()}).eq('id',id).then(()=>{});fqLocalJob(id,{progress:done})}};
+  await Promise.all([worker(),worker()]);
+  if(netFail||!ok)return hand((netFail?'Your browser could not reach Reddit':'Reddit did not answer the browser ('+lastErr+')')+', so the background search will do it instead. It starts within about 5 minutes.');
+  const res=[];
+  for(const p of found.values()){if(p.created_utc<fromTs||p.created_utc>toTs)continue;
+   if(p.removed_by_category||['[removed]','[deleted]'].includes(String(p.selftext||'').trim())||p.author==='[deleted]'||p.locked||p.archived||p.over_18||p.quarantine)continue;
+   const sc=fbScore(p,{topics,brand,exclude,subs,now});if(sc.score<25)continue;
+   res.push({title:String(p.title||'').slice(0,220),url:'https://www.reddit.com'+p.permalink,sub:p.subreddit,created:new Date(p.created_utc*1000).toISOString(),comments:p.num_comments||0,upvotes:p.score||0,relevance:sc.score,why:sc.why.slice(0,4),brand_mentioned:sc.brandMentioned,snippet:String(p.selftext||'').replace(/\s+/g,' ').trim().slice(0,220),body:String(p.selftext||'').replace(/\r/g,'').trim().slice(0,1500),author:p.author||''})}
+  res.sort((a,b)=>b.relevance-a.relevance||new Date(b.created)-new Date(a.created));const top=res.slice(0,want);
+  const rules=top.length?await fbRules(top.map(r=>r.sub)).catch(()=>({})):{};
+  const note=(top.length?(top.length<want?'Found '+top.length+' fitting posts in this period (you asked for '+want+'). Try wider dates or more keywords for more.':'' ):'No live posts fitted these keywords in this period. Try wider dates or more keywords.')+(failed?' '+failed+' search'+(failed===1?'':'es')+' could not be completed, so some posts may be missing.':'');
+  const row={status:'done',retry_local:false,results:top,found:top.length,progress:topics.length,note:note.trim()||null,finished_at:nowI()};
+  let r=await sb.from('find_jobs').update(Object.keys(rules).length?{...row,rules}:row).eq('id',id);
+  if(r.error&&/rules/i.test(r.error.message||''))r=await sb.from('find_jobs').update(row).eq('id',id);
+  if(r.error)return hand('The browser search finished but could not be saved ('+String(r.error.message||'').slice(0,80)+'), so the background search will do it instead.');
+  FQ().msg='Search finished: '+top.length+' post'+(top.length===1?'':'s')+' found.';await fqJobs();fqDraw();
+ }catch(e){try{await hand('The browser search stopped ('+String((e&&e.message)||e).slice(0,80)+'), so the background search will do it instead. It starts within about 5 minutes.')}catch(x){}}
+ finally{q.runner=''}}
+// a search that was running in this browser and was interrupted (page closed or refreshed) carries on when the page is opened again
+function fqResume(){const q=FQ();if(q.runner||!(q.jobs||[]).length)return;
+ const j=q.jobs.find(x=>x.status==='running'&&x.note===FB_NOTE&&x.started_at&&Date.now()-Date.parse(x.started_at)>60000);if(j)fqBrowserRun(j,true)}
 
 /* ---- Reddit work (admin only): pick a brand, find posts, draft posts and comments, approve, push into the brand's tasks ---- */
 const GW_ANGLES=['Personal experience','How-to','Troubleshooting','Comparison','Case study','Question','Discussion','Data or observation','Tool recommendation','Mistake or lesson','Strategy','Opinion','Resource'];
@@ -1994,7 +2075,8 @@ const gwNowS=()=>new Date().toISOString();
 const gwErrTxt=e=>/brand_profiles|reddit_drafts|brand_id|schema cache|relation/i.test((e&&e.message)||'')?'v18':((e&&e.message)||'error');
 const needV18=()=>{const q=FQ();if(q.perr==='v18'||q.derr==='v18'){alert('Run supabase_update_18.sql in Supabase first (SQL Editor), then reload this page.');return true}return false};
 /* brand */
-function gwSetBrand(id){const q=FQ();q.bid=id;q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';q.topics='';q.exclude='';q.subs='';q.view='';if(id)gwLoad();fqDraw();const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
+function gwOpenJob(id){gwSetBrand(id);FQ().view='find';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
+function gwSetBrand(id){const q=FQ();q.bid=id;try{if(id)localStorage.setItem('rw_bid',id);else localStorage.removeItem('rw_bid')}catch(e){}q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';q.topics='';q.exclude='';q.subs='';q.view='';if(id)gwLoad();fqDraw();const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
 const gwNewBrand=gwNbOpen;
 async function gwLoad(){const q=FQ(),id=q.bid;if(!id)return;
  const a=await sb.from('brand_profiles').select('*').eq('brand_id',id).maybeSingle();
@@ -2129,10 +2211,10 @@ function gwDraftsHtml(){const q=FQ();if(q.derr==='v18')return '<div class="warn"
   +'<div class="row" style="margin:10px 0 0"><select onchange="FQ().df.st=this.value;fqDraw()">'+opts([['open','Still working on'],['all','Everything'],['draft','Draft'],['review','Ready for review'],['approved','Approved'],['pushed','In brand tasks'],['archived','Archived']],F.st)+'</select><select onchange="FQ().df.kind=this.value;fqDraw()">'+opts([['all','Posts and comments'],['post','Posts'],['comment','Comments']],F.kind)+'</select><input id="gw_q" placeholder="Search drafts" value="'+esc(F.q)+'" style="flex:1;min-width:160px" oninput="FQ().df.q=this.value;fqDraw()"></div></div>'
   +(list.length?list.map(gwDraftHtml).join(''):'<div class="empty">No drafts here yet.</div>')}
 /* page */
-function gwBrandBar(){const q=FQ(),bs=ST.brands.filter(b=>!b.archived_at).slice().sort((a,b)=>a.name.localeCompare(b.name)),b0=gwBrand();
+function gwBrandBar(){const q=FQ(),bs=ST.brands.filter(b=>!b.archived_at).slice().sort((a,b)=>a.name.localeCompare(b.name)),b0=gwBrand(),optB=b=>'<option value="'+b.id+'"'+(q.bid===b.id?' selected':'')+'>'+esc(b.name)+'</option>',drafts=bs.filter(b=>b.status!=='live');
  const tabs=[['info','Brand info',can('reddit_find')||can('reddit_draft')],['find','Find posts',can('reddit_find')],['batch','Write a batch',can('reddit_draft')],['drafts','Drafts'+(q.drafts?' ('+q.drafts.filter(d=>!['archived','pushed'].includes(d.status)).length+')':''),can('reddit_draft')],['rules','Community rules',can('reddit_find')||can('reddit_draft')]].filter(x=>x[2]);
- return gwFlowHtml(!q.bid&&!q.nb)+(q.nb?gwNbHtml():'')+'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Work for this brand</span><select id="gw_b" onchange="gwSetBrand(this.value)"><option value="">Choose a brand...</option>'+bs.map(b=>'<option value="'+b.id+'"'+(q.bid===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select></label>'+G('brand_add','<button onclick="gwNbOpen()">+ New brand</button>')+(q.bid?'<button onclick="gwOpenBrandTasks()">Open this brand\'s tasks</button>':'')+'</div>'
-  +(b0?gwSetupHtml(b0):'')
+ return gwFlowHtml(!!q.flOpen)+(q.nb?gwNbHtml():'')+'<div class="cb"><div class="row" style="margin:0;align-items:flex-end"><label style="flex:1;min-width:240px"><span class="s">Work for this brand</span><select id="gw_b" onchange="gwSetBrand(this.value)"><option value="">Choose a brand...</option>'+(bs.some(b=>b.status!=='live')?'<optgroup label="Saved as drafts (not live yet)">'+bs.filter(b=>b.status!=='live').map(optB).join('')+'</optgroup>':'')+(bs.some(b=>b.status==='live')?'<optgroup label="Live brands">'+bs.filter(b=>b.status==='live').map(optB).join('')+'</optgroup>':'')+'</select></label>'+G('brand_add','<button onclick="gwNbOpen()">+ New brand</button>')+(q.bid?'<button onclick="gwOpenBrandTasks()">Open this brand\'s tasks</button>':'')+'</div>'
+  +(b0?gwSetupHtml(b0):(drafts.length?'<div class="row" style="margin:12px 0 0;align-items:center"><span class="s"><b>Saved as drafts (not live yet):</b></span>'+drafts.map(b=>'<button class="sm" onclick="gwSetBrand(\''+b.id+'\')">'+esc(b.name)+'</button>').join('')+'</div>':''))
   +(q.bid?'<div class="row" style="margin:14px 0 0">'+tabs.map(t=>'<button class="tb'+(q.view===t[0]?' on':'')+'" onclick="FQ().view=\''+t[0]+'\';fqDraw()">'+t[1]+'</button>').join('')+'</div>':'<p class="s" style="margin:10px 0 0">Choose an existing brand, or add a new one. Everything below (keywords, searches, drafts) then belongs to that brand, and approved drafts become that brand\'s tasks for your team.</p>')+'</div>'}
 function gwOpenBrandTasks(){const b=gwBrand();if(!b)return;ST.tab='brands';ST.bid=b.id;ST.panel='';draw()}
 
@@ -2251,14 +2333,14 @@ function gwNbSet(k,v){const n=gwNb();if(n)n[k]=v}
 function gwNbHtml(){const n=gwNb();if(!n)return '';
  const mem=ST.profiles.filter(u=>u.status==='active'&&u.role==='member'),cl=ST.clients,canAsg=can('brand_assign'),canCl=can('brand_edit')||can('client_edit');
  return '<div class="cb tvp"><div class="row" style="margin:0"><b>Add a brand</b><span style="flex:1"></span><button onclick="FQ().nb=null;fqDraw()">Cancel</button></div>'
-  +'<p class="s">The brand is added to your Brands list like any other. You can fill in the rest later from its page.</p>'
+  +'<p class="s">The brand is saved as a draft. It shows in the list on this page and on your Brands page, and nobody on your team sees it until you go live. You can fill in the rest later.</p>'
   +'<div class="row" style="align-items:flex-end"><label style="flex:2;min-width:220px"><span class="s">Brand name</span><input id="nb_name" style="width:100%" value="'+esc(n.name)+'" oninput="gwNbSet(\'name\',this.value)"></label>'
   +(canCl?'<label style="flex:1;min-width:200px"><span class="s">Client</span><select onchange="gwNbSet(\'client\',this.value)"><option value="">No client yet</option>'+cl.map(c=>'<option value="'+c.id+'"'+(n.client===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'+(can('client_edit')?'<label style="flex:1;min-width:200px"><span class="s">or a new client</span><input style="width:100%" placeholder="Client name" value="'+esc(n.newClient)+'" oninput="gwNbSet(\'newClient\',this.value)"></label>':''):'')+'</div>'
   +(canAsg?'<div class="row" style="align-items:flex-end"><label style="flex:1;min-width:220px"><span class="s">Who will do the work?</span><select onchange="gwNbSet(\'access\',this.value);fqDraw()"><option value="admin"'+(n.access==='admin'?' selected':'')+'>Not decided yet</option><option value="member"'+(n.access==='member'?' selected':'')+'>A team member</option><option value="open"'+(n.access==='open'?' selected':'')+'>Anyone with the work link</option></select></label>'
    +(n.access==='member'?'<label style="flex:1;min-width:220px"><span class="s">Team member</span><select onchange="gwNbSet(\'assignee\',this.value)"><option value="">Choose...</option>'+mem.map(u=>'<option value="'+u.id+'"'+(n.assignee===u.id?' selected':'')+'>'+esc(u.name)+'</option>').join('')+'</select></label>':'')+'</div>':'')
   +(isAdminU()?'<label style="flex-direction:row;align-items:center;gap:8px;font-weight:400;margin-top:8px"><input type="checkbox" '+(n.price?'checked':'')+' onchange="gwNbSet(\'price\',this.checked)"><span>Set up pricing for this brand right after (admin only)</span></label>':'')
   +'<p class="s">The brand stays a draft until you add work and press Go live on its page. Nothing reaches your team before that.</p>'
-  +'<div class="row"><button class="p" '+(n.busy?'disabled':'')+' onclick="gwNbCreate()">'+(n.busy?'Adding...':'Add brand')+'</button></div></div>'}
+  +'<div class="row"><button class="p" '+(n.busy?'disabled':'')+' onclick="gwNbCreate()">'+(n.busy?'Saving...':'Save brand as draft')+'</button></div></div>'}
 async function gwNbCreate(){const q=FQ(),n=gwNb();if(!n||n.busy)return;const name=String(n.name||'').trim();if(!name)return alert('Type the brand name first.');
  if(ST.brands.some(b=>b.name.toLowerCase()===name.toLowerCase())&&!confirm('A brand called "'+name+'" already exists. Add another one with the same name?'))return;
  n.busy=true;fqDraw();let cid=n.client||null;
@@ -2267,19 +2349,19 @@ async function gwNbCreate(){const q=FQ(),n=gwNb();if(!n||n.busy)return;const nam
   const row={name};if(cid&&(can('brand_edit')||can('client_edit')))row.client_id=cid;
   if(can('brand_assign')&&n.access!=='admin'){if(n.access==='member'&&!n.assignee)throw new Error('Choose the team member, or pick Not decided yet.');row.access=n.access;row.assignee=n.access==='member'?n.assignee:null}
   const{data,error}=await sb.from('brands').insert(row).select().single();if(error)throw error;
-  const wantPrice=n.price&&isAdminU();q.nb=null;await load();gwSetBrand(data.id);q.view='info';q.msg='Brand "'+name+'" added. Fill in the brand info, then find posts.';fqDraw();
+  const wantPrice=n.price&&isAdminU();q.nb=null;await load();gwSetBrand(data.id);q.view='info';q.msg='Brand "'+name+'" saved as a draft. It is listed under "Saved as drafts" here and stays hidden from your team until you go live. Fill in the brand info, then find posts.';fqDraw();
   if(wantPrice)setTimeout(()=>bpOpen(data.id),50)}
  catch(e){n.busy=false;fqDraw();alert((e&&e.message)||'Could not add the brand')}}
 async function gwSetClient(v){const q=FQ();if(!q.bid)return;const{error}=await sb.from('brands').update({client_id:v||null}).eq('id',q.bid);if(error)return alert(error.message);await load();fqDraw()}
 function gwSetupHtml(b){const q=FQ(),cl=ST.clients.find(c=>c.id===b.client_id),pl=typeof planned==='function'?planned(b.id):null;
  return '<div class="row" style="margin:12px 0 0;align-items:center;gap:10px"><label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><span class="s">Client</span><select '+(can('brand_edit')?'':'disabled')+' onchange="gwSetClient(this.value)"><option value="">No client yet</option>'+ST.clients.map(c=>'<option value="'+c.id+'"'+(b.client_id===c.id?' selected':'')+'>'+esc(c.name)+'</option>').join('')+'</select></label>'
   +'<span class="s">Work for: <b>'+(b.access==='member'?esc(pname(b.assignee)||'a team member'):b.access==='open'?'anyone with the link':'not decided yet')+'</b></span>'+(can('brand_assign')?'<button class="sm" onclick="gwOpenBrand()">'+(b.status==='live'?'Change assignment':'Assign &amp; go live')+'</button>':'')
-  +'<span class="chip '+(b.status==='live'?'ok':'mut')+'">'+(b.status==='live'?'Live':'Draft')+'</span>'
+  +'<span class="chip '+(b.status==='live'?'ok':'mut')+'">'+(b.status==='live'?'Live':'Draft: saved, not live yet')+'</span>'
   +(isAdminU()?(pl?'<span class="chip ok">Pricing set</span><button class="sm" onclick="bpOpen(\''+b.id+'\')">Pricing</button>':'<button class="sm" onclick="bpOpen(\''+b.id+'\')">Set pricing</button>'):'')+'</div>'}
 /* flow chart */
 function gwFlowHtml(open){
  const st=(n,t,d)=>'<div class="fl-s"><span class="fl-n">'+n+'</span><div><b>'+t+'</b><div class="s">'+d+'</div></div></div>',ar='<div class="fl-a" aria-hidden="true">&#8595;</div>';
- return '<details class="cb fl"'+(open?' open':'')+'><summary><b>How it works (flow chart)</b></summary><div class="fl-w">'
+ return '<details class="cb fl" ontoggle="FQ().flOpen=this.open"'+(open?' open':'')+'><summary><b>How it works (flow chart)</b></summary><div class="fl-w">'
   +st(1,'Choose or add a brand','Pick a brand you already have, or add one. A new brand can get its client, its team member and its pricing right here.')+ar
   +st(2,'Brand info','Describe the brand, add the website, upload a document and write down any real experiences you can use. Keywords and communities are suggested and saved.')+ar
   +st(3,'Find live posts','Pick how many posts and the dates. Posts are ranked by your keywords. The written rules of each community are collected too.')+ar
