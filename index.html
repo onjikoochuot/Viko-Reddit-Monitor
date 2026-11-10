@@ -2109,6 +2109,7 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
  // rules are a bonus: never let them hold the search up (no retries, 20 seconds at most, stop early if Reddit refuses)
  const t0=Date.now(),L=list.slice(0,30);for(let i=0;i<L.length;i+=5){if(Date.now()-t0>20000||(bad>=5&&!Object.keys(out).length))break;await Promise.all(L.slice(i,i+5).map(one))}return out}
 /* ---- Reddit API (AnyAPI, reached through the reddit-api function in Supabase; the key never reaches the browser) ---- */
+function rwHome(){const q=FQ();q.bid='';q.view='';q.counts=null;q.nb=null;q.conn=null;q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';try{localStorage.removeItem('rw_bid')}catch(e){}}
 const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
 const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
 async function apiCall(body,acc){let r;try{r=await sb.functions.invoke('reddit-api',{body})}catch(e){r={error:e}}
@@ -2910,7 +2911,7 @@ const msgPName=id=>{const p=(MSGD().people||[]).find(x=>x.id===id)||ST.profiles.
 function msgCName(id){const r=MSGD().rows.find(m=>m.client_id===id&&m.client_name);if(r)return r.client_name;const c=ST.clients.find(x=>x.id===id);return c?c.name:(MSGD().newc[id]||'a client')}
 function msgDay(iso){try{return new Date(iso).toLocaleDateString('en-GB',{weekday:'short',day:'numeric',month:'short'})}catch(_){return ''}}
 function msgFiles(fl){fl=Array.isArray(fl)?fl:[];return fl.filter(f=>String(f&&f.d||'').indexOf('data:')===0).map(f=>'<a class="chip at" download="'+esc(f.n||'file')+'" href="'+esc(f.d)+'">'+(/^image/.test(f.t)?'<img src="'+esc(f.d)+'" alt="" height="40"> ':'')+esc(f.n||'file')+'</a>').join(' ')}
-function navPaint(){const nv=$('nv');if(!nv||!me||ST.tok)return;if(isStaffU())nv.innerHTML=navTabs().map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;draw()">'+v[1]+'</button>').join('');else nv.innerHTML=memberNav()}
+function navPaint(){const nv=$('nv');if(!nv||!me||ST.tok)return;if(isStaffU())nv.innerHTML=navTabs().map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;'+(v[0]==='find'?'rwHome();':'')+'draw()">'+v[1]+'</button>').join('');else nv.innerHTML=memberNav()}
 function memberNav(){if(!me||me.role!=='member'||ST.tok||ST.v20===false)return '';const t=ST.mtab==='messages';
  return '<button class="'+(t?'':'on')+'" onclick="ST.mtab=\'\';draw()">My work</button><button class="'+(t?'on':'')+'" onclick="ST.mtab=\'messages\';draw()">Messages'+msgBadgeTxt()+'</button>'}
 const msgOnPage=()=>me&&(ST.tab==='messages'&&isStaffU()||me.role==='member'&&ST.mtab==='messages')&&!!$('msg_thread');
@@ -3043,7 +3044,7 @@ function draw(soft){
  if(ST.tok){if(!soft||!ed())$('app').innerHTML=workView();return}
  const adm=isStaffU();
  const npend=0;
- $('nv').innerHTML=adm?navTabs().map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;draw()">'+v[1]+'</button>').join(''):memberNav();
+ $('nv').innerHTML=adm?navTabs().map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;'+(v[0]==='find'?'rwHome();':'')+'draw()">'+v[1]+'</button>').join(''):memberNav();
  if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.bp||ST.tab==='reports'||ST.tab==='find'||ST.tab==='messages'||(!adm&&ST.mtab==='messages')||(ST.tab==='earn'&&(ST.ep||ST.pw))))$('app').innerHTML=adm?admView():(ST.mtab==='messages'?msgView():workView());return}
  $('app').innerHTML=adm?admView()+(isAdminU()?pricePanel():''):(ST.mtab==='messages'&&ST.v20!==false?msgView():workView());
  if(adm&&ST.bid&&$('kd'))scn();
