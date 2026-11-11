@@ -434,6 +434,8 @@ async function chkP(id){let why='';const p0=pieceOf(id),was=p0&&p0.last_check||'
 async function fixLink(id){const p=pieceOf(id);if(!p)return;let u=prompt('Paste the correct Reddit link for this '+(p.kind==='comment'?'comment':'post')+'.\n\nCurrent link:\n'+(p.url||'(none)'),p.url||'');if(u===null)return;
  u=String(u).trim().split(/[?#]/)[0].replace(/^http:/i,'https:').replace(/\/\/(old|new|np|m)\.reddit\.com/i,'//www.reddit.com');if(u&&!/\/$/.test(u))u+='/';
  const m=u.match(/^https:\/\/(?:www\.)?reddit\.com\/r\/\w+\/comments\/\w+(?:\/[^/]*)?(?:\/(\w+))?\/$/i);
+ const share=/^https:\/\/(?:(?:www\.)?reddit\.com\/(?:r|u|user)\/[\w-]+\/s\/\w+|redd\.it\/\w+)\/$/i.test(u);
+ if(share){if(u===p.url){alert('That is the same link as before.');return}const n0=Date.now();const r0=await sb.from('pieces').update({url:u,status:'checking',hist:(p.hist||[]).concat([{t:n0,s:'checking',m:'link changed (share link)'}]).slice(-400),next_check:new Date(n0).toISOString()}).eq('id',id);if(r0.error){alert('Could not save the new link: '+r0.error.message);return}await load();draw(true);await chkP(id);return}
  if(!m){alert('That is not a Reddit post or comment link. It should look like:\nhttps://www.reddit.com/r/name/comments/abc123/title/'+(p.kind==='comment'?'xyz789/':''));return}
  if(p.kind==='comment'&&!m[1]){alert('This is a comment, so the link must be the link to the comment itself, not only to the post.\n\nOn Reddit: open the comment, press Share, then Copy link.');return}
  if(u===p.url){alert('That is the same link as before.');return}
@@ -2146,6 +2148,11 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
  // rules are a bonus: never let them hold the search up (no retries, 20 seconds at most, stop early if Reddit refuses)
  const t0=Date.now(),L=list.slice(0,30);for(let i=0;i<L.length;i+=5){if(Date.now()-t0>20000||(bad>=5&&!Object.keys(out).length))break;await Promise.all(L.slice(i,i+5).map(one))}return out}
 /* ---- Reddit API (AnyAPI, reached through the reddit-api function in Supabase; the key never reaches the browser) ---- */
+(function(){let last=null;const sig=b=>(b.getAttribute('onclick')||'')+'|'+String(b.textContent||'').replace(/^\u2713\s*/,'').trim().slice(0,60);
+ const st=document.createElement('style');st.textContent='button.pressed,label.btn.pressed,a.btn.pressed{position:relative;box-shadow:0 0 0 2px rgba(10,122,75,.35) inset}button.pressed::before,label.btn.pressed::before,a.btn.pressed::before{content:"\\2713\\00a0";font-weight:800;color:#0a7a4b}button.p.pressed::before{color:#fff}';document.head.appendChild(st);
+ const mark=()=>{if(!last)return;if(Date.now()-last.t>4000){last=null;document.querySelectorAll('.pressed').forEach(e=>e.classList.remove('pressed'));return}document.querySelectorAll('button,label.btn,a.btn').forEach(b=>{const on=sig(b)===last.s;if(on!==b.classList.contains('pressed'))b.classList.toggle('pressed',on)})};
+ document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('button,label.btn,a.btn');if(!b||b.closest('#nv'))return;last={s:sig(b),t:Date.now()};mark();setTimeout(mark,4100)},true);
+ let tm=0;new MutationObserver(()=>{if(!last||tm)return;tm=setTimeout(()=>{tm=0;mark()},60)}).observe(document.documentElement,{childList:true,subtree:true})})();
 function rwHome(){const q=FQ();q.bid='';q.view='';q.counts=null;q.nb=null;q.conn=null;q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';try{localStorage.removeItem('rw_bid')}catch(e){}}
 const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
 const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
@@ -2341,7 +2348,27 @@ async function gwSuggest(){const q=FQ(),p=q.prof||{};q.err='';q.msg='';q.busy=tr
   const have=new Set((Array.isArray(p.keywords)?p.keywords:gwL(p.keywords)).map(x=>x.toLowerCase())),add=t.filter(x=>!have.has(x));
   p.keywords=(Array.isArray(p.keywords)?p.keywords:gwL(p.keywords)).concat(add);q.prof=p;q.msg='Added '+add.length+' suggested keywords. Delete the weak ones and add the phrases people would type when they need this brand, then press Save.'}
  catch(e){q.err=e.message||String(e)}q.busy=false;fqDraw()}
-async function gwFile(list){const q=FQ();q.err='';q.busy=true;fqDraw();const out=[];try{for(const f of Array.from(list||[]))out.push(await fqFileText(f));q.fileText=out.join('\n');q.fileName=Array.from(list).map(f=>f.name).join(', ')}catch(e){q.err=e.message||String(e)}q.busy=false;fqDraw()}
+/* fill the brand info from an uploaded document: no AI, it only lifts what the document itself says */
+function gwAutoFill(text){const q=FQ(),p=q.prof=q.prof||{},b=gwBrand()||{},name=String(b.name||'').trim(),filled=[],T=String(text||'').replace(/\r/g,'').replace(/[ \t]+/g,' ');
+ const sents=T.split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length>=40&&s.length<=320&&/[a-z]{3,}\s+[a-z]{2,}/i.test(s)&&(s.match(/[A-Za-z]/g)||[]).length/s.length>0.6);
+ const nameRx=name?new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
+ if(!String(p.website||'').trim()){const ds=(T.match(/\b(?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9-]{1,40}\.(?:com|io|co|ai|app|net|org|dev|so|me|shop|store|tech|co\.uk|co\.ke|africa)\b(?:\/[^\s,;)]*)?/gi)||[]).filter(d=>!/@/.test(d)&&!/\b(gmail|yahoo|outlook|hotmail|reddit|facebook|twitter|linkedin|instagram|youtube|google|tiktok)\./i.test(d));
+  const key=name.toLowerCase().replace(/[^a-z0-9]/g,''),best=ds.find(d=>key&&d.toLowerCase().replace(/[^a-z0-9]/g,'').includes(key))||ds[0];if(best){p.website=best.replace(/^https?:\/\//i,'').replace(/[.,;]+$/,'');filled.push('website')}}
+ if(!String(p.about||'').trim()&&sents.length){const DOES=/\b(is an?|is the|helps?|lets|allows?|enables?|provides?|offers?|automates?|platform|software|tool|service|app\b|solution|built (?:for|to)|designed (?:for|to))\b/i;
+  const sc=s=>(nameRx&&nameRx.test(s)?3:0)+(DOES.test(s)?2:0)+(/\?$/.test(s)?-2:0)+(/https?:|www\.|@|\b(learn more|contact us|visit us|sign up|click here|pricing|per month|free trial)\b/i.test(s)?-5:0);
+  const pick=sents.map((s,i)=>({s,i,v:sc(s)-i*0.02})).sort((x,y)=>y.v-x.v).filter(x=>x.v>-2).slice(0,3).sort((x,y)=>x.i-y.i).map(x=>x.s);let out='';for(const s of pick){if((out+' '+s).length>650)break;out=(out?out+' ':'')+s}
+  if(out){p.about=out;filled.push('what the brand does')}}
+ if(!String(p.audience||'').trim()){const WHO='(?:teams?|businesses|companies|founders|marketers|sales(?: teams| people| reps)?|recruiters|agencies|students|owners|professionals|developers|creators|freelancers|startups|entrepreneurs|managers|consultants|coaches|stores?|sellers|brands|customers|people who|anyone who|those who)';
+  const m=T.match(new RegExp('\\b(?:designed|built|made|ideal|perfect|created|meant)\\s+for\\s+([^.\\n;:]{6,140}?\\b'+WHO+'\\b[^.\\n;:]{0,60})','i'))||T.match(new RegExp('\\b(?:helps?|for)\\s+((?:[a-z0-9&,\\- ]{0,60}\\s)?'+WHO+'\\b[^.\\n;:]{0,60})','i'));
+  if(m){p.audience=m[1].replace(/\s+/g,' ').trim().replace(/^(?:the|all|any)\s+/i,'').slice(0,160);filled.push('who it is for')}}
+ let added=0;try{const t=fqSuggest(T,name,'');const cur=Array.isArray(p.keywords)?p.keywords:gwL(p.keywords),have=new Set(cur.map(x=>x.toLowerCase())),add=t.filter(x=>!have.has(x.toLowerCase()));if(add.length){p.keywords=cur.concat(add);added=add.length;filled.push(added+' keywords')}}catch(e){}
+ return filled}
+async function gwFile(list){const q=FQ();q.err='';q.msg='';q.busy=true;fqDraw();const out=[];
+ try{for(const f of Array.from(list||[]))out.push(await fqFileText(f));q.fileText=out.join('\n');q.fileName=Array.from(list).map(f=>f.name).join(', ');
+  if(String(q.fileText).replace(/\s+/g,'').length<40){q.fileText='';q.err='No text could be read from '+q.fileName+'. It is probably a scanned document (pictures of pages). Upload the Word (.docx) or text version, or a PDF where you can select the text with the mouse.'}
+  else{const f=gwAutoFill(q.fileText),left=[['wording','approved wording'],['experiences','real experiences']].filter(x=>!String((q.prof||{})[x[0]]||'').trim()).map(x=>x[1]);
+   q.msg=f.length?'Filled in from '+q.fileName+': '+f.join(', ')+'. Check it, change anything that is wrong, then press Save brand info.'+(left.length?' Left empty on purpose (they are never invented): '+left.join(' and ')+'.':''):'The document was read, but the boxes that are already filled were left as they are.'}}
+ catch(e){q.err=e.message||String(e)}q.busy=false;fqDraw()}
 function gwInfoHtml(){const q=FQ(),p=q.prof||{},v=k=>esc(Array.isArray(p[k])?p[k].join(k==='keywords'?'\n':', '):(p[k]||''));
  if(q.perr==='v18')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_18.sql</b> and press Run, then reload this page.</div>';
  return '<div class="cb"><div class="s" style="margin-bottom:8px">Everything you save here is used automatically for searches and drafts, so you never have to type it again.</div>'
