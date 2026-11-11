@@ -2256,6 +2256,46 @@ async function tmAdd(){const m=$('ta_m'),b={op:'create',name:$('ta_n').value.tri
 async function tmDelete(id){const u=ST.profiles.find(x=>x.id===id);if(!u)return;if(!confirm('Delete '+u.name+' ('+u.email+') now?\n\nTheir account is removed for good. Work they published stays, without their name on it.'))return;
  let r=await teamFn({op:'delete',uid:id});if(!r.ok&&r.error==='NOFN'){const x=await sb.rpc('delete_member',{uid:id});r=x.error?{ok:false,error:/function|schema/i.test(x.error.message)?'This needs supabase_update_23.sql or the team-admin function. See TODAY_UPDATE_STEPS.txt.':x.error.message}:{ok:true}}
  if(!r.ok)return alert('Could not delete: '+r.error);await reload();toast(u.name+' deleted')}
+/* ---------- Trash: everything that was removed, in one place, grouped, each with its countdown ---------- */
+const trashCan=()=>isAdminU()||can('brand_delete')||can('work_delete');
+const trashPeople=()=>(ST.profiles||[]).filter(u=>u.status==='blocked');
+const trashTotal=()=>{try{return (ST.trashB||[]).length+(ST.trashT||[]).length+(isAdminU()||can('team_pause')?trashPeople().length:0)}catch(e){return 0}};
+const tLeft=x=>{const d=daysLeft(x);return d<=0?'deleted at the next clean-up':d==1?'1 day left':d+' days left'};
+const tLeftCls=x=>daysLeft(x)<=2?'rd':'s';
+function trSel(k,id,on){ST.trs=ST.trs||{};if(on)ST.trs[k+id]=true;else delete ST.trs[k+id];draw()}
+const trTick=(k,id)=>'<input type="checkbox" style="width:auto;margin:0 10px 0 0;transform:scale(1.2)" '+((ST.trs||{})[k+id]?'checked ':'')+'onclick="event.stopPropagation();trSel(\''+k+'\',\''+id+'\',this.checked)">';
+const trPicked=k=>Object.keys(ST.trs||{}).filter(x=>x.startsWith(k)).map(x=>x.slice(k.length));
+function trashView(){const cat=ST.trc||'all',B=ST.trashB||[],T=(ST.trashT||[]),P=isAdminU()||can('team_pause')?trashPeople():[],q=String(ST.trq||'').toLowerCase().trim();
+ const bn=id=>((ST.brands||[]).concat(B).find(b=>b.id===id)||{}).name||'(brand)',hit=t=>!q||t.toLowerCase().includes(q);
+ const tabs=[['all','Everything',B.length+T.length+P.length],['brands','Brands',B.length],['tasks','Tasks',T.length]].concat(P.length||isAdminU()?[['people','Expelled people',P.length]]:[]);
+ let h='<h1>Trash</h1><p class="mu">Everything that was removed waits here. Brands and tasks are deleted for good after '+trashDays()+' days, expelled people after 24 hours. Until then you can restore them. Money already earned is always kept.</p>'
+  +'<div class="row">'+tabs.map(x=>'<button class="tb'+(cat===x[0]?' on':'')+'" onclick="ST.trc=\''+x[0]+'\';draw()">'+x[1]+' ('+x[2]+')</button>').join('')+'<input placeholder="Search the Trash" value="'+esc(ST.trq||'')+'" style="flex:1;min-width:180px" oninput="ST.trq=this.value;clearTimeout(window.__trt);window.__trt=setTimeout(()=>{draw();const e=document.querySelector(\'input[placeholder=&quot;Search the Trash&quot;]\');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},250)"></div>';
+ const sec=(title,k,list,row,acts)=>{const picked=trPicked(k).filter(id=>list.some(x=>x.id===id));return '<div class="cb"><div class="row" style="margin:0;align-items:center"><b style="flex:1">'+title+' ('+list.length+')</b>'
+  +(list.length?'<button class="sm" onclick="trAll(\''+k+'\','+(picked.length===list.length?'false':'true')+')">'+(picked.length===list.length?'Untick all':'Tick all')+'</button>'+(picked.length?'<span class="s">'+picked.length+' ticked:</span>':'')+acts(picked):'')+'</div>'
+  +(list.length?list.map(row).join(''):'<div class="empty" style="padding:14px">Nothing here.</div>')+'</div>'};
+ if(cat==='all'||cat==='brands'){const l=B.filter(b=>hit(b.name)).sort((a,b)=>new Date(a.trashed_at)-new Date(b.trashed_at));
+  h+=sec('Brands','b',l,b=>{const n=(ST.allT||[]).filter(t=>t.brand_id===b.id).length;return '<div class="task"><div class="row" style="margin:0;align-items:center">'+trTick('b',b.id)+'<div style="flex:1"><div class="t">'+esc(b.name)+'</div><div class="s">Brand with '+n+' task'+(n==1?'':'s')+' · removed '+D(b.trashed_at)+' · <span class="'+tLeftCls(b.trashed_at)+'">'+tLeft(b.trashed_at)+'</span></div></div><div class="a"><button class="p" onclick="restoreBrand(\''+b.id+'\')">Restore</button>'+G('brand_delete','<button class="dng" onclick="purgeBrand(\''+b.id+'\')">Delete forever</button>')+'</div></div></div>'},
+   pk=>(pk.length?'<button class="sm p" onclick="trBulk(\'b\',\'restore\')">Restore</button>'+G('brand_delete','<button class="sm dng" onclick="trBulk(\'b\',\'purge\')">Delete forever</button>'):'')+G('brand_delete','<button class="sm dng" onclick="emptyBrandTrash()">Empty</button>'))}
+ if(cat==='all'||cat==='tasks'){const l=T.filter(t=>hit(bn(t.brand_id)+' '+tlabel(t)+' '+(t.sub||'')+' '+((ST.pby[t.id]||[]).map(p=>p.body||'').join(' ')))).sort((a,b)=>bn(a.brand_id).localeCompare(bn(b.brand_id))||new Date(a.trashed_at)-new Date(b.trashed_at));
+  const mm={};h+=sec('Tasks','t',l,t=>{const m=mm[t.brand_id]||(mm[t.brand_id]=numbered(t.brand_id)),ps=ST.pby[t.id]||[];return '<div class="task'+(catOf(t)==='comment'?' cc':'')+'"><div class="row" style="margin:0;align-items:center">'+trTick('t',t.id)+'<div style="flex:1;min-width:0"><div class="t"><span class="num2">'+esc(tnum(t,m)||tn2(t))+'</span>'+esc(tlabel(t))+'</div><div class="s"><b>'+esc(bn(t.brand_id))+'</b> · '+ps.length+' item'+(ps.length==1?'':'s')+(t.sub?' · r/'+esc(t.sub):'')+' · removed '+D(t.trashed_at)+' · <span class="'+tLeftCls(t.trashed_at)+'">'+tLeft(t.trashed_at)+'</span></div></div><div class="a"><button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button>'+G('work_delete','<button class="dng" onclick="purgeTask(\''+t.id+'\')">Delete forever</button>')+'</div></div><details><summary>Show items</summary>'+(ps.map(miniPc).join('')||'<div class="s">No items.</div>')+'</details></div>'},
+   pk=>(pk.length?'<button class="sm p" onclick="trBulk(\'t\',\'restore\')">Restore</button>'+G('work_delete','<button class="sm dng" onclick="trBulk(\'t\',\'purge\')">Delete forever</button>'):'')+G('work_delete','<button class="sm dng" onclick="trEmptyTasks()">Empty</button>'))}
+ if((cat==='all'||cat==='people')&&(P.length||isAdminU())){const l=P.filter(u=>hit(u.name+' '+u.email)),left=u=>Math.max(0,Math.ceil((+new Date(u.blocked_at||Date.now())+DAY-Date.now())/36e5));
+  h+=sec('Expelled people','u',l,u=>'<div class="task"><div class="row" style="margin:0;align-items:center">'+trTick('u',u.id)+'<div style="flex:1"><div class="t">'+esc(u.name)+'</div><div class="s">'+esc(u.email)+' · '+esc(lvName(u.role))+' · <span class="'+(left(u)<=3?'rd':'s')+'">'+(left(u)?left(u)+' hours until deleted':'deleted at the next clean-up')+'</span></div></div><div class="a">'+(can('team_pause')?'<button class="p" onclick="setStatus(\''+u.id+'\',\'active\')">Restore</button>':'')+(isAdminU()?'<button class="dng" onclick="tmDelete(\''+u.id+'\')">Delete forever</button>':'')+'</div></div></div>',
+   pk=>pk.length?(can('team_pause')?'<button class="sm p" onclick="trBulk(\'u\',\'restore\')">Restore</button>':'')+(isAdminU()?'<button class="sm dng" onclick="trBulk(\'u\',\'purge\')">Delete forever</button>':''):'')}
+ return h}
+function trAll(k,on){ST.trs=ST.trs||{};Object.keys(ST.trs).filter(x=>x.startsWith(k)).forEach(x=>delete ST.trs[x]);if(on){const q=String(ST.trq||'').toLowerCase().trim(),list=k==='b'?ST.trashB:k==='t'?ST.trashT:trashPeople();list.forEach(x=>ST.trs[k+x.id]=true)}draw()}
+async function trBulk(k,act){const ids=trPicked(k);if(!ids.length)return alert('Tick at least one first.');const n=ids.length,what=k==='b'?'brand':k==='t'?'task':'person';const W=n+' '+what+(n==1?'':k==='u'?'':'s');
+ if(act==='restore'){if(!confirm('Restore '+W+'?'))return;
+  if(k==='b'){for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('brands').update({archived_at:null,trashed_at:null}).in('id',ids.slice(i,i+100));if(error)return alert(error.message)}}
+  else if(k==='t'){if(!(await updTasks(ids,{archived_at:null,trashed_at:null})))return}
+  else{for(const id of ids){const{error}=await sb.from('profiles').update({status:'active'}).eq('id',id);if(error)return alert(error.message)}}
+  ST.trs={};await reload();toast('Restored '+W);return}
+ const v=prompt('Delete '+W+' forever? This cannot be undone.'+(k==='u'?'':' Money already earned is kept.')+'\n\nType DELETE '+n+' to confirm:');if(v==null)return;if(v.trim().toUpperCase()!=='DELETE '+n)return alert('That did not match, so nothing was deleted.');
+ if(k==='u'){for(const id of ids){let r=await teamFn({op:'delete',uid:id});if(!r.ok&&r.error==='NOFN'){const x=await sb.rpc('delete_member',{uid:id});r=x.error?{ok:false,error:x.error.message}:{ok:true}}if(!r.ok)return alert('Could not delete: '+r.error)}}
+ else{const tb=k==='b'?'brands':'tasks';for(let i=0;i<ids.length;i+=100){const{error}=await sb.from(tb).delete().in('id',ids.slice(i,i+100));if(error)return alert(error.message)}}
+ ST.trs={};await reload();toast('Deleted '+W+' for good')}
+async function trEmptyTasks(){const ids=(ST.trashT||[]).map(t=>t.id);if(!ids.length)return alert('There are no tasks in Trash.');const v=prompt('Delete all '+ids.length+' task'+(ids.length==1?'':'s')+' in Trash forever? This cannot be undone.\n\nType EMPTY to confirm:');if(v==null)return;if(v.trim().toUpperCase()!=='EMPTY')return alert('That did not match, so nothing was deleted.');
+ for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('tasks').delete().in('id',ids.slice(i,i+100));if(error)return alert(error.message)}await reload();toast('Task trash emptied')}
 function rwHome(){const q=FQ();q.bid='';q.view='';q.counts=null;q.nb=null;q.conn=null;q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';try{localStorage.removeItem('rw_bid')}catch(e){}}
 const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
 const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
@@ -3049,10 +3089,10 @@ const PERM_DEF0={
 const permLabel=k=>{for(const g of PERMS){const x=g[1].find(y=>y[0]===k);if(x)return x[1]}return k};
 const defOn=(role,p)=>((ST.rpd&&ST.rpd[role])||PERM_DEF0[role]||[]).includes(p);
 const permOn=(u,p)=>{const o=u.perms||{};return p in o?(o[p]===true||o[p]==='true'):defOn(u.role,p)};
-const tabOk=(t)=>{t=t||ST.tab;if(t==='earn'||t==='set')return isAdminU();if(t==='clients')return can('client_view');if(t==='team')return can('team_view');if(t==='reports')return can('reports_make');if(t==='find')return can('reddit_find')||can('reddit_draft');if(t==='messages')return true;return true};
+const tabOk=(t)=>{t=t||ST.tab;if(t==='earn'||t==='set')return isAdminU();if(t==='trash')return trashCan();if(t==='clients')return can('client_view');if(t==='team')return can('team_view');if(t==='reports')return can('reports_make');if(t==='find')return can('reddit_find')||can('reddit_draft');if(t==='messages')return true;return true};
 function navTabs(){const npend=can('team_approve')?ST.profiles.filter(u=>u.status==='pending').length:0,t=[['overview','Overview'],['brands','Brands']];
  if(can('client_view'))t.push(['clients','Clients']);if(can('team_view'))t.push(['team','Team'+(npend?' ('+npend+')':'')]);if(isAdminU())t.push(['earn','Earnings']);
- if(can('reports_make'))t.push(['reports','Make reports']);if(can('reddit_find')||can('reddit_draft'))t.push(['find','Reddit work']);if(ST.v20!==false)t.push(['messages','Messages'+msgBadgeTxt()]);if(isAdminU())t.push(['set','Settings']);return t}
+ if(can('reports_make'))t.push(['reports','Make reports']);if(can('reddit_find')||can('reddit_draft'))t.push(['find','Reddit work']);if(ST.v20!==false)t.push(['messages','Messages'+msgBadgeTxt()]);if(trashCan())t.push(['trash','Trash'+(trashTotal()?' ('+trashTotal()+')':'')]);if(isAdminU())t.push(['set','Settings']);return t}
 async function loadPerms(){ST.myperms=[];ST.v19=true;if(!me)return;if(me.role==='member'){const r=await sb.rpc('my_perms');ST.myperms=(!r.error&&r.data&&r.data.perms)||[];return}
  if(me.role==='admin'){ST.myperms=['*'];const r=await sb.from('role_perm_defaults').select('*');if(r.error){ST.v19=false}else{ST.rpd={supermanager:[],manager:[]};(r.data||[]).forEach(x=>{(ST.rpd[x.role]=ST.rpd[x.role]||[]).push(x.perm)})}return}
  const r=await sb.rpc('my_perms');if(r.error){ST.v19=false;return}ST.myperms=(r.data&&r.data.perms)||[]}
@@ -3300,7 +3340,7 @@ async function pMsgSend(){const t=String(PT.mdraft||'').trim();if(!t&&!(PT.mfl||
  const r=await sb.rpc('client_msg_send',{tok:PT.tok,msg:t,bid:PT.mb||null,cat:PT.mcat==='auto'?'':PT.mcat,fl:PT.mfl||[]});if(r.error)return alert(r.error.message||'Could not send');
  PT.m.messages.push(r.data);PT.mdraft='';PT.mfl=[];pMsgDraw()}
 
-const admView=()=>!tabOk()?(ST.tab='overview',admView()):ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='reports'?reportsView():ST.tab==='find'?findView():ST.tab==='messages'?msgView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
+const admView=()=>!tabOk()?(ST.tab='overview',admView()):ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='reports'?reportsView():ST.tab==='trash'?trashView():ST.tab==='find'?findView():ST.tab==='messages'?msgView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
 function draw(soft){
  if(ST.hold)return;
  if(!me&&!ST.tok)return;
