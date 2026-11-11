@@ -413,15 +413,19 @@ async function rcheck(url,kind){
  if(kind==='comment'){const c=j[1].data.children[0];if(!c||c.kind!=='t1')return{s:'removed'};const d=c.data;return{s:G.includes(d.body)||d.author==='[deleted]'?'removed':'live',score:d.score,replies:d.replies&&d.replies.data?d.replies.data.children.filter(x=>x.kind==='t1').length:0,title:po.title}}
  return{s:po.removed_by_category||G.includes(po.selftext)||po.author==='[deleted]'?'removed':'live',score:po.score,replies:po.num_comments,title:po.title};
 }
+const gonePast=p=>{let n=0;const h=p.hist||[];for(let i=h.length-1;i>=0&&h[i].s==='removed';i--)n++;return n};
 async function runCheck(p,pre){
  const now=Date.now(),OFF=[1,30,60,480];let u;
  try{const r=pre||await rcheck(p.url,p.kind),stage=(p.stage||0)+1,pub=+new Date(p.published_at);
-  u={status:r.s,stage,hist:(p.hist||[]).concat([{t:now,s:r.s}]).slice(-400),score:r.score==null?p.score:r.score,replies:r.replies==null?p.replies:r.replies,title:r.title||p.title,last_check:new Date(now).toISOString(),next_check:r.s==='removed'?null:new Date(stage<4?pub+OFF[stage]*6e4:now+DAY).toISOString()}}
+  u={status:r.s,stage,hist:(p.hist||[]).concat([{t:now,s:r.s}]).slice(-400),score:r.score==null?p.score:r.score,replies:r.replies==null?p.replies:r.replies,title:r.title||p.title,last_check:new Date(now).toISOString(),next_check:r.s==='removed'?(gonePast(p)>=3?null:new Date(now+DAY).toISOString()):new Date(stage<4?pub+OFF[stage]*6e4:now+DAY).toISOString()}}
  catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error',m:'browser: '+String(e&&e.message||e).slice(0,60)}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
  await sb.from('pieces').update(u).eq('id',p.id);
 }
 async function chkP(id){const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t=>{$('who').textContent=t};
- if(p0&&p0.url){w('Checking with the Reddit API...');const a=await apiLiveOne(p0.url,p0.kind);w(me.name);if(a){await runCheck(p0,a);await load();draw(true);alert(a.s==='removed'?'Checked: this item is deleted.':'Checked: this item is live.');return}}
+ if(p0&&p0.url){w('Checking with the Reddit API...');let why='';const a=await apiLiveOne(p0.url,p0.kind,x=>{why=x});w(me.name);
+  if(!a&&/not in the API answer/.test(why)){sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id).then(()=>{});
+   alert('The Reddit API opened the post, but this '+(p0.kind==='comment'?'comment':'post')+' is not in the public list.\n\nThat usually means Reddit removed or hid it. The person who wrote it still sees it when logged in, so it can look live to you.\n\nTo be sure, open the link in a private window (not logged in). If you can see it there, press "Mark live".\n\nThe status was left as it is, and the back-up checker will also look.');return}
+  if(a){await runCheck(p0,a);await load();draw(true);alert(a.s==='removed'?'Checked: this item is deleted.':'Checked: this item is live.');return}}
  const{error}=await sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id);
  if(error){alert('Could not queue the check: '+error.message);return}
  for(let i=0;i<24;i++){w('Waiting for your Reddit checker... '+(i*4)+'s');await new Promise(r=>setTimeout(r,4000));await load();const p=pieceOf(id);
@@ -429,7 +433,7 @@ async function chkP(id){const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t
  w(me.name);alert('No answer from the checker. Open reddit.com in Brave (logged in) and look for the small black "Viko checker" badge in the bottom-right corner. If it is missing, Tampermonkey is not running the script.')}
 async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
 let due=0;
-async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live']).lte('next_check',new Date().toISOString()).limit(20);
+async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live','removed']).lte('next_check',new Date().toISOString()).limit(20);
  for(const p of data||[]){const cl=await sb.from('pieces').update({next_check:new Date(Date.now()+18e4).toISOString()}).eq('id',p.id).eq('next_check',p.next_check).select('id');if(!cl.data||!cl.data.length)continue;await runCheck(p);await new Promise(r=>setTimeout(r,600))}if(data&&data.length&&!ed()){await load();draw(true)}}catch(e){}due=0}
 
 /* ---------- excel ---------- */
@@ -2196,11 +2200,11 @@ function fqPack(id){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;cons
   if(r.read){t.push('TOP COMMENTS:');if(r.top&&r.top.length)r.top.forEach((c,k)=>t.push((k+1)+'. '+(c.a?'u/'+c.a:'')+' ('+(c.s||0)+' points): '+c.t));else t.push('(no comments yet)');t.push('')}});
  const b=new Blob([t.join('\r\n')+fqRulesAppendix(L.map(r=>r.sub)).join('\r\n')],{type:'text/plain'}),a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=(j.brand_name||'posts').replace(/[^\w\- ]+/g,'').trim().replace(/\s+/g,'_')+'_full_text_'+ymd(j.created_at)+'.txt';document.body.appendChild(a);a.click();a.remove()}
 /* ---- live or deleted: the Reddit API first, the old ways as back-up ---- */
-async function apiLiveMany(items){const none=()=>items.map(()=>null);if(API().on===false||!items.length)return none();
- try{const out=[];for(let i=0;i<items.length;i+=20){const d=await apiCall({op:'check',items:items.slice(i,i+20)});(d.results||[]).forEach(r=>out.push(r&&r.s&&r.s!=='unknown'?r:null))}
+async function apiLiveMany(items,onWhy){const none=()=>items.map(()=>null);if(API().on===false||!items.length)return none();
+ try{const out=[];for(let i=0;i<items.length;i+=20){const d=await apiCall({op:'check',items:items.slice(i,i+20)});(d.results||[]).forEach(r=>{if(r&&r.s==='unknown'&&onWhy)onWhy(String(r.why||''));out.push(r&&r.s&&r.s!=='unknown'?r:null)})}
   while(out.length<items.length)out.push(null);return out}
  catch(e){if(e&&e.apiFatal)apiOff(e);return none()}}
-const apiLiveOne=async(u,k)=>(await apiLiveMany([{url:u,kind:k}]))[0];
+const apiLiveOne=async(u,k,onWhy)=>(await apiLiveMany([{url:u,kind:k}],onWhy))[0];
 // back-up: read the post page from this browser through the add-on (if it is installed)
 async function fbLiveOne(url){if(!fbBridgeOn())return null;try{const path=new URL(url).pathname.replace(/\/+$/,'');const j=await fbGet(path+'.json?raw_json=1&limit=1');const po=j[0].data.children[0].data,G=['[removed]','[deleted]'];
   const gone=!!po.removed_by_category||G.includes(String(po.selftext||'').trim())||po.author==='[deleted]';return{s:gone?'removed':'live',score:po.score,replies:po.num_comments,title:po.title}}catch(e){return null}}
