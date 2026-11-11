@@ -391,7 +391,7 @@ function pc(p,adm){
  return '<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(st)+sgChip(p,adm)+(p.published_at?'<span class="s">published '+D(p.published_at)+'</span>':'')+'<span style="flex:1"></span><div class="a">'
  +(p.ptitle?'<button onclick="cp(\''+p.id+'\',1)">Copy title</button>':'')+(p.body?'<button onclick="cp(\''+p.id+'\')">Copy '+(p.kind==='post'?'body':'text')+'</button>':'')
  +(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">'+(p.kind==='post'?'View post':'View comment')+'</a>':'')
- +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
+ +(adm&&p.url?'<button onclick="chkP(\''+p.id+'\')">Check now</button><button onclick="fixLink(\''+p.id+'\')" title="Use this if the wrong link was pasted">Change link</button><button onclick="setSt(\''+p.id+'\',\'live\')">Mark live</button><button onclick="setSt(\''+p.id+'\',\'removed\')">Mark deleted</button>':'')
  +(adm&&can('work_add')&&!p.url?'<button onclick="editPc(\''+p.id+'\')">Edit draft</button>':'')+(adm&&can('work_delete')&&!p.url?'<button onclick="delPc(\''+p.id+'\')" aria-label="Remove draft">&#10005;</button>':'')+'</div></div>'
  +pvw(p)+(p.url?'<details><summary>Show what was published</summary>'+DV(p)+'</details>':DV(p))
  +(p.url?'<div class="s">'+(p.last_check?'Last checked '+new Date(p.last_check).toLocaleString([],{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})+' &middot; '+up(p.score)+' &middot; '+p.replies+(p.kind==='post'?(p.replies==1?' comment':' comments'):(p.replies==1?' reply':' replies')):'Tracking started. First check in about 1 minute.')+(err?' &middot; <span class="rd">last check could not reach Reddit'+(h[h.length-1].m?' ('+esc(h[h.length-1].m)+')':'')+'</span>':'')+'</div><div>'+dots(p)+'</div>'
@@ -431,6 +431,15 @@ async function chkP(id){let why='';const p0=pieceOf(id),was=p0&&p0.last_check||'
   if(p&&(p.last_check||'')!==was){w(me.name);draw(true);const lh=p.hist&&p.hist.length?p.hist[p.hist.length-1]:null;if(lh&&lh.s==='error')break; /* the back-up could not reach Reddit either: say so below, do not call it checked */
    alert(p.status==='removed'?'Checked: Reddit does not show this item to the public (deleted, removed or hidden).\n\nIf you can see it while logged in but not in a private window, Reddit has hidden it.':'Checked: this item is live.');return}}
  w(me.name);draw(true);const hid=/not in the API answer/.test(why||'');alert((hid?'The Reddit API opened the post, but this '+(p0&&p0.kind==='comment'?'comment':'post')+' is not in the public list. That usually means Reddit removed or hid it (the person who wrote it still sees it when logged in).':'This could not be confirmed right now'+(why?' ('+why+')':'')+'.')+' The back-up checker was also blocked by Reddit, or did not answer.'+'\n\nThe status was left as it is. To be sure, open the link in a private window (not logged in). If you can see it there, press "Mark live". If not, press "Mark deleted".')}
+async function fixLink(id){const p=pieceOf(id);if(!p)return;let u=prompt('Paste the correct Reddit link for this '+(p.kind==='comment'?'comment':'post')+'.\n\nCurrent link:\n'+(p.url||'(none)'),p.url||'');if(u===null)return;
+ u=String(u).trim().split(/[?#]/)[0].replace(/^http:/i,'https:').replace(/\/\/(old|new|np|m)\.reddit\.com/i,'//www.reddit.com');if(u&&!/\/$/.test(u))u+='/';
+ const m=u.match(/^https:\/\/(?:www\.)?reddit\.com\/r\/\w+\/comments\/\w+(?:\/[^/]*)?(?:\/(\w+))?\/$/i);
+ if(!m){alert('That is not a Reddit post or comment link. It should look like:\nhttps://www.reddit.com/r/name/comments/abc123/title/'+(p.kind==='comment'?'xyz789/':''));return}
+ if(p.kind==='comment'&&!m[1]){alert('This is a comment, so the link must be the link to the comment itself, not only to the post.\n\nOn Reddit: open the comment, press Share, then Copy link.');return}
+ if(u===p.url){alert('That is the same link as before.');return}
+ const n=Date.now();const{error}=await sb.from('pieces').update({url:u,status:'checking',hist:(p.hist||[]).concat([{t:n,s:'checking',m:'link changed'}]).slice(-400),next_check:new Date(n).toISOString()}).eq('id',id);
+ if(error){alert('Could not save the new link: '+error.message);return}
+ await load();draw(true);await chkP(id)}
 async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
 let due=0;
 async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live','removed']).lte('next_check',new Date().toISOString()).limit(20);
