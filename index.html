@@ -2349,7 +2349,7 @@ async function gwSuggest(){const q=FQ(),p=q.prof||{};q.err='';q.msg='';q.busy=tr
   p.keywords=(Array.isArray(p.keywords)?p.keywords:gwL(p.keywords)).concat(add);q.prof=p;q.msg='Added '+add.length+' suggested keywords. Delete the weak ones and add the phrases people would type when they need this brand, then press Save.'}
  catch(e){q.err=e.message||String(e)}q.busy=false;fqDraw()}
 /* fill the brand info from an uploaded document: no AI, it only lifts what the document itself says */
-function gwAutoFill(text){const q=FQ(),p=q.prof=q.prof||{},b=gwBrand()||{},name=String(b.name||'').trim(),filled=[],T=String(text||'').replace(/\r/g,'').replace(/[ \t]+/g,' ');
+function gwAutoFill(text,noKw){const q=FQ(),p=q.prof=q.prof||{},b=gwBrand()||{},name=String(b.name||'').trim(),filled=[],T=String(text||'').replace(/\r/g,'').replace(/[ \t]+/g,' ');
  const sents=T.split(/(?<=[.!?])\s+|\n+/).map(s=>s.trim()).filter(s=>s.length>=40&&s.length<=320&&/[a-z]{3,}\s+[a-z]{2,}/i.test(s)&&(s.match(/[A-Za-z]/g)||[]).length/s.length>0.6);
  const nameRx=name?new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g,'\\$&'),'i'):null;
  if(!String(p.website||'').trim()){const ds=(T.match(/\b(?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9-]{1,40}\.(?:com|io|co|ai|app|net|org|dev|so|me|shop|store|tech|co\.uk|co\.ke|africa)\b(?:\/[^\s,;)]*)?/gi)||[]).filter(d=>!/@/.test(d)&&!/\b(gmail|yahoo|outlook|hotmail|reddit|facebook|twitter|linkedin|instagram|youtube|google|tiktok)\./i.test(d));
@@ -2361,13 +2361,48 @@ function gwAutoFill(text){const q=FQ(),p=q.prof=q.prof||{},b=gwBrand()||{},name=
  if(!String(p.audience||'').trim()){const WHO='(?:teams?|businesses|companies|founders|marketers|sales(?: teams| people| reps)?|recruiters|agencies|students|owners|professionals|developers|creators|freelancers|startups|entrepreneurs|managers|consultants|coaches|stores?|sellers|brands|customers|people who|anyone who|those who)';
   const m=T.match(new RegExp('\\b(?:designed|built|made|ideal|perfect|created|meant)\\s+for\\s+([^.\\n;:]{6,140}?\\b'+WHO+'\\b[^.\\n;:]{0,60})','i'))||T.match(new RegExp('\\b(?:helps?|for)\\s+((?:[a-z0-9&,\\- ]{0,60}\\s)?'+WHO+'\\b[^.\\n;:]{0,60})','i'));
   if(m){p.audience=m[1].replace(/\s+/g,' ').trim().replace(/^(?:the|all|any)\s+/i,'').slice(0,160);filled.push('who it is for')}}
- let added=0;try{const t=fqSuggest(T,name,'');const cur=Array.isArray(p.keywords)?p.keywords:gwL(p.keywords),have=new Set(cur.map(x=>x.toLowerCase())),add=t.filter(x=>!have.has(x.toLowerCase()));if(add.length){p.keywords=cur.concat(add);added=add.length;filled.push(added+' keywords')}}catch(e){}
+ let added=0;if(!noKw)try{const t=fqSuggest(T,name,'');const cur=Array.isArray(p.keywords)?p.keywords:gwL(p.keywords),have=new Set(cur.map(x=>x.toLowerCase())),add=t.filter(x=>!have.has(x.toLowerCase()));if(add.length){p.keywords=cur.concat(add);added=add.length;filled.push(added+' keywords')}}catch(e){}
  return filled}
+/* read a brand document that has sections (Website, Audience, Keywords, Approved wording, Real experiences, Notes...) */
+const GW_SEC=[['website',/^(?:official\s+)?(?:website|web\s*site|site|url|web address|homepage|domain)$/],
+ ['audience',/^(?:target\s+)?(?:audience|market|customers?|users?|persona|personas|demographics?)(?:\s+\w+)?$|^who (?:it|the brand|we) (?:is|are)? ?(?:for|serves?)$|^ideal (?:customer|client|user)s?(?: profile)?$/],
+ ['about',/^(?:brand\s+|company\s+|product\s+)?(?:description|overview|summary|about(?: us| the brand)?|what (?:it|the brand|we) (?:does|do|offers?)|elevator pitch|value proposition|products?(?: and services)?|services?|offer(?:ing)?s?|positioning)$/],
+ ['keywords',/^(?:target\s+|seo\s+|search\s+|reddit\s+|main\s+|primary\s+|secondary\s+)?(?:keywords?|key ?phrases?|search (?:terms|phrases|queries)|phrases|queries|topics)(?:\s+to (?:search|target|use))?$|^(?:high[- ]?intent|buyer[- ]?intent|intent)(?:\s+\w+){0,2}$/],
+ ['subs',/^(?:target\s+|suggested\s+|relevant\s+)?(?:communities|subreddits?|subs)(?:\s+to (?:use|target|search))?$/],
+ ['avoid',/^(?:words?|terms|topics|keywords?) to (?:avoid|exclude)$|^(?:negative|excluded) (?:keywords?|words?|terms)$|^exclusions?$/],
+ ['wording',/^(?:approved\s+)?(?:messaging|wording|language|copy)(?:\s*(?:&|and)\s*(?:wording|messaging|language|tone))?$|^(?:brand\s+)?(?:voice|tone)(?:\s*(?:&|and)\s*(?:voice|tone))?$|^(?:tone of voice|style guide|guidelines|brand guidelines|do'?s and don'?ts|dos and don'?ts|rules)$/],
+ ['experiences',/^(?:social proof|testimonials?|reviews?|customer (?:reviews|feedback|stories|quotes)|real experiences|case stud(?:y|ies)|success stories|user (?:quotes|feedback|reviews))$/],
+ ['notes',/^(?:important\s+|other\s+|additional\s+|extra\s+)?notes?$|^(?:pricing|prices?|retailers?|where to buy|availability|sales|promotions?|offers and sales|faq|faqs|other(?: info(?:rmation)?)?|additional info(?:rmation)?|extra info(?:rmation)?)$/]];
+function gwSecOf(h){h=String(h||'').toLowerCase().replace(/\([^)]*\)/g,' ').replace(/[*_#`"“”]+/g,' ').replace(/^\s*(?:\d+[.)]|[ivx]+\.)\s*/,'').replace(/[:\-–—.]+\s*$/,'').replace(/\s+/g,' ').trim();if(!h||h.length>60)return '';const f=GW_SEC.find(x=>x[1].test(h));return f?f[0]:''}
+function gwSections(text){const out={},add=(k,v)=>{v=String(v||'').trim();if(!v)return;(out[k]=out[k]||[]).push(v)};let cur='';
+ const lines=String(text||'').replace(/\r/g,'').split('\n').map(l=>l.replace(/\*\*/g,'').replace(/^\s*(?:[•●▪–—*\-+·]|\d+[.)])\s+/,'').replace(/\s+/g,' ').trim()).filter(Boolean);
+ for(const l of lines){const lab=l.match(/^([^:]{2,45}):\s*(.*)$/);
+  if(lab){const k=gwSecOf(lab[1]);if(k&&!lab[2]){cur=k;continue}if(k&&lab[2]){if(['website','audience','about'].includes(k)&&!['notes','wording','experiences'].includes(cur))add(k,lab[2]);else add(cur||k,['website','audience','about','keywords','subs','avoid'].includes(cur||k)?lab[2]:l);continue}if(!lab[2])continue}
+  const k=!lab&&l.length<=60&&!/[.!?]$/.test(l)?gwSecOf(l):'';if(k){cur=k;continue}
+  if(!lab&&l.length<=60&&!/[.!?]$/.test(l)&&cur&&!['keywords','subs','avoid'].includes(cur)&&l.split(' ').length<=5&&/^[A-Z]/.test(l)&&!/[,]/.test(l)){/* an unknown heading: stop adding to the last section */cur='';continue}
+  if(cur)add(cur,l)}
+ return out}
+const gwKw=x=>{let s=String(x||'').replace(/^["'“‘]+|["'”’]+$/g,'').trim();s=s.replace(/\[([^\]]+)\]/g,(m,i)=>i.includes('/')?i.split('/')[0].trim():'\u0000');if(s.includes('\u0000'))return '';return s.replace(/\s+[–—-]\s+which one.*$/i,'').replace(/\s+/g,' ').trim()};
+function gwFromSections(S){const q=FQ(),p=q.prof=q.prof||{},done=[],L=k=>S[k]||[];
+ if(L('website').length){const w=L('website')[0].match(/(?:https?:\/\/)?(?:www\.)?[a-z0-9][a-z0-9.-]+\.[a-z]{2,}(?:\/[^\s]*)?/i);if(w){p.website=w[0].replace(/^https?:\/\//i,'').replace(/\/+$/,'');done.push('website')}}
+ if(L('audience').length){p.audience=L('audience').join(' ').slice(0,400);done.push('who it is for')}
+ if(L('about').length){p.about=L('about').join('\n').slice(0,2000);done.push('what the brand does')}
+ if(L('keywords').length){const cur=Array.isArray(p.keywords)?p.keywords:gwL(p.keywords),seen=new Set(),kw=[];L('keywords').map(gwKw).concat(cur).forEach(k=>{k=String(k||'').trim();const n=k.toLowerCase();if(k&&k.length<=150&&!seen.has(n)){seen.add(n);kw.push(k)}});p.keywords=kw;done.push(kw.length+' keywords')}
+ const subsTxt=L('subs').join(' ');const subs=(subsTxt.match(/\b(?:r\/)?[A-Za-z0-9_]{3,21}\b/g)||[]).map(x=>x.replace(/^r\//i,'')).filter(x=>!/^(and|the|for|with|use|also)$/i.test(x));
+ if(subs.length){const cur=Array.isArray(p.subs)?p.subs:gwL(p.subs);p.subs=Array.from(new Set(cur.concat(subs)));done.push('communities')}
+ if(L('avoid').length){const cur=Array.isArray(p.avoid)?p.avoid:gwL(p.avoid);p.avoid=Array.from(new Set(cur.concat(L('avoid').join(',').split(/[,;]+/).map(x=>x.trim()).filter(Boolean))));done.push('words to avoid')}
+ if(L('wording').length){p.wording=L('wording').join('\n');done.push('approved wording')}
+ if(L('experiences').length){p.experiences=L('experiences').join('\n');done.push('real experiences')}
+ if(L('notes').length){p.notes=L('notes').join('\n');done.push('notes')}
+ return done}
 async function gwFile(list){const q=FQ();q.err='';q.msg='';q.busy=true;fqDraw();const out=[];
  try{for(const f of Array.from(list||[]))out.push(await fqFileText(f));q.fileText=out.join('\n');q.fileName=Array.from(list).map(f=>f.name).join(', ');
   if(String(q.fileText).replace(/\s+/g,'').length<40){q.fileText='';q.err='No text could be read from '+q.fileName+'. It is probably a scanned document (pictures of pages). Upload the Word (.docx) or text version, or a PDF where you can select the text with the mouse.'}
-  else{const f=gwAutoFill(q.fileText),left=[['wording','approved wording'],['experiences','real experiences']].filter(x=>!String((q.prof||{})[x[0]]||'').trim()).map(x=>x[1]);
-   q.msg=f.length?'Filled in from '+q.fileName+': '+f.join(', ')+'. Check it, change anything that is wrong, then press Save brand info.'+(left.length?' Left empty on purpose (they are never invented): '+left.join(' and ')+'.':''):'The document was read, but the boxes that are already filled were left as they are.'}}
+  else{const S=gwSections(q.fileText),fromDoc=Object.keys(S).length>=2?gwFromSections(S):[];
+   const before=JSON.stringify(q.prof||{});const guessed=fromDoc.length?gwAutoFill(q.fileText,!!S.keywords):gwAutoFill(q.fileText);
+   const left=[['website','website'],['audience','who it is for'],['about','what the brand does'],['wording','approved wording'],['experiences','real experiences'],['subs','communities']].filter(x=>{const v=(q.prof||{})[x[0]];return !(Array.isArray(v)?v.length:String(v||'').trim())}).map(x=>x[1]);
+   const all=fromDoc.concat(guessed.filter(x=>!fromDoc.some(y=>y.split(' ').pop()===x.split(' ').pop())));
+   q.msg=all.length?'Filled in from '+q.fileName+': '+all.join(', ')+'.'+(fromDoc.length?' Each section of the document went into its matching box.':'')+' Check it, then press Save brand info (nothing is saved until you do).'+(left.length?' Not in the document, so left empty: '+left.join(', ')+'.':''):'The document was read, but nothing new was found for the boxes.'}}
  catch(e){q.err=e.message||String(e)}q.busy=false;fqDraw()}
 function gwInfoHtml(){const q=FQ(),p=q.prof||{},v=k=>esc(Array.isArray(p[k])?p[k].join(k==='keywords'?'\n':', '):(p[k]||''));
  if(q.perr==='v18')return '<div class="warn"><b>One more database update is needed.</b> Open Supabase, go to SQL Editor, paste <b>supabase_update_18.sql</b> and press Run, then reload this page.</div>';
