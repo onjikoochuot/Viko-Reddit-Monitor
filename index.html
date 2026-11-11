@@ -467,25 +467,38 @@ const dlBrand=(id,full)=>xlsx(items(id,full),bname(id),full);
 /* ---------- add task form (admin) ---------- */
 function rP(){if($('pal'))$('pal').innerHTML=attHtml(PA,'delPA(#)')}
 function delPA(i){PA.splice(i,1);rP()}
-function syncCB(){document.querySelectorAll('.cx').forEach((e,i)=>{CB[i].t=e.value});document.querySelectorAll('.cl').forEach((e,i)=>{CB[i].l=e.value})}
-function rCB(){if(!$('cbs'))return;$('cbs').innerHTML=CB.map((c,i)=>'<div class="cb"><div class="row" style="margin:0 0 6px"><b>Comment '+(i+1)+'</b><span style="flex:1"></span>'+(CB.length>1?'<button onclick="delCB('+i+')">Remove</button>':'')+'</div><textarea class="cx" placeholder="Comment text">'+esc(c.t)+'</textarea><input class="cl" placeholder="Links to include (separate with spaces)" style="width:100%;margin-top:6px" value="'+esc(c.l)+'"><div class="row"><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(CB['+i+'].att,this.files,()=>{syncCB();rCB()})"></label>'+attHtml(c.att,'delCA('+i+',#)')+'</div></div>').join('')}
-function addCB(){syncCB();CB.push({t:'',l:'',att:[]});rCB()}
+function syncCB(){document.querySelectorAll('.cx').forEach((e,i)=>{CB[i].t=e.value});document.querySelectorAll('.cl').forEach((e,i)=>{CB[i].l=e.value});document.querySelectorAll('.cu').forEach((e,i)=>{CB[i].u=e.value})}
+function rCB(){if(!$('cbs'))return;$('cbs').innerHTML=CB.map((c,i)=>'<div class="cb"><div class="row" style="margin:0 0 6px"><b>Comment '+(i+1)+'</b><span style="flex:1"></span>'+(CB.length>1?'<button onclick="delCB('+i+')">Remove</button>':'')+'</div><div class="cuw" style="display:'+(($('kd')&&$('kd').value==='comment')?'':'none')+'"><input class="cu" placeholder="Post to comment under (leave empty to use the post link above)" style="width:100%;margin-bottom:6px" value="'+esc(c.u||'')+'"></div><textarea class="cx" placeholder="Comment text">'+esc(c.t)+'</textarea><input class="cl" placeholder="Links to include (separate with spaces)" style="width:100%;margin-top:6px" value="'+esc(c.l)+'"><div class="row"><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(CB['+i+'].att,this.files,()=>{syncCB();rCB()})"></label>'+attHtml(c.att,'delCA('+i+',#)')+'</div></div>').join('')}
+function addCB(){syncCB();CB.push({t:'',l:'',u:'',att:[]});rCB()}
 function delCB(i){syncCB();CB.splice(i,1);rCB()}
 function delCA(i,j){syncCB();CB[i].att.splice(j,1);rCB()}
-function scn(){const k=$('kd').value;$('fp').style.display=/^(post|postc)$/.test(k)?'':'none';$('fc').style.display=/^(postc|comment)$/.test(k)?'':'none';$('ft').style.display=k==='comment'?'':'none';$('fk').style.display=k==='track'?'':'none';rP();rCB()}
+function scn(){const k=$('kd').value;$('fp').style.display=/^(post|postc)$/.test(k)?'':'none';$('fc').style.display=/^(postc|comment)$/.test(k)?'':'none';$('ft').style.display=k==='comment'?'':'none';if($('fbulk'))$('fbulk').style.display=k==='comment'?'':'none';$('fk').style.display=k==='track'?'':'none';rP();rCB()}
 const formHtml=()=>'<div class="cb"><div class="row" style="margin:0"><h3 style="margin:0">Add work</h3><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><div class="fld"><span>What are we doing?</span><select id="kd" onchange="scn()"><option value="post">New post</option><option value="postc">New post with comments</option><option value="comment">Comments on an existing thread</option><option value="track">Track links that are already published</option></select></div>'
  +'<div class="row"><label><span class="s">Subreddit</span><input id="sb" placeholder="r/devops"></label><label style="flex:1"><span class="s">Task title (optional)</span><input id="lb" style="width:100%"></label></div>'
- +'<div class="fld" id="ft"><span>Link of the thread to comment on</span><input id="th" style="width:100%" placeholder="https://www.reddit.com/r/..."></div>'
+ +'<div class="fld" id="ft"><span>Post link (used for every comment below that has no post link of its own)</span><input id="th" style="width:100%" placeholder="https://www.reddit.com/r/..."></div>'
+ +'<details class="cb" id="fbulk" style="display:none"><summary><b>Several posts at once: paste them</b></summary><p class="s">Put the post link on one line and its comment under it. Leave an empty line between them. A block without a link is another comment for the post above it.</p><textarea id="bulkc" style="min-height:140px" placeholder="https://www.reddit.com/r/shopify/comments/abc123/title/&#10;Your comment for that post...&#10;&#10;https://www.reddit.com/r/ecommerce/comments/def456/title/&#10;Your comment for the second post..."></textarea><div class="row"><button onclick="bulkCB()">Put them in the comments below</button></div></details>'
  +'<div class="cb" id="fp"><b>Post</b><div class="fld"><span>Title</span><input id="pt" style="width:100%"></div><div class="fld"><span>Body (optional)</span><textarea id="pd" style="min-height:130px"></textarea></div><div class="fld"><span>Image, video or file attachments</span><label class="btn">Attach files<input type="file" multiple hidden onchange="addAtt(PA,this.files,rP)"></label> <span id="pal"></span></div><div class="fld"><span>Links to include (separate with spaces)</span><input id="pl" style="width:100%"></div></div>'
  +'<div id="fc"><b>Comments</b><div id="cbs"></div><button onclick="addCB()">+ Add another comment</button></div>'
  +'<div class="fld" id="fk"><span>Published links, one per line</span><textarea id="tk"></textarea></div>'
  +'<div class="row"><button class="p" onclick="addTask()">Add to this brand</button></div></div>';
+function bulkCB(){const txt=String(($('bulkc')||{}).value||'');const blocks=txt.replace(/\r/g,'').split(/\n\s*\n+/).map(b=>b.trim()).filter(Boolean);if(!blocks.length)return alert('Paste at least one post link and its comment first.');
+ let last='',out=[];blocks.forEach(b=>{const ls=b.split('\n');const i=ls.findIndex(l=>/reddit\.com\/r\//i.test(l));let u=last,body=b;if(i>=0){u=ls[i].trim();last=u;body=ls.filter((_,j)=>j!==i).join('\n').trim()}if(body||u)out.push({t:body,l:'',u:u,att:[]})});
+ const noLink=out.filter(c=>!c.u&&!/reddit\.com\/r\//i.test(($('th')||{}).value||'')).length;syncCB();CB=CB.filter(c=>c.t.trim()||c.att.length).concat(out);if(!CB.length)CB=[{t:'',l:'',u:'',att:[]}];rCB();$('bulkc').value='';const e=$('fbulk');if(e)e.open=false;
+ toast(out.length+' comment'+(out.length==1?'':'s')+' added below'+(noLink?'. '+noLink+' still need a post link':''))}
 async function insTask(o,kind){let r=await sb.from('tasks').insert(Object.assign({kind},o)).select().single();if(r.error&&/kind|seq/i.test(r.error.message))r=await sb.from('tasks').insert(o).select().single();return r}
 async function addTask(){
  syncCB();const k=$('kd').value,sub=$('sb').value.trim().replace(/^r\//i,''),th=norm($('th').value);let pcs=[];
  if(k==='post'||k==='postc'){const ti=$('pt').value.trim();if(!ti)return alert('Add the post title');pcs.push({kind:'post',ptitle:ti,body:$('pd').value.trim(),links:lk($('pl').value),att:PA.slice()})}
  if(k==='postc'||k==='comment')CB.filter(c=>c.t.trim()||c.att.length).forEach(c=>pcs.push({kind:'comment',body:c.t.trim(),links:lk(c.l),att:c.att.slice()}));
- if(k==='comment'&&!/reddit\.com\/r\//i.test(th))return alert('Add the link of the thread to comment on');
+ if(k==='comment'){const nrm=x=>String(x||'').toLowerCase().replace(/\s+/g,' ').trim(),pid=u=>{const m=String(u||'').match(/\/comments\/(\w+)/i);return m?m[1].toLowerCase():''};
+  const items=CB.filter(c=>c.t.trim()||c.att.length).map(c=>({c,u:norm(String(c.u||'').trim())||th}));if(!items.length)return alert('Add at least one comment');
+  const bad=items.filter(x=>!/reddit\.com\/r\//i.test(x.u)).length;if(bad)return alert(bad==items.length?'Add the post link to comment under (at the top, or on each comment).':bad+' comment'+(bad==1?' has':'s have')+' no post link. Add it on the comment, or fill the post link at the top.');
+  const have=new Set();ST.tasks.concat(ST.trashT||[]).filter(t=>t.brand_id===ST.bid&&t.thread).forEach(t=>ST.pieces.filter(p=>p.task_id===t.id&&p.kind==='comment').forEach(p=>have.add(pid(t.thread)+'|'+nrm(p.body))));
+  const groups={},order=[];let skip=0;items.forEach(x=>{const key=pid(x.u)+'|'+nrm(x.c.t);if(x.c.t.trim()&&have.has(key)){skip++;return}have.add(key);const g=pid(x.u)||x.u;if(!groups[g]){groups[g]={u:x.u,pcs:[]};order.push(g)}groups[g].pcs.push({kind:'comment',body:x.c.t.trim(),links:lk(x.c.l),att:x.c.att.slice()})});
+  if(!order.length)return alert('Already added: '+(skip==1?'this comment is':'all '+skip+' comments are')+' already in this brand, so nothing was added.');
+  const lab=$('lb').value.trim();let nT=0,nC=0;for(const g of order){const G=groups[g];const{data:t,error}=await insTask({brand_id:ST.bid,label:order.length>1?'':lab,sub:(order.length>1?'':sub)||info(G.u).sub,thread:G.u},'comment');if(error){alert(error.message);break}
+   const{error:e2}=await sb.from('pieces').insert(G.pcs.map((p,i)=>Object.assign({task_id:t.id,brand_id:ST.bid,sort:i},p)));if(e2){alert(e2.message);break}nT++;nC+=G.pcs.length}
+  CB=[{t:'',l:'',u:'',att:[]}];delete ST.attBrands[ST.bid];await load();draw();toast(nC+' comment'+(nC==1?'':'s')+' added as '+nT+' task'+(nT==1?'':'s')+(nT>1?' (one per post)':'')+(skip?'. '+skip+' were already in this brand and were skipped':'')+'. You can add more.');return}
  if(k==='track'){const us=$('tk').value.split(/\s+/).filter(x=>/reddit\.com/i.test(x)).map(norm);if(!us.length)return alert('Paste at least one Reddit link');
   us.forEach(u=>pcs.push({kind:info(u).type,url:u,published_at:new Date().toISOString(),status:'checking',stage:0,next_check:new Date(Date.now()+6e4).toISOString()}))}
  if(!pcs.length)return alert('Add at least one draft');
@@ -1949,7 +1962,7 @@ async function fqGo(){if(needV16())return;const q=FQ(),b=gwBrand(),topics=fqList
  q.msg='Search started. It is saved, so you can leave or refresh this page. It stays in "Your searches" and keeps going.';await fqJobs();fqDraw();if(ins.data&&ins.data.id)fqBrowserRun(ins.data)}
 const fqErr=m=>{FQ().err=m;fqDraw()};
 async function fqJobs(){const q=FQ();const{data,error}=await sb.from('find_jobs').select('*').order('created_at',{ascending:false}).limit(30);
- if(error){q.jerr=/find_jobs|schema cache|relation/i.test(error.message||'')?'v16':(error.message||'error')}else{q.jerr='';q.jobs=data||[]}
+ if(error){q.jerr=/find_jobs|schema cache|relation/i.test(error.message||'')?'v16':(error.message||'error')}else{q.jerr='';q.jobs=(data||[]).filter(x=>!x.trashed_at)}
  const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml();fqPoll();fqResume()}
 function fqPoll(){const q=FQ();clearTimeout(q.timer);if(ST.tab!=='find')return;if((q.jobs||[]).some(j=>j.status==='pending'||j.status==='running'))q.timer=setTimeout(fqJobs,8000)}
 function fqReuse(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return;const k=j.keywords||{};q.topics=(k.topics||[]).join('\n');q.exclude=(k.exclude||[]).join(', ');q.subs=(k.subs||[]).join(', ');q.want=j.want;
@@ -1957,7 +1970,7 @@ function fqReuse(id){const q=FQ(),j=(q.jobs||[]).find(x=>x.id===id);if(!j)return
  q.msg='Keywords and dates from that search are filled in below. Change what you like, then press Find posts.';q.view='find';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
 async function fqRetry(id){const{error}=await sb.from('find_jobs').update({status:'pending',progress:0,found:0,results:[],note:null,retry_local:false,started_at:null,finished_at:null}).eq('id',id);if(!noErr(error))return;FQ().msg='Started again.';await fqJobs();fqDraw();const j=(FQ().jobs||[]).find(x=>x.id===id);if(j)fqBrowserRun(j)}
 async function fqLocal(id){const{error}=await sb.from('find_jobs').update({retry_local:true}).eq('id',id);if(!noErr(error))return;FQ().msg='Passed to your computer. It starts within a minute if the Keep_running window is open on your computer.';await fqJobs();fqDraw()}
-async function fqDel(id){if(!confirm('Delete this search and its results?'))return;const{error}=await sb.from('find_jobs').delete().eq('id',id);if(!noErr(error))return;await fqJobs()}
+async function fqDel(id){if(!confirm('Move this search and its results to Trash?\n\nYou can restore it from the Trash tab until its timer runs out.'))return;if(!(await rwSoftDel('find_jobs',[id])))return;q_trashDirty();await fqJobs()}
 const fqToggle=id=>{const q=FQ();q.open[id]=!q.open[id];const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()};
 const fqSelOf=j=>{const q=FQ();if(!q.sel[j.id]){const m={};(j.results||[]).forEach((r,i)=>{m[i]=i<25});q.sel[j.id]=m}return q.sel[j.id]};
 function fqTick(id,i,on){const j=(FQ().jobs||[]).find(x=>x.id===id);if(!j)return;fqSelOf(j)[i]=on;const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
@@ -2195,7 +2208,7 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
  const skip=b=>!!(b.closest('#nv')||b.closest('header')||b.closest('#msg_comp,#rmmod,[id^=msg_],.msgbox')||b.classList.contains('tb')||b.classList.contains('chip')||b.closest('.chips')||b.disabled);
  const st=document.createElement('style');st.textContent='button.didit{background:#e6f4ec!important;border-color:#1e8a5e!important;color:#14583c!important}button.p.didit{background:#1e8a5e!important;color:#fff!important}button.didit::after{content:"\\00a0\\21bb";font-weight:700;opacity:.85}button.didit::before{content:"\\2713\\00a0";font-weight:800}';document.head.appendChild(st);
  const textNode=b=>Array.from(b.childNodes).find(n=>n.nodeType===3&&n.nodeValue.trim());
- function paint(){const c=ctx(),now=Date.now();marks=marks.filter(m=>m.c===c&&now-m.t<30*60e3);
+ function paint(){const c=ctx(),now=Date.now();marks=marks.filter(m=>m.c===c&&now-m.t<(m.ttl||30*60e3));
   document.querySelectorAll('button.didit').forEach(b=>{if(marks.some(m=>m.s===b.getAttribute('data-sig')))return;b.classList.remove('didit');const o=b.getAttribute('data-orig'),tn=textNode(b);if(o!=null&&tn)tn.nodeValue=tn.nodeValue.replace(/^(\s*)\S+/,'$1'+o.split(/\s+/)[0]);b.removeAttribute('data-orig');b.removeAttribute('data-sig');b.removeAttribute('title')});
   if(!marks.length)return;
   document.querySelectorAll('button').forEach(b=>{if(b.classList.contains('didit')||skip(b))return;const s0=sig(b);if(!marks.some(x=>x.s===s0))return;
@@ -2205,7 +2218,10 @@ async function fbRules(subs){const out={},seen=new Set(),list=[];
  document.addEventListener('click',e=>{const b=e.target&&e.target.closest&&e.target.closest('button');if(!b||skip(b))return;const o=orig(b),v=verb(o);if(!v)return;const s0=sig(b);
   if(b.classList.contains('didit')&&ASK.has(v)&&!nConfirm('You already did "'+o+'" here.\n\nDo it again? Anything already done is not made twice.')){e.stopPropagation();e.preventDefault();return}
   pend={s:s0,c:ctx(),t:Date.now()};lastC={s:s0,t:Date.now()};marks=marks.filter(m=>m.s!==s0);
-  setTimeout(()=>{if(pend&&pend.s===s0){marks.push({s:s0,c:ctx(),t:Date.now()});pend=null;paint()}},900)},true);
+  const box=b.closest('.cb'),form=!!(box&&box.querySelector('input:not([type=checkbox]):not([type=radio]):not([type=file]),textarea'));const ttl=form?5000:30*60e3;
+  setTimeout(()=>{if(pend&&pend.s===s0){marks.push({s:s0,c:ctx(),t:Date.now(),ttl});pend=null;paint();if(form)setTimeout(paint,ttl+60)}},900)},true);
+ // typing or changing something next to a done button means it is a new job: the button goes back to normal
+ document.addEventListener('input',e=>{const c=e.target&&e.target.closest&&e.target.closest('.cb');if(!c)return;const sg=Array.from(c.querySelectorAll('button.didit')).map(x=>x.getAttribute('data-sig'));if(sg.length){marks=marks.filter(m=>!sg.includes(m.s));paint()}},true);
  // an error, a "no", or a cancelled box straight after the press means it did not happen
  const FAILRX=/could not|couldn.t|error|failed|not allowed|\bfirst\b|nothing|cannot|can.t|must|did not|didn.t|not match|not a |missing|is empty|refus|invalid|only (?:approved|an admin|admins)|no (?:task|draft|post|brand|link|text|account)|please (?:sign|type|pick|choose|tick)|tick at least|not ready|not switched on|already/i;
  const nAlert=window.alert.bind(window),nConfirm=window.confirm.bind(window),nPrompt=window.prompt.bind(window);
@@ -2259,15 +2275,18 @@ async function tmDelete(id){const u=ST.profiles.find(x=>x.id===id);if(!u)return;
 /* ---------- Trash: everything that was removed, in one place, grouped, each with its countdown ---------- */
 const trashCan=()=>isAdminU()||can('brand_delete')||can('work_delete');
 const trashPeople=()=>(ST.profiles||[]).filter(u=>u.status==='blocked');
-const trashTotal=()=>{try{return (ST.trashB||[]).length+(ST.trashT||[]).length+(isAdminU()||can('team_pause')?trashPeople().length:0)}catch(e){return 0}};
+const trashTotal=()=>{try{return (ST.trashB||[]).length+(ST.trashT||[]).length+(ST.trD||[]).length+(ST.trJ||[]).length+(isAdminU()||can('team_pause')?trashPeople().length:0)}catch(e){return 0}};
 const tLeft=x=>{const d=daysLeft(x);return d<=0?'deleted at the next clean-up':d==1?'1 day left':d+' days left'};
 const tLeftCls=x=>daysLeft(x)<=2?'rd':'s';
 function trSel(k,id,on){ST.trs=ST.trs||{};if(on)ST.trs[k+id]=true;else delete ST.trs[k+id];draw()}
 const trTick=(k,id)=>'<input type="checkbox" style="width:auto;margin:0 10px 0 0;transform:scale(1.2)" '+((ST.trs||{})[k+id]?'checked ':'')+'onclick="event.stopPropagation();trSel(\''+k+'\',\''+id+'\',this.checked)">';
 const trPicked=k=>Object.keys(ST.trs||{}).filter(x=>x.startsWith(k)).map(x=>x.slice(k.length));
-function trashView(){const cat=ST.trc||'all',B=ST.trashB||[],T=(ST.trashT||[]),P=isAdminU()||can('team_pause')?trashPeople():[],q=String(ST.trq||'').toLowerCase().trim();
+function q_trashDirty(){ST.trL=0}
+async function trLoadRw(){ST.trL=1;const a=await sb.from('reddit_drafts').select('*').not('trashed_at','is',null).order('trashed_at',{ascending:false}).limit(500),j=await sb.from('find_jobs').select('*').not('trashed_at','is',null).order('trashed_at',{ascending:false}).limit(200);
+ ST.trD=a.error?[]:(a.data||[]);ST.trJ=j.error?[]:(j.data||[]);ST.trV23=!(a.error&&/trashed_at|column/i.test(a.error.message||''));if(ST.tab==='trash')draw()}
+function trashView(){if(!ST.trL&&(can('reddit_find')||can('reddit_draft')||isAdminU()))setTimeout(trLoadRw,10);const DR=ST.trD||[],J=ST.trJ||[],cat=ST.trc||'all',B=ST.trashB||[],T=(ST.trashT||[]),P=isAdminU()||can('team_pause')?trashPeople():[],q=String(ST.trq||'').toLowerCase().trim();
  const bn=id=>((ST.brands||[]).concat(B).find(b=>b.id===id)||{}).name||'(brand)',hit=t=>!q||t.toLowerCase().includes(q);
- const tabs=[['all','Everything',B.length+T.length+P.length],['brands','Brands',B.length],['tasks','Tasks',T.length]].concat(P.length||isAdminU()?[['people','Expelled people',P.length]]:[]);
+ const tabs=[['all','Everything',B.length+T.length+P.length+DR.length+J.length],['brands','Brands',B.length],['tasks','Tasks',T.length],['drafts','Reddit work drafts',DR.length],['searches','Searches',J.length]].concat(P.length||isAdminU()?[['people','Expelled people',P.length]]:[]);
  let h='<h1>Trash</h1><p class="mu">Everything that was removed waits here. Brands and tasks are deleted for good after '+trashDays()+' days, expelled people after 24 hours. Until then you can restore them. Money already earned is always kept.</p>'
   +'<div class="row">'+tabs.map(x=>'<button class="tb'+(cat===x[0]?' on':'')+'" onclick="ST.trc=\''+x[0]+'\';draw()">'+x[1]+' ('+x[2]+')</button>').join('')+'<input placeholder="Search the Trash" value="'+esc(ST.trq||'')+'" style="flex:1;min-width:180px" oninput="ST.trq=this.value;clearTimeout(window.__trt);window.__trt=setTimeout(()=>{draw();const e=document.querySelector(\'input[placeholder=&quot;Search the Trash&quot;]\');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}},250)"></div>';
  const sec=(title,k,list,row,acts)=>{const picked=trPicked(k).filter(id=>list.some(x=>x.id===id));return '<div class="cb"><div class="row" style="margin:0;align-items:center"><b style="flex:1">'+title+' ('+list.length+')</b>'
@@ -2279,11 +2298,23 @@ function trashView(){const cat=ST.trc||'all',B=ST.trashB||[],T=(ST.trashT||[]),P
  if(cat==='all'||cat==='tasks'){const l=T.filter(t=>hit(bn(t.brand_id)+' '+tlabel(t)+' '+(t.sub||'')+' '+((ST.pby[t.id]||[]).map(p=>p.body||'').join(' ')))).sort((a,b)=>bn(a.brand_id).localeCompare(bn(b.brand_id))||new Date(a.trashed_at)-new Date(b.trashed_at));
   const mm={};h+=sec('Tasks','t',l,t=>{const m=mm[t.brand_id]||(mm[t.brand_id]=numbered(t.brand_id)),ps=ST.pby[t.id]||[];return '<div class="task'+(catOf(t)==='comment'?' cc':'')+'"><div class="row" style="margin:0;align-items:center">'+trTick('t',t.id)+'<div style="flex:1;min-width:0"><div class="t"><span class="num2">'+esc(tnum(t,m)||tn2(t))+'</span>'+esc(tlabel(t))+'</div><div class="s"><b>'+esc(bn(t.brand_id))+'</b> · '+ps.length+' item'+(ps.length==1?'':'s')+(t.sub?' · r/'+esc(t.sub):'')+' · removed '+D(t.trashed_at)+' · <span class="'+tLeftCls(t.trashed_at)+'">'+tLeft(t.trashed_at)+'</span></div></div><div class="a"><button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button>'+G('work_delete','<button class="dng" onclick="purgeTask(\''+t.id+'\')">Delete forever</button>')+'</div></div><details><summary>Show items</summary>'+(ps.map(miniPc).join('')||'<div class="s">No items.</div>')+'</details></div>'},
    pk=>(pk.length?'<button class="sm p" onclick="trBulk(\'t\',\'restore\')">Restore</button>'+G('work_delete','<button class="sm dng" onclick="trBulk(\'t\',\'purge\')">Delete forever</button>'):'')+G('work_delete','<button class="sm dng" onclick="trEmptyTasks()">Empty</button>'))}
+ if(cat==='all'||cat==='drafts'){const l=DR.filter(d=>hit(bn(d.brand_id)+' '+(d.title||'')+' '+(d.thread_title||'')+' '+(d.body||'')+' '+(d.sub||'')));
+  h+=sec('Reddit work drafts','d',l,d=>'<div class="task'+(d.kind==='comment'?' cc':'')+'"><div class="row" style="margin:0;align-items:center">'+trTick('d',d.id)+'<div style="flex:1;min-width:0"><div class="t">'+esc(clip(d.kind==='post'?(d.title||'Untitled post'):(d.thread_title||d.thread_url||'Comment'),90))+'</div><div class="s"><b>'+esc(bn(d.brand_id))+'</b> · '+(d.kind==='post'?'post':'comment')+(d.sub?' · r/'+esc(String(d.sub).replace(/^r\//i,'')):'')+' · removed '+D(d.trashed_at)+' · <span class="'+tLeftCls(d.trashed_at)+'">'+tLeft(d.trashed_at)+'</span></div>'+(d.body?'<div class="s" style="margin-top:4px">'+esc(clip(d.body,180))+'</div>':'')+'</div><div class="a"><button class="p" onclick="trRw(\'d\',[\''+d.id+'\'],\'restore\')">Restore</button><button class="dng" onclick="trRw(\'d\',[\''+d.id+'\'],\'purge\')">Delete forever</button></div></div></div>',
+   pk=>pk.length?'<button class="sm p" onclick="trRw(\'d\',trPicked(\'d\'),\'restore\')">Restore</button><button class="sm dng" onclick="trRw(\'d\',trPicked(\'d\'),\'purge\')">Delete forever</button>':'<button class="sm dng" onclick="trRw(\'d\',(ST.trD||[]).map(x=>x.id),\'purge\',1)">Empty</button>')}
+ if(cat==='all'||cat==='searches'){const l=J.filter(j=>hit(bn(j.brand_id)+' '+((j.keywords&&j.keywords.topics)||[]).join(' ')));
+  h+=sec('Searches','j',l,j=>{const kw=((j.keywords&&j.keywords.topics)||[]).slice(0,4).join(', ');return '<div class="task"><div class="row" style="margin:0;align-items:center">'+trTick('j',j.id)+'<div style="flex:1;min-width:0"><div class="t">'+esc(bn(j.brand_id))+' search</div><div class="s">'+esc(clip(kw||'(no keywords)',120))+' · '+((j.results||[]).length)+' posts found · removed '+D(j.trashed_at)+' · <span class="'+tLeftCls(j.trashed_at)+'">'+tLeft(j.trashed_at)+'</span></div></div><div class="a"><button class="p" onclick="trRw(\'j\',[\''+j.id+'\'],\'restore\')">Restore</button><button class="dng" onclick="trRw(\'j\',[\''+j.id+'\'],\'purge\')">Delete forever</button></div></div></div>'},
+   pk=>pk.length?'<button class="sm p" onclick="trRw(\'j\',trPicked(\'j\'),\'restore\')">Restore</button><button class="sm dng" onclick="trRw(\'j\',trPicked(\'j\'),\'purge\')">Delete forever</button>':'<button class="sm dng" onclick="trRw(\'j\',(ST.trJ||[]).map(x=>x.id),\'purge\',1)">Empty</button>')}
+ if(ST.trV23===false)h+='<div class="warn">Deleted Reddit work drafts and searches will appear here after <b>supabase_update_23.sql</b> is run in Supabase.</div>';
  if((cat==='all'||cat==='people')&&(P.length||isAdminU())){const l=P.filter(u=>hit(u.name+' '+u.email)),left=u=>Math.max(0,Math.ceil((+new Date(u.blocked_at||Date.now())+DAY-Date.now())/36e5));
   h+=sec('Expelled people','u',l,u=>'<div class="task"><div class="row" style="margin:0;align-items:center">'+trTick('u',u.id)+'<div style="flex:1"><div class="t">'+esc(u.name)+'</div><div class="s">'+esc(u.email)+' · '+esc(lvName(u.role))+' · <span class="'+(left(u)<=3?'rd':'s')+'">'+(left(u)?left(u)+' hours until deleted':'deleted at the next clean-up')+'</span></div></div><div class="a">'+(can('team_pause')?'<button class="p" onclick="setStatus(\''+u.id+'\',\'active\')">Restore</button>':'')+(isAdminU()?'<button class="dng" onclick="tmDelete(\''+u.id+'\')">Delete forever</button>':'')+'</div></div></div>',
    pk=>pk.length?(can('team_pause')?'<button class="sm p" onclick="trBulk(\'u\',\'restore\')">Restore</button>':'')+(isAdminU()?'<button class="sm dng" onclick="trBulk(\'u\',\'purge\')">Delete forever</button>':''):'')}
  return h}
-function trAll(k,on){ST.trs=ST.trs||{};Object.keys(ST.trs).filter(x=>x.startsWith(k)).forEach(x=>delete ST.trs[x]);if(on){const q=String(ST.trq||'').toLowerCase().trim(),list=k==='b'?ST.trashB:k==='t'?ST.trashT:trashPeople();list.forEach(x=>ST.trs[k+x.id]=true)}draw()}
+async function trRw(k,ids,act,all){ids=ids.filter(Boolean);if(!ids.length)return alert('Tick at least one first.');const tb=k==='d'?'reddit_drafts':'find_jobs',W=ids.length+' '+(k==='d'?'draft':'search')+(ids.length==1?'':k==='d'?'s':'es');
+ if(act==='restore'){const{error}=await sb.from(tb).update({trashed_at:null}).in('id',ids);if(!noErr(error))return;toast('Restored '+W)}
+ else{if(ids.length>1||all){const v=prompt('Delete '+W+' forever? This cannot be undone.\n\nType '+(all?'EMPTY':'DELETE '+ids.length)+' to confirm:');if(v==null)return;if(v.trim().toUpperCase()!==(all?'EMPTY':'DELETE '+ids.length))return alert('That did not match, so nothing was deleted.')}else if(!confirm('Delete this '+(k==='d'?'draft':'search')+' forever? This cannot be undone.'))return;
+  for(let i=0;i<ids.length;i+=100){const{error}=await sb.from(tb).delete().in('id',ids.slice(i,i+100));if(!noErr(error))return}toast('Deleted '+W+' for good')}
+ ST.trs={};try{if(FQ().bid){FQ().drafts=null;FQ().jobs=null}}catch(e){}await trLoadRw()}
+function trAll(k,on){ST.trs=ST.trs||{};Object.keys(ST.trs).filter(x=>x.startsWith(k)).forEach(x=>delete ST.trs[x]);if(on){const list=k==='b'?ST.trashB:k==='t'?ST.trashT:k==='d'?(ST.trD||[]):k==='j'?(ST.trJ||[]):trashPeople();list.forEach(x=>ST.trs[k+x.id]=true)}draw()}
 async function trBulk(k,act){const ids=trPicked(k);if(!ids.length)return alert('Tick at least one first.');const n=ids.length,what=k==='b'?'brand':k==='t'?'task':'person';const W=n+' '+what+(n==1?'':k==='u'?'':'s');
  if(act==='restore'){if(!confirm('Restore '+W+'?'))return;
   if(k==='b'){for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('brands').update({archived_at:null,trashed_at:null}).in('id',ids.slice(i,i+100));if(error)return alert(error.message)}}
@@ -2469,7 +2500,7 @@ async function gwLoad(){const q=FQ(),id=q.bid;if(!id)return;
  const a=await sb.from('brand_profiles').select('*').eq('brand_id',id).maybeSingle();
  if(a.error){q.perr=gwErrTxt(a.error);q.prof={}}else{q.perr='';q.prof=a.data||{brand_id:id}}
  const d=await sb.from('reddit_drafts').select('*').eq('brand_id',id).order('created_at',{ascending:false});
- if(d.error){q.derr=gwErrTxt(d.error);q.drafts=[]}else{q.derr='';q.drafts=d.data||[]}
+ if(d.error){q.derr=gwErrTxt(d.error);q.drafts=[]}else{q.derr='';q.drafts=(d.data||[]).filter(x=>!x.trashed_at)}
  if(q.bid!==id)return;if(!q.view)q.view=(q.prof&&(q.prof.about||(q.prof.keywords||[]).length))?'find':'info';
  gwPrefill();fqDraw();const e=$('fq_jobs');if(e)e.innerHTML=fqJobsHtml()}
 function gwPrefill(){const q=FQ(),p=q.prof||{};if(q.prefilled===q.bid)return;q.prefilled=q.bid;
@@ -2586,7 +2617,9 @@ async function gwStatus(id,st){const q=FQ(),d=(q.drafts||[]).find(x=>x.id===id);
 function gwMissing(d){if(d.kind==='comment'){if(!String(d.body||'').trim())return 'Write the comment first.';if(!/reddit\.com\/r\/.+\/comments\//i.test(d.thread_url||''))return 'Add the link of the post this comment goes under.'}
  else{if(!String(d.title||'').trim())return 'Write the post title first.';if(!String(d.body||'').trim())return 'Write the post body first.'}
  if(!String(d.sub||'').trim())return 'Add the community (subreddit).';return ''}
-async function gwDel(id){if(!confirm('Delete this draft for good?'))return;const{error}=await sb.from('reddit_drafts').delete().eq('id',id);if(!noErr(error))return;FQ().drafts=FQ().drafts.filter(x=>x.id!==id);fqDraw()}
+/* removing drafts or searches moves them to Trash (the Trash tab); without update 23 they are deleted as before */
+async function rwSoftDel(table,ids){if(!ids.length)return true;let r=await sb.from(table).update({trashed_at:new Date().toISOString()}).in('id',ids);if(r.error&&/trashed_at|column|schema/i.test(r.error.message||'')){r=await sb.from(table).delete().in('id',ids);if(!r.error){toast('Deleted (run supabase_update_23.sql so removed work goes to Trash first)');return true}}return noErr(r.error)}
+async function gwDel(id){if(!confirm('Move this draft to Trash?\n\nYou can restore it from the Trash tab until its timer runs out.'))return;if(!(await rwSoftDel('reddit_drafts',[id])))return;FQ().drafts=FQ().drafts.filter(x=>x.id!==id);q_trashDirty();fqDraw()}
 function gwChk(id,i,on){const d=(FQ().drafts||[]).find(x=>x.id===id);if(!d)return;d.checks=Object.assign({},d.checks||{});d.checks[i]=on}
 const gwOpen=id=>{const q=FQ();q.dopen[id]=!q.dopen[id];fqDraw()};
 function gwCopy(t,msg){(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>{FQ().msg=msg||'Copied.';fqDraw()}).catch(()=>prompt('Copy this:',t))}
@@ -2661,7 +2694,7 @@ async function gwBulk(ds,st,label){const q=FQ();if(!ds.length)return;let n=0;q.b
  for(const d of ds){const old=d.status;d.status=st;if(st==='approved')d.approved_at=gwNowS();if(await gwSave(d.id,'Status: '+old+' to '+st+' (whole batch)',true))n++;else{d.status=old;break}}
  q.busy=false;q.msg=n+' draft'+(n==1?'':'s')+' '+label+'.';if(q.df)q.df.st=st==='review'?'review':st==='approved'?'approved':q.df.st;fqDraw()}
 async function gwBulkDelEmpty(){const q=FQ(),ds=(q.drafts||[]).filter(gwEmpty);if(!ds.length)return;if(!confirm('Delete '+ds.length+' empty draft'+(ds.length==1?'':'s')+' (no comment or post written in them)?\n\nThis cannot be undone. Drafts with writing in them are not touched.'))return;
- const ids=ds.map(d=>d.id);const{error}=await sb.from('reddit_drafts').delete().in('id',ids);if(!noErr(error))return;q.drafts=q.drafts.filter(d=>!ids.includes(d.id));q.msg=ids.length+' empty draft'+(ids.length==1?'':'s')+' deleted.';fqDraw()}
+ const ids=ds.map(d=>d.id);if(!(await rwSoftDel('reddit_drafts',ids)))return;q.drafts=q.drafts.filter(d=>!ids.includes(d.id));q_trashDirty();q.msg=ids.length+' empty draft'+(ids.length==1?'':'s')+' moved to Trash.';fqDraw()}
 /* stages, ticking, and actions on one, several or all drafts */
 function gwTick(id,on){const q=FQ();q.dsel=q.dsel||{};if(on)q.dsel[id]=true;else delete q.dsel[id];fqDraw()}
 function gwShown(){const q=FQ(),F=q.df||{st:'open',kind:'all',q:''},Q=String(F.q||'').trim().toLowerCase();
@@ -2876,7 +2909,7 @@ async function gwRemoveRw(){const b=gwBrand();if(!b)return;
 const rwAll=()=>ST.brands.concat(ST.rbrands||[]);
 const rwOn=()=>ST.v21!==false;
 const rwList=()=>rwOn()?rwAll().filter(b=>!b.archived_at&&(b.rw_state==='only'||b.rw_state==='linked')):ST.brands.filter(b=>!b.archived_at);
-async function rwCounts(){const q=FQ();const r=await sb.from('reddit_drafts').select('brand_id,status');q.counts={};(r.data||[]).forEach(d=>{const c=q.counts[d.brand_id]=q.counts[d.brand_id]||{d:0,a:0};if(!['archived','pushed'].includes(d.status))c.d++;if(d.status==='approved')c.a++});if(ST.tab==='find'&&!q.bid)fqDraw()}
+async function rwCounts(){const q=FQ();let r=await sb.from('reddit_drafts').select('brand_id,status,trashed_at');if(r.error)r=await sb.from('reddit_drafts').select('brand_id,status');q.counts={};(r.data||[]).filter(d=>!d.trashed_at).forEach(d=>{const c=q.counts[d.brand_id]=q.counts[d.brand_id]||{d:0,a:0};if(!['archived','pushed'].includes(d.status))c.d++;if(d.status==='approved')c.a++});if(ST.tab==='find'&&!q.bid)fqDraw()}
 function rwHomeHtml(){const q=FQ(),on=rwOn(),L=rwList().slice().sort((a,b)=>String(a.name).localeCompare(String(b.name))),s=String(q.rwq||'').trim().toLowerCase(),F=L.filter(b=>!s||b.name.toLowerCase().includes(s));
  const nJ=b=>(q.jobs||[]).filter(j=>j.brand_id===b.id||(!j.brand_id&&String(j.brand_name||'').toLowerCase()===b.name.toLowerCase())).length;
  const cand=on?ST.brands.filter(b=>!b.archived_at&&b.rw_state!=='linked').sort((a,b)=>a.name.localeCompare(b.name)):[];
