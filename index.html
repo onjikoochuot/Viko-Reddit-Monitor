@@ -421,16 +421,15 @@ async function runCheck(p,pre){
  catch(e){u={hist:(p.hist||[]).concat([{t:now,s:'error',m:'browser: '+String(e&&e.message||e).slice(0,60)}]).slice(-400),last_check:new Date(now).toISOString(),next_check:new Date(now+6e5).toISOString()}}
  await sb.from('pieces').update(u).eq('id',p.id);
 }
-async function chkP(id){const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t=>{$('who').textContent=t};
- if(p0&&p0.url){w('Checking with the Reddit API...');let why='';const a=await apiLiveOne(p0.url,p0.kind,x=>{why=x});w(me.name);
-  if(!a&&/not in the API answer/.test(why)){sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id).then(()=>{});
-   alert('The Reddit API opened the post, but this '+(p0.kind==='comment'?'comment':'post')+' is not in the public list.\n\nThat usually means Reddit removed or hid it. The person who wrote it still sees it when logged in, so it can look live to you.\n\nTo be sure, open the link in a private window (not logged in). If you can see it there, press "Mark live".\n\nThe status was left as it is, and the back-up checker will also look.');return}
+async function chkP(id){let why='';const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t=>{$('who').textContent=t};
+ if(p0&&p0.url){w('Checking with the Reddit API...');const a=await apiLiveOne(p0.url,p0.kind,x=>{why=x});w(me.name);
   if(a){await runCheck(p0,a);await load();draw(true);alert(a.s==='removed'?'Checked: this item is deleted.':'Checked: this item is live.');return}}
  const{error}=await sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id);
  if(error){alert('Could not queue the check: '+error.message);return}
- for(let i=0;i<24;i++){w('Waiting for your Reddit checker... '+(i*4)+'s');await new Promise(r=>setTimeout(r,4000));await load();const p=pieceOf(id);
-  if(p&&(p.last_check||'')!==was){w(me.name);draw(true);alert(p.status==='removed'?'Checked: this item is deleted.':(p.hist&&p.hist.length&&p.hist[p.hist.length-1].s==='error'?'Reddit refused the check: '+(p.hist[p.hist.length-1].m||'unknown'):'Checked: this item is live.'));return}}
- w(me.name);alert('No answer from the checker. Open reddit.com in Brave (logged in) and look for the small black "Viko checker" badge in the bottom-right corner. If it is missing, Tampermonkey is not running the script.')}
+ w('Asking the back-up checker...');for(const fn of ['hyper-service','checker']){try{const r=await sb.functions.invoke(fn,{body:{}});if(!r.error)break}catch(e){}}
+ for(let i=0;i<6;i++){if(i){w('Waiting for the back-up checker... '+(i*4)+'s');await new Promise(r=>setTimeout(r,4000))}await load();const p=pieceOf(id);
+  if(p&&(p.last_check||'')!==was){w(me.name);draw(true);alert(p.status==='removed'?'Checked: Reddit does not show this item to the public (deleted, removed or hidden).\n\nIf you can see it while logged in but not in a private window, Reddit has hidden it.':(p.hist&&p.hist.length&&p.hist[p.hist.length-1].s==='error'?'Reddit refused the check: '+(p.hist[p.hist.length-1].m||'unknown'):'Checked: this item is live.'));return}}
+ w(me.name);draw(true);const hid=/not in the API answer/.test(why||'');alert((hid?'The Reddit API opened the post, but this '+(p0&&p0.kind==='comment'?'comment':'post')+' is not in the public list. That usually means Reddit removed or hid it (the person who wrote it still sees it when logged in).':'Reddit could not be checked right now'+(why?' ('+why+')':'')+'.')+'\n\nThe status was left as it is. To be sure, open the link in a private window (not logged in). If you can see it there, press "Mark live". If not, press "Mark deleted".')}
 async function setSt(id,s){const p=pieceOf(id),n=Date.now();await sb.from('pieces').update({status:s,hist:(p.hist||[]).concat([{t:n,s}]).slice(-400),last_check:new Date(n).toISOString(),next_check:s==='removed'?null:new Date(n+DAY).toISOString()}).eq('id',id);await refresh()}
 let due=0;
 async function runDue(){if(due||!me||me.role!=='admin')return;due=1;try{const{data}=await sb.from('pieces').select('*').not('url','is',null).in('status',['checking','live','removed']).lte('next_check',new Date().toISOString()).limit(20);
