@@ -666,9 +666,10 @@ async function runJob(job) {
       const cdp = await ctx.newCDPSession(page);
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 1400, deviceScaleFactor: 1.6, mobile: false });
     }
-    let n = 0;
+    let n = 0, stopAs = '';
     for (const raw of pairs) {
       n++;
+      try { const st = await sb('/rest/v1/report_jobs?id=eq.' + job.id + '&select=status'); if (st && st[0] && st[0].status !== 'running') { stopAs = st[0].status; break; } } catch { /* keep going if the check itself fails */ }
       const pair = { post: raw.post || '', comment: raw.comment || '', sub: raw.sub || '' };
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
@@ -707,6 +708,7 @@ async function runJob(job) {
         else skip('Could not check on Reddit (' + String(e.message).slice(0, 100) + ')', true);
       }
     }
+    if (stopAs) { log('stopped from the website (' + stopAs + ') after ' + (n - 1) + ' of ' + pairs.length); return; }
     const retryable = skipped.filter((x) => x.retry).length, escalate = !LOCAL && retryable > 0 && process.env.ESCALATE !== '0';
     if (!items.length) {
       await patchJob(job.id, { status: 'failed', retry_local: escalate, note: escalate ? 'GitHub could not open these pages (' + retryable + '). Your computer will try next. It needs the Keep_running window open.' : 'None of the ' + pairs.length + ' engagements could be included, so no report was made. See the list below for the reasons.', skipped, included: 0, progress: pairs.length, finished_at: new Date().toISOString() });
