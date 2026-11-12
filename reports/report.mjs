@@ -683,10 +683,12 @@ async function runJob(job) {
         if (!lc.unknown && !lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
         if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
         let shot = null; const errs = [];
-        for (const layout of ['modern']) { // old Reddit is not used: it needs a login and is being phased out
+        // FIRST: the typed-up copy from the Reddit API (fast, and Reddit cannot block it). Set SCREENSHOT_FIRST=1 to go back to screenshots first.
+        if (process.env.SCREENSHOT_FIRST !== '1') { try { shot = await typedShot(ctx, pair, kws); } catch (e) { errs.push('typed copy: ' + String(e.message).split('\n')[0].slice(0, 120)); log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); } }
+        if (!shot) for (const layout of ['modern']) { // BACK-UP: a real screenshot of the Reddit page // old Reddit is not used: it needs a login and is being phased out
           try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
         }
-        if (!shot) { // the screenshot failed: type the post and comment up from the Reddit API instead
+        if (!shot && process.env.SCREENSHOT_FIRST === '1') { // screenshots-first mode: the typed-up copy is the back-up
           try { shot = await typedShot(ctx, pair, kws); } catch (e) { log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); }
           if (shot) log(n + '/' + pairs.length, 'screenshot not possible, typed-up copy used');
         }
@@ -733,7 +735,7 @@ async function runJob(job) {
     const nTyped = items.filter((x) => x.typed).length;
     let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
     if (escalate) note = 'Partly ready: ' + retryable + (job.source === 'posts' ? ' post' : ' engagement') + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
-    if (nTyped) note = (note ? note + ' ' : '') + nTyped + ' of ' + items.length + ' could not be screenshotted and were typed up instead (marked in the PDF).';
+    if (nTyped) note = (note ? note + ' ' : '') + (process.env.SCREENSHOT_FIRST === '1' ? nTyped + ' of ' + items.length + ' could not be screenshotted and were typed up instead (marked in the PDF).' : nTyped + ' of ' + items.length + ' typed up from the Reddit API' + (items.length - nTyped ? ', ' + (items.length - nTyped) + ' screenshotted because the API could not give them' : '') + '.');
     await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: objPath, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');
   } finally {
