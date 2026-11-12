@@ -674,7 +674,9 @@ async function runJob(job) {
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
-          try { pair.comment = LOCAL ? await resolveShortInBrowser(page, pair.comment, true) : await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
+          const viaApi = await apiLive([{ url: pair.comment, kind: 'comment' }]).catch(() => null); // the Reddit API helper opens share links first
+          if (viaApi && viaApi[0] && viaApi[0].resolved && commentId(viaApi[0].resolved)) { log(n + '/' + pairs.length, 'share link opened by the Reddit API helper'); pair.comment = viaApi[0].resolved; }
+          else try { pair.comment = LOCAL ? await resolveShortInBrowser(page, pair.comment, true) : await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
         }
         if (!pair.comment || !ids(pair.comment) || !commentId(pair.comment)) { skip('Link is not a Reddit comment link'); continue; }
         if (!pair.post || !ids(pair.post)) { try { pair.post = /\/s\//.test(pair.post) ? (LOCAL ? await resolveShortInBrowser(page, pair.post) : await resolveShort(pair.post)) : toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } catch { pair.post = toBase(pair.comment, 'https://www.reddit.com').replace(/(\/comments\/[a-z0-9]+\/).*/i, '$1'); } }
