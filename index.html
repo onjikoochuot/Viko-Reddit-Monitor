@@ -705,6 +705,18 @@ function dtBar(w,def,o){o=o||{};let s=dtSort(def);if(o.noTask&&s==='task')s=def;
   +'<div class="dtr"><span class="s dtl">Order</span>'+[['new','Newest first'],['old','Oldest first']].concat(o.noTask?[]:[['task','Task number']]).map(x=>'<button class="tb'+(s===x[0]?' on':'')+'" onclick="dtSet(\'s\','+q(x[0])+','+q(w)+')">'+x[1]+'</button>').join('')
   +(dtOn()?'<span class="s dtn">Showing only work '+(o.what||'published')+' <b>'+esc(dtLabel())+'</b>. <a href="#" onclick="dtSet(\'r\',\'\','+q(w)+');return false">Show all dates</a></span>':'')+'</div></div>'}
 function dtOrder(arr,def){const s=dtSort(def);if(s==='task')return arr;return arr.slice().sort((a,b)=>s==='old'?(pWhen(a)||9e15)-(pWhen(b)||9e15):pWhen(b)-pWhen(a))}
+/* ---- "Check these again": re-check every item in the current view with the Reddit API ---- */
+async function chkAll(ids){ids=(ids||[]).filter(Boolean);if(!ids.length)return alert('There is nothing published to check in this view.');
+ if(ids.length>25&&!confirm('Check these '+ids.length+' items again with the Reddit API?\n\nIt takes about '+Math.max(1,Math.ceil(ids.length*3/60))+' minute(s) and uses a little API credit. Keep this page open until it finishes.'))return;
+ let live=0,del=0,unk=0,stop='';const w=t=>{const e=$('who');if(e)e.textContent=t};
+ for(let i=0;i<ids.length;i+=5){w('Checking '+Math.min(i+5,ids.length)+' of '+ids.length+'...');
+  try{const d=await apiCall({op:'checksave',pids:ids.slice(i,i+5)});(d.results||[]).forEach(x=>{x.s==='live'?live++:x.s==='removed'?del++:unk++})}
+  catch(e){if(e&&e.apiFatal){stop=e.message;break}unk+=Math.min(5,ids.length-i)}}
+ w(me&&me.name||'');try{await refresh()}catch(e){}
+ alert((stop?'Stopped early: '+stop+'\n\n':'')+'Checked again with the Reddit API:\n'+live+' live\n'+del+' deleted'+(unk?'\n'+unk+' could not be confirmed (left as they were, tried again later)':''))}
+const chkIdsB=bid=>ST.pieces.filter(p=>p.brand_id===bid&&!p._arc&&p.url&&p.status!=='todo'&&(ST.tf==='all'||p.status===ST.tf)&&inDT(p)).map(p=>p.id);
+const chkIdsM=bid=>ST.pieces.filter(p=>(ST.tok||p.brand_id===bid)&&p.url&&p.status!=='todo'&&(!ST.mst||p.status===ST.mst)&&inDT(p)).map(p=>p.id);
+function chkAllM(bid){if(ST.asUser)return alert('This button is switched off in the preview. It works for the team member.');chkAll(chkIdsM(bid))}
 function listHtml(b){
  const m=numbered(b.id),ps=ST.pieces.filter(p=>p.brand_id===b.id),n=s=>ps.filter(p=>p.status===s).length,aps=ps.filter(p=>!p._arc),na=s=>aps.filter(p=>p.status===s).length,odn=dueStats(ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at)).od,its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
  const sv=surv(ps),kp='<div class="kpi"><div class="k-live"><b>'+np+'</b>live posts</div><div class="k-live"><b>'+nc+'</b>live comments</div><div class="k-chk"><b>'+n('checking')+'</b>being confirmed</div><div class="k-del"><b>'+n('removed')+'</b>deleted</div><div class="k-dr"><b>'+na('todo')+'</b>drafts to publish</div>'+(odn?'<div class="k-del"><b>'+odn+'</b>tasks overdue</div>':'')+'<div class="k-ink"><b>'+(sv==null?'-':sv+'%')+'</b>still live</div><div><b>'+sumUp(ps)+'</b>upvotes (live)</div></div>';
@@ -715,7 +727,7 @@ function listHtml(b){
  const trk=dtSort('new')==='task'?groups('track'):(()=>{const ord=dtSort('new'),lw=t=>Math.max(0,...(ST.pby[t.id]||[]).filter(p=>p.url&&inDT(p)&&(ST.tf==='all'||p.status===ST.tf)).map(pWhen));
   const arr=ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at&&m[t.id]).map(t=>[t,lw(t)]).sort((x,y)=>ord==='old'?(x[1]||9e15)-(y[1]||9e15):y[1]-x[1]).map(x=>taskCard(x[0],'track',m)).filter(Boolean);if(!arr.length)return '';const sh=arr.slice(0,ST.lim);
   return '<div class="cat">All posts and comments, '+(ord==='old'?'oldest':'newest')+' first <small>'+arr.length+'</small></div>'+sh.join('')+(arr.length>sh.length?'<div class="row"><button onclick="ST.lim+=30;draw(true)">Show 30 more ('+(arr.length-sh.length)+' left)</button></div>':'')})();
- return banner()+kp+rp+drafts+'<h3>Tracking</h3>'+dtBar('d','new')+'<div class="row" style="margin-top:0">'+chips+'</div>'+(trk||'<div class="empty">'+(dtOn()?'Nothing was published '+esc(dtLabel())+'. <a href="#" onclick="dtSet(\'r\',\'\',\'d\');return false">Show all dates</a>':'Nothing here yet. When a link is published it appears here and is checked automatically.')+'</div>');
+ return banner()+kp+rp+drafts+'<h3>Tracking</h3>'+dtBar('d','new')+'<div class="row" style="margin-top:0">'+chips+(()=>{const n=chkIdsB(b.id).length;return n?'<button class="p chkall" title="Ask the Reddit API again whether each of these is live or deleted" onclick="chkAll(chkIdsB(\''+b.id+'\'))">&#8635; Check '+(ST.tf==='all'?'all':'these')+' again ('+n+')</button>':''})()+'</div>'+(trk||'<div class="empty">'+(dtOn()?'Nothing was published '+esc(dtLabel())+'. <a href="#" onclick="dtSet(\'r\',\'\',\'d\');return false">Show all dates</a>':'Nothing here yet. When a link is published it appears here and is checked automatically.')+'</div>');
 }
 function openBrand(id){ST.bid=id;ST.panel='';ST.tf='all';ST.q='';ST.lim=30;draw();ensureAtt(id).then(()=>{if(ST.bid===id)draw(true)})}
 function brandCard(b){const ps=ST.pieces.filter(p=>p.brand_id===b.id),n=x=>ps.filter(p=>p.status===x).length,cl=ST.clients.find(c=>c.id===b.client_id),ns=ST.sugg.filter(x=>x.brand_id===b.id&&x.status==='new').length;
@@ -890,7 +902,7 @@ function mBrandHead(b,bps,o){o=o||{};const c=stCount(bps),pub=c.live+c.checking+
   +'<div class="cb"><div class="ct">How '+esc(b.name)+' is doing</div><div class="bar" style="margin:10px 0 4px"><i style="width:'+pcp+'%"></i></div><div class="s">'+pub+' of '+all+' published ('+pcp+'%)</div>'
   +'<div class="mperf"><div><b style="color:'+SC.live+'">'+c.live+'</b>live now</div><div><b>'+(still==null?'-':still+'%')+'</b>still live</div><div><b style="color:'+SC.removed+'">'+c.removed+'</b>deleted</div><div><b>'+up+'</b>upvotes on live work</div><div><b>'+(lastP?D(new Date(lastP).toISOString()):'-')+'</b>last published</div></div></div>'
   +'<div class="bigf">'+btn('','View all',all,'#10292c')+btn('todo','To do',c.todo,SC.todo)+btn('live','Live',c.live,SC.live)+btn('checking','Being confirmed',c.checking,SC.checking)+btn('removed','Deleted',c.removed,SC.removed)+'</div>'
-  +(f?'<p class="s" style="margin:-4px 0 8px">Showing only <b>'+({live:'live',checking:'being confirmed',removed:'deleted',todo:'to do'}[f])+'</b> work. <a href="#" onclick="ST.mst=\'\';draw();return false">View all</a></p>':'')}
+  +((()=>{if(ST.tok)return '';const n=chkIdsM(b.id).length;return n&&f!=='todo'?'<div class="row" style="margin:-2px 0 10px"><button class="p chkall" title="Ask the Reddit API again whether each of these is live or deleted" onclick="chkAllM(\''+b.id+'\')">&#8635; Check '+(f?'these':'all my published work')+' again ('+n+')</button></div>':''})())+(f?'<p class="s" style="margin:-4px 0 8px">Showing only <b>'+({live:'live',checking:'being confirmed',removed:'deleted',todo:'to do'}[f])+'</b> work. <a href="#" onclick="ST.mst=\'\';draw();return false">View all</a></p>':'')}
 function workView(){
  const bs=ST.tok?[ST.obrand]:ST.brands;
  if(!bs.length)return '<div class="empty">No brands are assigned to you yet. When your admin assigns one and goes live, it will appear here.</div>';
