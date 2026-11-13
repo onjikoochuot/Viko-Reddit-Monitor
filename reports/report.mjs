@@ -244,7 +244,7 @@ async function apiLive(items) {
   finally { clearTimeout(tm); }
 }
 async function liveCheck(pair) { // -> { lc, lp, viaApi }
-  const a = await apiLive([{ url: pair.comment, kind: 'comment' }, { url: pair.post, kind: 'post' }]);
+  const a = await apiLive([{ url: pair.comment, kind: 'comment', post: pair.post }, { url: pair.post, kind: 'post' }]);
   const conv = (x, kind) => !x || x.s === 'unknown' ? null : { live: x.s === 'live', why: 'removed or deleted', title: x.title, text: x.snip };
   let lc = a && conv(a[0]), lp = a && conv(a[1]);
   const viaApi = !!(lc && lp);
@@ -674,7 +674,7 @@ async function runJob(job) {
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
-          const viaApi = await apiLive([{ url: pair.comment, kind: 'comment' }]).catch(() => null); // the Reddit API helper opens share links first
+          const viaApi = await apiLive([{ url: pair.comment, kind: 'comment', post: raw.post || pair.post }]).catch(() => null); // the Reddit API helper opens share links first
           if (viaApi && viaApi[0] && viaApi[0].resolved && commentId(viaApi[0].resolved)) { log(n + '/' + pairs.length, 'share link opened by the Reddit API helper'); pair.comment = viaApi[0].resolved; }
           else try { pair.comment = LOCAL ? await resolveShortInBrowser(page, pair.comment, true) : await resolveShort(pair.comment, true); await sleep(GAP_MS); } catch (e) { skip('Short comment link could not be opened (' + String(e.message).slice(0, 80) + ')', true); continue; }
         }
