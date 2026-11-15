@@ -403,6 +403,7 @@ async function done(id){
  const v=norm($('l_'+id).value);if(!/reddit\.com\/r\//i.test(v))return alert('Paste the full Reddit link of what you published');
  const{error}=ST.tok?await sb.rpc('open_submit',{tok:ST.tok,pid:id,u:v}):await sb.rpc('submit_link',{pid:id,u:v});
  if(error)return alert(error.message);await refresh();
+ if(!ST.tok)apiCheckSave(id).then(a=>{if(a&&(a.s==='live'||a.s==='removed'))refresh().catch(()=>{})});
 }
 async function refresh(){await load();draw(true)}
 
@@ -423,7 +424,7 @@ async function runCheck(p,pre){
  await sb.from('pieces').update(u).eq('id',p.id);
 }
 async function chkP(id){let why='';const p0=pieceOf(id),was=p0&&p0.last_check||'';const w=t=>{$('who').textContent=t};
- if(p0&&p0.url){w('Checking with the Reddit API...');const sv=await apiCheckSave(id);if(sv&&(sv.s==='live'||sv.s==='removed')){w(me.name);await load();draw(true);alert(sv.s==='removed'?'Checked with the Reddit API: this item is deleted (not shown to the public).':'Checked with the Reddit API: this item is live.'+(sv.resolved?'\n\nThe share link was replaced with the full link.':''));return}if(sv&&sv.why)why=sv.why;const a=sv?null:await apiLiveOne(p0.url,p0.kind,x=>{why=x});w(me.name);
+ if(p0&&p0.url){w('Checking with the Reddit API...');const sv=await apiCheckSave(id);if(sv&&(sv.s==='live'||sv.s==='removed')){w(me.name);await load();draw(true);alert(sv.s==='removed'?'Checked with the Reddit API: this item is deleted (not shown to the public).':'Checked with the Reddit API: this item is live.'+(sv.resolved?'\n\nThe share link was replaced with the full link.':''));return}if(sv&&sv.why)why=sv.why;const a=sv&&sv.s!=='error'?null:await apiLiveOne(p0.url,p0.kind,x=>{why=x});w(me.name);
   if(a){await runCheck(p0,a);await load();draw(true);alert(a.s==='removed'?'Checked: this item is deleted.':'Checked: this item is live.');return}}
  const{error}=await sb.from('pieces').update({next_check:new Date().toISOString()}).eq('id',id);
  if(error){alert('Could not queue the check: '+error.message);return}
@@ -2301,8 +2302,9 @@ function stTiles(ps,clickable){const c=stCount(ps),f=ST.mst||'',T=(k,cls,l,n)=>'
  return '<div class="kpi">'+T('live','k-live','Live',c.live)+T('checking','k-chk','Being confirmed',c.checking)+T('removed','k-del','Deleted',c.removed)+T('todo','k-dr','Drafts to publish',c.todo)+T('','k-ink','All',c.all)+'</div>'}
 const miniBar=c=>{const t=c.live+c.checking+c.removed+c.todo;return '<div class="mini-sb">'+(t?[['live',SC.live],['checking',SC.checking],['removed',SC.removed],['todo',SC.todo]].map(x=>c[x[0]]?'<i title="'+x[0]+'" style="flex:'+c[x[0]]+';background:'+x[1]+'"></i>':'').join(''):'')+'</div><div class="s" style="margin-top:4px">'+c.live+' live \u00b7 '+c.checking+' confirming \u00b7 '+c.removed+' deleted \u00b7 '+c.todo+' to publish</div>'};
 /* team members: fresh check and wrong-link fix on their own work */
-async function apiCheckSave(id){try{const d=await apiCall({op:'checksave',pids:[id]});const x=d&&d.results&&d.results[0];return x||null}catch(e){return null}}
-async function memCheck(id){toast('Checking with the Reddit API...');const a=await apiCheckSave(id);if(a&&(a.s==='live'||a.s==='removed')){await refresh();alert(a.s==='live'?'Checked with the Reddit API: this is live.'+(a.resolved?'\n\nThe share link was replaced with the full link.':''):'Checked with the Reddit API: Reddit does not show this to the public (deleted, removed or hidden).');return}
+async function apiCheckSave(id){try{const d=await apiCall({op:'checksave',pids:[id]});const x=d&&d.results&&d.results[0];return x||null}catch(e){return{s:'error',why:String(e&&e.message||e)}}}
+async function memCheck(id){toast('Checking with the Reddit API...');const a=await apiCheckSave(id);if(a&&(a.s==='live'||a.s==='removed')){await refresh();alert(a.s==='live'?'Checked with the Reddit API: this is live.'+(a.resolved?'\n\nThe short link was replaced with the full link.':''):'Checked with the Reddit API: Reddit does not show this to the public (deleted, removed or hidden).');return}
+ if(a&&a.s!=='error'){await refresh();alert('Checked with the Reddit API, but it could not be confirmed yet ('+(a.why||'no answer')+').\n\nThe status was left as it is and it is checked again automatically. If the link is wrong, press "Fix link" and paste the correct one.');return}
  const r=await sb.rpc('member_check_now',{pid:id});if(r.error)return alert(/function|schema/i.test(r.error.message)?'This needs supabase_update_23.sql. Ask your admin.':r.error.message);toast('Asked for a fresh check. The result shows here within about 2 minutes.');setTimeout(()=>{try{refresh()}catch(e){}},90000)}
 async function memFix(id){const p=pieceOf(id);if(!p)return;const u=prompt('Paste the correct Reddit link for this '+(p.kind==='comment'?'comment (open the comment, Share, Copy link)':'post')+'.\n\nCurrent link:\n'+(p.url||''),p.url||'');if(u==null||!u.trim()||u.trim()===p.url)return;
  const r=await sb.rpc('member_fix_link',{pid:id,u:u.trim()});if(r.error)return alert(/function|schema/i.test(r.error.message)?'This needs supabase_update_23.sql. Ask your admin.':r.error.message);const a=await apiCheckSave(id);try{await refresh()}catch(e){}if(a&&(a.s==='live'||a.s==='removed'))alert('Link changed and checked with the Reddit API: '+(a.s==='live'?'live.':'not shown to the public (deleted or removed).'));else toast('Link changed. It is checked again within about 2 minutes.')}
