@@ -366,6 +366,18 @@ nav .ni{display:none}
  body.shell main{margin:64px 0 0 max(236px,calc(236px + (100vw - 236px - 1240px)/2));max-width:1240px;padding:40px 44px 120px;box-sizing:border-box}
  body.shell [style*="scroll-margin-top"]{scroll-margin-top:84px!important}
 }
+
+/* fold the side menu away (icons only) */
+#sbt{display:none}#sbt.pressed::before{content:none!important}#sbt.pressed{box-shadow:none!important}
+@media(min-width:1000px){
+ body.shell #sbt{display:inline-flex;align-items:center;justify-content:center;width:38px;height:38px;padding:0;margin-right:6px;border-radius:10px;flex:none}
+ body.shell #sbt svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round}
+ body.shell nav,body.shell main{transition:width .18s ease,margin-left .18s ease}
+ body.shell.sbmin nav{width:68px;padding-left:10px;padding-right:10px}
+ body.shell.sbmin nav button,body.shell.sbmin nav button:hover{font-size:0;gap:0;justify-content:center;padding:12px 0}
+ body.shell.sbmin nav .ni{width:20px;height:20px}body.shell.sbmin nav .ni svg{width:20px;height:20px}
+ body.shell.sbmin main{margin-left:max(68px,calc(68px + (100vw - 68px - 1240px)/2))}
+}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -3607,7 +3619,10 @@ async function bootClient(tok){
 /* side menu: icons, and switch the shell on when there is a real menu (admins and managers) */
 (function(){const P={overview:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',brands:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/>',clients:'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.900 2.100 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 0 1 0 6.400"/><path d="M18.500 14.900c1.700.800 2.700 2.500 3 5.100"/>',earnings:'<circle cx="12" cy="12" r="9"/><path d="M15 9.200c-.5-1-1.600-1.600-3-1.600-1.700 0-3 .900-3 2.200 0 3 6 1.400 6 4.400 0 1.300-1.300 2.200-3 2.200-1.400 0-2.500-.600-3-1.600"/><path d="M12 5.800v12.400"/>',make:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',reddit:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.800-3.800"/>',messages:'<path d="M21 12a8 8 0 0 1-11.800 7L4 20l1.100-4.600A8 8 0 1 1 21 12z"/>',trash:'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.100-1.300l2-1.500-2-3.400-2.300.900a7 7 0 0 0-2.200-1.300L14 3h-4l-.400 2.400a7 7 0 0 0-2.200 1.300l-2.300-.900-2 3.400 2 1.500a7 7 0 0 0 0 2.600l-2 1.500 2 3.400 2.300-.900a7 7 0 0 0 2.200 1.300L10 21h4l.400-2.400a7 7 0 0 0 2.200-1.300l2.300.900 2-3.400-2-1.500c.100-.400.100-.900.100-1.300z"/>',my:'<path d="M5 12l4 4L19 6"/>',other:'<circle cx="12" cy="12" r="2"/>'};
  const fix=()=>{const nv=document.getElementById('nv');if(!nv)return;const bs=nv.querySelectorAll('button');document.body.classList.toggle('shell',bs.length>=4);
-  bs.forEach(b=>{if(b.querySelector('.ni'))return;const k=(b.textContent||'').trim().toLowerCase().split(/\s|\(/)[0];const sp=document.createElement('span');sp.className='ni';sp.setAttribute('aria-hidden','true');sp.innerHTML='<svg viewBox="0 0 24 24">'+(P[k]||P.other)+'</svg>';b.insertBefore(sp,b.firstChild)})};
- const go=()=>{const nv=document.getElementById('nv');if(!nv)return;new MutationObserver(fix).observe(nv,{childList:true});fix()};
+  bs.forEach(b=>{if(b.querySelector('.ni'))return;const k=(b.textContent||'').trim().toLowerCase().split(/\s|\(/)[0];const sp=document.createElement('span');sp.className='ni';sp.setAttribute('aria-hidden','true');if(!b.title)b.title=(b.textContent||'').trim();sp.innerHTML='<svg viewBox="0 0 24 24">'+(P[k]||P.other)+'</svg>';b.insertBefore(sp,b.firstChild)})};
+ const setMin=on=>{document.body.classList.toggle('sbmin',!!on);const t=document.getElementById('sbt');if(t){t.title=on?'Show the menu':'Hide the menu';t.setAttribute('aria-label',t.title);t.setAttribute('aria-expanded',on?'false':'true')}};
+ window.sbToggle=()=>{const on=!document.body.classList.contains('sbmin');setMin(on);try{localStorage.setItem('rm_sbmin',on?'1':'')}catch(e){}};
+ const go=()=>{const nv=document.getElementById('nv');if(!nv)return;const h=document.querySelector('header');if(h&&!document.getElementById('sbt')){const t=document.createElement('button');t.id='sbt';t.type='button';t.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';t.onclick=()=>window.sbToggle();h.insertBefore(t,h.firstChild)}
+  let m='';try{m=localStorage.getItem('rm_sbmin')||''}catch(e){}setMin(!!m);new MutationObserver(fix).observe(nv,{childList:true});fix()};
  if(document.readyState==='loading')document.addEventListener('DOMContentLoaded',go);else go()})();
 </script></body></html>
