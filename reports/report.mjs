@@ -419,9 +419,20 @@ async function typedShot(ctx, pair, words) { // returns the same shape as shoot(
   const comHtml = '<div id="c" class="cm"><div class="tag" style="color:#2f5d4a;background:#e3efe9">TYPED-UP COPY OF THE COMMENT</div><div class="meta">' + esc(stat([c.author ? 'u/' + c.author : '', c.top === false ? 'a reply' : '', fmtDate(c.created_utc)])) + '</div><div class="body">' + ct.html + '</div>' +
     '<div class="stats" style="color:#2f5d4a">' + esc(c.score != null ? '▲ ' + c.score + ' point' + (Number(c.score) === 1 ? '' : 's') : '') + '</div><div class="note">Copied from Reddit data on ' + esc(when) + '. Not a screenshot.</div></div>';
   const post = await renderCard(ctx, postHtml), com = await renderCard(ctx, comHtml);
-  return { post, com, postText: (p.title || '') + ' ' + (p.selftext || ''), comText: c.body || '', hits: { post: pt.n + pti.n, comment: ct.n }, typed: true };
+  return { post, com, postText: (p.title || '') + ' ' + (p.selftext || ''), comText: c.body || '', hits: { post: pt.n + pti.n, comment: ct.n }, typed: true, created: c.created_utc || p.created_utc || 0 };
 }
 
+async function typedPostOnly(ctx, postUrl, words) {
+  const card = await apiCard(postUrl, ''); if (!card) return null;
+  const p = card.post || {}; if (!p.title && !p.selftext) return null;
+  const when = fmtDate(Math.floor(Date.now() / 1000)), stat = (a) => a.filter(Boolean).join('  ·  ');
+  const pt = hlText(p.selftext || '', words), pti = hlText(p.title || '', words);
+  const html = '<div id="c"><div class="tag">TYPED-UP COPY OF THE POST</div><div class="meta">' + esc(stat(['r/' + (p.subreddit || subOf(postUrl)), p.author ? 'Posted by u/' + p.author : '', fmtDate(p.created_utc)])) + '</div><h1>' + pti.html + '</h1>' + (pt.html ? '<div class="body">' + pt.html + '</div>' : '') +
+    '<div class="stats">' + esc(stat([p.score != null && p.score !== '' ? '▲ ' + Number(p.score).toLocaleString('en-US') + ' upvotes' : '', p.num_comments ? Number(p.num_comments).toLocaleString('en-US') + ' comments' : ''])) + '</div><div class="note">Copied from Reddit data on ' + esc(when) + '. Not a screenshot.</div></div>';
+  const removed = !!(p.removed_by_category || p.removed) || GONE.includes(String(p.selftext || '').trim());
+  return { post: await renderCard(ctx, html), postText: (p.title || '') + ' ' + (p.selftext || ''), hits: { post: pt.n + pti.n, comment: 0 }, typed: true, created: p.created_utc || 0, removed };
+}
+const dayTxt = (d) => { if (!d) return ''; const t = /^\d{4}-\d{2}-\d{2}$/.test(d) ? Date.parse(d + 'T12:00:00Z') / 1000 : Number(d); return fmtDate(t); };
 /* ---------------- the PDF ---------------- */
 const pngSize = (b64) => { try { const b = Buffer.from(b64.slice(0, 64), 'base64'); return { w: b.readUInt32BE(16) || 1, h: b.readUInt32BE(20) || 1 }; } catch { return { w: 1, h: 1 }; } };
 const REPORT_CSS = `
@@ -442,27 +453,41 @@ const REPORT_CSS = `
   .si{min-height:0;display:flex;align-items:flex-start;justify-content:center}.si img{display:block;max-width:100%;max-height:100%;width:auto;height:auto;border-radius:.05in}
   .ft{position:absolute;left:.75in;right:.75in;bottom:.3in;display:flex;justify-content:space-between;font-size:8pt;color:#6b7068;border-top:1px solid #e6e2d9;padding-top:.08in}
   
-  .why{font-size:8.5pt;line-height:1.4;color:#1e2a25}.meta{font-size:8pt;color:#6b7068;margin-top:3pt}`;
+  .why{font-size:8.5pt;line-height:1.4;color:#1e2a25}
+  .gone{display:flex;gap:.18in;align-items:flex-start;background:#fdf1f2;border:1px solid #f0c9cf;border-left:.06in solid #b3263b;border-radius:.12in;padding:.24in .26in;margin-bottom:.42in}
+  .gx{width:.5in;height:.5in;flex:none;border-radius:50%;background:#b3263b;color:#fff;font-size:22pt;line-height:.5in;text-align:center;font-weight:700}
+  .gt{font-size:15pt;font-weight:700;color:#8d1c2e;letter-spacing:.3px;margin-bottom:5pt}.gw{font-size:9.5pt;line-height:1.5;color:#4a2a30}
+  .num.ng{background:#b3263b}.pill.gp{background:#fdf1f2;border-color:#f0c9cf;color:#8d1c2e}.pill.gp i{background:#b3263b}.meta{font-size:8pt;color:#6b7068;margin-top:3pt}`;
 function reportHtml(job, items) {
   const kws = String(job.keyword || '').split(',').map((s) => s.trim()).filter(Boolean);
   const brand = (job.brand_name || kws[0] || String(job.title || '').replace(/\s*Reddit.*$/i, '') || 'Reddit').trim();
   const nSub = new Set(items.map((i) => String(i.sub || '').toLowerCase()).filter(Boolean)).size || items.length;
-  const inCom = items.filter((i) => i.hits && i.hits.comment > 0).length, inPost = items.filter((i) => i.hits && i.hits.post > 0).length;
+  const L = items.filter((i) => !i.gone), G = items.filter((i) => i.gone);
+  const inCom = L.filter((i) => i.hits && i.hits.comment > 0).length, inPost = L.filter((i) => i.hits && i.hits.post > 0).length;
   const named = kws.length ? inCom : items.length;
   const pl = (n, w) => n + ' ' + w + (n === 1 ? '' : 's');
-  let sub = 'Named in ' + pl(named, 'comment') + ' across ' + pl(nSub, 'subreddit') + (inPost ? ', and in ' + pl(inPost, 'post') + '.' : '.');
+  const named2 = kws.length ? inCom : L.length;
+  let sub = !G.length ? 'Named in ' + pl(named, 'comment') + ' across ' + pl(nSub, 'subreddit') + (inPost ? ', and in ' + pl(inPost, 'post') + '.' : '.')
+    : !L.length ? pl(G.length, 'engagement') + ' that ' + (G.length === 1 ? 'was' : 'were') + ' published and later deleted, across ' + pl(nSub, 'subreddit') + '.'
+    : L.length + ' live and ' + G.length + ' deleted across ' + pl(nSub, 'subreddit') + '. Named in ' + pl(named2, 'live comment') + '.';
   const total = items.length;
   const pages = items.map((it, i) => {
     const where = it.hits ? (it.hits.post > 0 && it.hits.comment > 0 ? 'Post &amp; Comment' : it.hits.post > 0 ? 'Post' : it.hits.comment > 0 ? 'Comment' : '') : '';
-    const sp = pngSize(it.postImg), sc = pngSize(it.comImg);
+    const pub = dayTxt(it.date) || (it.created ? fmtDate(it.created) : '');
+    const pubHtml = '<div class="lb c">PUBLISHED</div><div class="why">' + (pub ? esc(pub) : 'Date not known') + '</div>';
+    const sp = it.postImg ? pngSize(it.postImg) : { w: 1, h: 1 }, sc = it.comImg ? pngSize(it.comImg) : { w: 1, h: 1 };
+    const goneTxt = it.what === 'post' ? (it.comment ? 'THE POST WAS DELETED' : 'THIS POST WAS DELETED') : it.what === 'both' ? 'THE POST AND THE COMMENT WERE DELETED' : 'THIS COMMENT WAS DELETED';
+    const goneWhy = it.what === 'post' && it.comment ? 'The post this comment was made under is no longer shown on Reddit (deleted or removed), so the comment can no longer be seen either.' : 'It was published' + (pub ? ' on ' + esc(pub) : '') + ' and is no longer shown on Reddit (deleted or removed). There is no screenshot because it can no longer be seen. The link' + (it.comment ? 's above show' : ' above shows') + ' where it was.';
     const first = i === 0;
     return `<section class="pg${first ? ' p1' : ''}"><div class="topbar"></div>
    ${first ? `<div class="hero"><div class="kick">REDDIT POST REPORT</div><h1>${esc(brand)}</h1><p class="sb">${esc(sub)}</p>
-     <div class="stats"><div><b>${items.length}</b><span>TOTAL POSTS</span></div><div><b>${nSub}</b><span>SUBREDDITS</span></div><div><b>${inCom}</b><span>MENTIONS IN COMMENTS</span></div><div><b>${inPost}</b><span>MENTIONS IN POST BODY</span></div></div></div>`
+     ${!G.length ? `<div class="stats"><div><b>${items.length}</b><span>TOTAL POSTS</span></div><div><b>${nSub}</b><span>SUBREDDITS</span></div><div><b>${inCom}</b><span>MENTIONS IN COMMENTS</span></div><div><b>${inPost}</b><span>MENTIONS IN POST BODY</span></div></div>`
+       : `<div class="stats"><div><b>${items.length}</b><span>TOTAL</span></div><div><b>${L.length}</b><span>LIVE</span></div><div><b>${G.length}</b><span>DELETED</span></div><div><b>${nSub}</b><span>SUBREDDITS</span></div></div>`}</div>`
        : `<div class="run"><span>${esc(brand.toUpperCase())}</span><span>REDDIT POST REPORT</span></div>`}
-   <div class="eh"><div class="num">${String(i + 1).padStart(2, '0')}</div><div class="et"><h2>POST ${i + 1}</h2><div class="rs">${it.sub ? 'r/' + esc(it.sub) : ''}</div></div>${where ? `<div class="pill"><i></i>Brand mentioned in: ${where}</div>` : ''}</div>
-   <div class="links"><div class="lb">POST LINK</div><a href="${esc(it.post)}">${esc(it.post)}</a><div class="lb c">COMMENT LINK</div><a href="${esc(it.comment)}">${esc(it.comment)}</a>${it.typed ? '<div class="lb c">NOTE</div><div class="why">A screenshot of this page was not possible, so the post and the comment are typed up below from Reddit data (same wording, upvotes and comments). They are marked as typed-up copies.</div>' : ''}</div>
-   <div class="shots"><div class="si" style="flex:${(sp.h / sp.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.postImg}"></div><div class="si" style="flex:${(sc.h / sc.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.comImg}"></div></div>
+   <div class="eh"><div class="num${it.gone ? ' ng' : ''}">${String(i + 1).padStart(2, '0')}</div><div class="et"><h2>POST ${i + 1}</h2><div class="rs">${it.sub ? 'r/' + esc(it.sub) : ''}${pub ? ' &middot; published ' + esc(pub) : ''}</div></div>${it.gone ? '<div class="pill gp"><i></i>Deleted</div>' : where ? `<div class="pill"><i></i>Brand mentioned in: ${where}</div>` : ''}</div>
+   <div class="links"><div class="lb">POST LINK</div><a href="${esc(it.post)}">${esc(it.post)}</a>${it.comment ? `<div class="lb c">COMMENT LINK</div><a href="${esc(it.comment)}">${esc(it.comment)}</a>` : ''}${pubHtml}${!it.gone && it.typed ? '<div class="lb c">NOTE</div><div class="why">A screenshot of this page was not possible, so ' + (it.comment ? 'the post and the comment are' : 'the post is') + ' typed up below from Reddit data (same wording, upvotes and comments). ' + (it.comment ? 'They are' : 'It is') + ' marked as typed-up copies.</div>' : ''}</div>
+   ${it.gone ? `<div class="gone"><div class="gx">&times;</div><div><div class="gt">${goneTxt}</div><div class="gw">${goneWhy}</div></div></div>`
+     : `<div class="shots"><div class="si" style="flex:${(sp.h / sp.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.postImg}"></div>${it.comImg ? `<div class="si" style="flex:${(sc.h / sc.w).toFixed(3)} 1 0"><img src="data:image/png;base64,${it.comImg}"></div>` : ''}</div>`}
    <div class="ft"><span>${esc(brand)} &bull; Reddit Post Report</span><span>Page ${i + 1} of ${total}</span></div></section>`;
   }).join('');
   return `<!doctype html><html><head><meta charset="utf-8"><title>${esc(job.title)}</title><style>${REPORT_CSS}</style></head><body>${pages}</body></html>`;
@@ -671,8 +696,29 @@ async function runJob(job) {
       n++;
       try { const st = await sb('/rest/v1/report_jobs?id=eq.' + job.id + '&select=status'); if (st && st[0] && st[0].status !== 'running') { stopAs = st[0].status; break; } } catch { /* keep going if the check itself fails */ }
       const pair = { post: raw.post || '', comment: raw.comment || '', sub: raw.sub || '' };
+      const want = raw.want === 'any' || raw.want === 'gone' ? raw.want : 'live', isPost = raw.kind === 'post';
+      const gone = (what, extra) => { items.push({ gone: true, what, post: raw.post || pair.post, comment: isPost ? '' : (raw.comment || pair.comment), sub: pair.sub || subOf(pair.comment || pair.post), date: raw.date || '', ...(extra || {}) }); bump(n); log(n + '/' + pairs.length, 'listed as deleted (' + what + ')'); };
       const skip = (why, retry = false) => { skipped.push({ post: pair.post, comment: pair.comment, reason: why, ...(retry ? { retry: true } : {}) }); log(n + '/' + pairs.length, 'skipped:', why); bump(n); };
       try {
+        if (isPost) { // a post the brand published on its own (no comment)
+          if (!pair.post) { skip('No post link'); continue; }
+          if (/\/s\//.test(pair.post)) { const v = await apiLive([{ url: pair.post, kind: 'post' }]).catch(() => null); if (v && v[0] && v[0].resolved) pair.post = v[0].resolved; }
+          const v = await apiLive([{ url: pair.post, kind: 'post' }]).catch(() => null);
+          let st = v && v[0] && v[0].s !== 'unknown' ? v[0].s : '';
+          if (!st && !LOCAL) { try { const l = await lookSoft(pair.post, 'post'); st = l.unknown ? '' : l.live ? 'live' : 'removed'; } catch { /* unknown */ } }
+          if (!st) st = raw.saved === 'removed' ? 'removed' : '';
+          if (st === 'removed') { if (want === 'live') { skip('Post is no longer live (removed or deleted)'); continue; } gone('post'); continue; }
+          if (want === 'gone') { skip(st === 'live' ? 'The post is live, so it is not in a deleted-only report' : 'Could not confirm that the post was deleted'); continue; }
+          let shot = null; try { shot = await typedPostOnly(ctx, pair.post, kws); } catch (e) { log(n + '/' + pairs.length, 'typed post failed:', String(e.message).split('\n')[0]); }
+          if (shot && shot.removed) { if (want === 'live') { skip('Post is no longer live (removed or deleted)'); continue; } gone('post'); continue; }
+          if (!shot) { skip('Could not capture the post', true); continue; }
+          items.push({ post: raw.post || pair.post, comment: '', typed: true, sub: pair.sub || subOf(pair.post), hits: shot.hits, postImg: shot.post.toString('base64'), comImg: '', date: raw.date || '', created: shot.created });
+          bump(n); log(n + '/' + pairs.length, 'captured the post'); continue;
+        }
+        if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment) && want !== 'live' && raw.saved === 'removed') { // a deleted short link: no need to open it
+          const v = await apiLive([{ url: pair.comment, kind: 'comment', post: raw.post || pair.post }]).catch(() => null);
+          if (!(v && v[0] && v[0].s === 'live')) { gone('comment'); continue; }
+        }
         if (pair.comment && /\/r\/[^/]+\/s\/[A-Za-z0-9]+/.test(pair.comment)) { // short comment link: find the real one
           const viaApi = await apiLive([{ url: pair.comment, kind: 'comment', post: raw.post || pair.post }]).catch(() => null); // the Reddit API helper opens share links first
           if (viaApi && viaApi[0] && viaApi[0].resolved && commentId(viaApi[0].resolved)) { log(n + '/' + pairs.length, 'share link opened by the Reddit API helper'); pair.comment = viaApi[0].resolved; }
@@ -683,8 +729,13 @@ async function runJob(job) {
         const shownPost = raw.post || pair.post;
         log(n + '/' + pairs.length, 'opening', pair.comment.replace(/^https?:\/\/[^/]+/, '').slice(0, 70));
         const { lc, lp } = await liveCheck(pair);
-        if (!lc.unknown && !lc.live) { skip('Comment is no longer live (' + lc.why + ')'); continue; }
-        if (!lp.unknown && !lp.live) { skip('Post is no longer live (' + lp.why + ')'); continue; }
+        if (!lc.unknown && !lc.live) { if (want === 'live') { skip('Comment is no longer live (' + lc.why + ')'); continue; } gone(!lp.unknown && !lp.live ? 'both' : 'comment'); continue; }
+        if (!lp.unknown && !lp.live) { if (want === 'live') { skip('Post is no longer live (' + lp.why + ')'); continue; } gone('post'); continue; }
+        if (want === 'gone') {
+          if (!lc.unknown && lc.live) { skip('The comment is live, so it is not in a deleted-only report'); continue; }
+          if (raw.saved !== 'removed') { skip('Could not confirm that the comment was deleted, so it was left out'); continue; }
+          gone('comment'); continue; // could not be checked now: the website had marked it deleted
+        }
         let shot = null; const errs = [];
         // FIRST: the typed-up copy from the Reddit API (fast, and Reddit cannot block it). Set SCREENSHOT_FIRST=1 to go back to screenshots first.
         if (process.env.SCREENSHOT_FIRST !== '1') { try { shot = await typedShot(ctx, pair, kws); } catch (e) { errs.push('typed copy: ' + String(e.message).split('\n')[0].slice(0, 120)); log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); } }
@@ -696,13 +747,13 @@ async function runJob(job) {
           if (shot) log(n + '/' + pairs.length, 'screenshot not possible, typed-up copy used');
         }
         if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330), true); continue; }
-        if (shot.typed && GONE.includes(String(shot.comText).trim())) { skip('Comment is no longer live (removed or deleted)'); continue; }
-        if (lc.unknown && GONE_TXT.test(shot.comText.slice(0, 300))) { skip('Comment is no longer live (checked on the page)'); continue; }
+        if (shot.typed && GONE.includes(String(shot.comText).trim())) { if (want === 'live') { skip('Comment is no longer live (removed or deleted)'); continue; } gone('comment'); continue; }
+        if (lc.unknown && GONE_TXT.test(shot.comText.slice(0, 300))) { if (want === 'live') { skip('Comment is no longer live (checked on the page)'); continue; } gone('comment'); continue; }
         if (lc.unknown && !shot.comText.trim()) { skip('Could not read the comment on the page (it may still be loading)', true); continue; }
-        if (lp.unknown && GONE_TXT.test(shot.postText.slice(0, 300))) { skip('Post is no longer live (checked on the page)'); continue; }
+        if (lp.unknown && GONE_TXT.test(shot.postText.slice(0, 300))) { if (want === 'live') { skip('Post is no longer live (checked on the page)'); continue; } gone('post'); continue; }
         if (lp.unknown && !shot.postText.trim()) { skip('Could not read the post on the page (it may still be loading)', true); continue; }
         if (kws.length && !shot.hits.comment) noHit++;
-        items.push({ post: shownPost, comment: pair.comment, typed: !!shot.typed, sub: pair.sub || lc.sub || subOf(pair.comment), hits: shot.hits, postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64') });
+        items.push({ post: shownPost, comment: pair.comment, typed: !!shot.typed, sub: pair.sub || lc.sub || subOf(pair.comment), hits: shot.hits, postImg: shot.post.toString('base64'), comImg: shot.com.toString('base64'), date: raw.date || '', created: shot.created || 0 });
         bump(n); log(n + '/' + pairs.length, 'captured (highlights: post ' + shot.hits.post + ', comment ' + shot.hits.comment + ')');
       } catch (e) {
         if (e.net) { skip('Network or proxy problem: ' + e.message, true); }
@@ -736,10 +787,11 @@ async function runJob(job) {
     }
     const objPath = job.id + '/report.pdf';
     await sb('/storage/v1/object/reports/' + objPath, { method: 'POST', raw: true, body: pdf, headers: { 'Content-Type': 'application/pdf', 'x-upsert': 'true' } });
-    const nTyped = items.filter((x) => x.typed).length;
+    const nTyped = items.filter((x) => x.typed && !x.gone).length, nGone = items.filter((x) => x.gone).length, nLive = items.length - nGone;
     let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
     if (escalate) note = 'Partly ready: ' + retryable + (job.source === 'posts' ? ' post' : ' engagement') + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
-    if (nTyped) note = (note ? note + ' ' : '') + (process.env.SCREENSHOT_FIRST === '1' ? nTyped + ' of ' + items.length + ' could not be screenshotted and were typed up instead (marked in the PDF).' : nTyped + ' of ' + items.length + ' typed up from the Reddit API' + (items.length - nTyped ? ', ' + (items.length - nTyped) + ' screenshotted because the API could not give them' : '') + '.');
+    if (nTyped) note = (note ? note + ' ' : '') + (process.env.SCREENSHOT_FIRST === '1' ? nTyped + ' of ' + nLive + ' could not be screenshotted and were typed up instead (marked in the PDF).' : nTyped + ' of ' + nLive + ' typed up from the Reddit API' + (nLive - nTyped ? ', ' + (nLive - nTyped) + ' screenshotted because the API could not give them' : '') + '.');
+    if (nGone) note = (note ? note + ' ' : '') + (nLive ? nLive + ' live and ' : '') + nGone + ' deleted (deleted ones are listed with their links, without screenshots).';
     await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: objPath, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');
   } finally {
