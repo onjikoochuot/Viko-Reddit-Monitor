@@ -378,6 +378,30 @@ nav .ni{display:none}
  body.shell.sbmin nav .ni{width:20px;height:20px}body.shell.sbmin nav .ni svg{width:20px;height:20px}
  body.shell.sbmin main{margin-left:max(68px,calc(68px + (100vw - 68px - 1240px)/2))}
 }
+
+.rsf{display:flex;flex-wrap:wrap;gap:10px 16px;align-items:center;margin-top:12px}
+.rsx{margin-top:10px}.rsx summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--primary)}
+.rsp{background:#fff;border:1px solid rgba(14,42,46,.14);border-radius:14px;padding:14px 16px;margin:10px 0;box-shadow:0 1px 2px rgba(14,42,46,.05)}
+.rsp.on{border-color:var(--accent);box-shadow:0 0 0 2px rgba(255,90,31,.18)}
+.rsh{display:flex;gap:12px;align-items:flex-start}.rsh input[type=checkbox]{margin-top:4px;width:18px;height:18px;flex:none}
+.rst{font-weight:700;font-size:15.5px;color:var(--primary);text-decoration:none;line-height:1.35}.rst:hover{text-decoration:underline}
+.rss{margin-top:6px;font-size:13.5px;color:var(--n600);line-height:1.5}
+.rsa{display:flex;gap:6px;flex:none;align-items:center}.rsa .btn{text-decoration:none;display:inline-flex;align-items:center}
+.rsread{margin:12px 0 2px 30px;border-top:1px solid rgba(14,42,46,.1);padding-top:12px}
+.rsbody{white-space:pre-wrap;font-size:14px;line-height:1.6;background:#F6F8F7;border-radius:10px;padding:12px 14px;max-height:520px;overflow:auto}
+.rsread h4{margin:14px 0 6px;font-size:13px}
+.rsc{border-left:2px solid rgba(14,42,46,.14);padding:6px 0 6px 10px;margin:6px 0}.rsct{white-space:pre-wrap;font-size:13.5px;line-height:1.5;margin-top:2px}
+@media(max-width:760px){.rsh{flex-wrap:wrap}.rsa{width:100%}.rsread{margin-left:0}}
+
+.rsang{margin-top:12px;display:flex;flex-direction:column;gap:6px}.rsang>div{display:flex;flex-wrap:wrap;gap:6px}
+.rsg{display:flex;flex-wrap:wrap;gap:5px;margin-top:6px}.rsg span{font-size:11.5px;font-weight:600;padding:2px 9px;border-radius:99px;background:#EEF3F2;color:var(--primary)}
+.bmt{display:flex;align-items:flex-end;gap:2px;height:120px;margin-top:12px}.bmt>div{flex:1;height:100%;display:flex;align-items:flex-end}.bmt i{display:block;width:100%;min-height:2px;background:var(--accent);border-radius:3px 3px 0 0}
+.bmb{display:grid;grid-template-columns:150px 1fr 34px;gap:10px;align-items:center;padding:6px 8px;border-radius:8px;cursor:pointer;font-size:13px}.bmb:hover,.bmb.on{background:#EEF3F2}.bmb span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bmb i{height:9px;background:#E7ECEB;border-radius:99px;overflow:hidden;display:block}.bmb em{display:block;height:100%;background:var(--primary);border-radius:99px}.bmb b{text-align:right}
+.bmk{flex:none;font-size:11px;font-weight:700;padding:3px 9px;border-radius:99px;margin-top:2px}.bmk.post{background:#E6EEFB;color:#1D4ED8}.bmk.comment{background:#FFF1E8;color:#B4400F}
+.tone.pos{color:#167347;font-weight:700}.tone.neg{color:#B3263B;font-weight:700}.tone.mix{color:var(--n600)}
+.ours{color:var(--accent)}.mtag{color:var(--accent)}.rsc.hl{background:#FFF7E0;border-left-color:var(--accent);border-radius:0 8px 8px 0}
+mark{background:#FFE58A;color:inherit;padding:0 2px;border-radius:3px}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -791,11 +815,11 @@ function dtBar(w,def,o){o=o||{};let s=dtSort(def);if(o.noTask&&s==='task')s=def;
 function dtOrder(arr,def){const s=dtSort(def);if(s==='task')return arr;return arr.slice().sort((a,b)=>s==='old'?(pWhen(a)||9e15)-(pWhen(b)||9e15):pWhen(b)-pWhen(a))}
 /* ---- "Check these again": re-check every item in the current view with the Reddit API ---- */
 async function chkAll(ids){ids=(ids||[]).filter(Boolean);if(!ids.length)return alert('There is nothing published to check in this view.');
- if(ids.length>25&&!confirm('Check these '+ids.length+' items again with the Reddit API?\n\nIt takes about '+Math.max(1,Math.ceil(ids.length*3/60))+' minute(s) and uses a little API credit. Keep this page open until it finishes.'))return;
+ if(ids.length>25&&!confirm('Check these '+ids.length+' items again with the Reddit API?\n\nIt takes about '+Math.max(1,Math.ceil(ids.length*8/60))+' minute(s) and uses a little API credit. Keep this page open until it finishes.'))return;
  let live=0,del=0,unk=0,stop='';const w=t=>{const e=$('who');if(e)e.textContent=t};
- for(let i=0;i<ids.length;i+=5){w('Checking '+Math.min(i+5,ids.length)+' of '+ids.length+'...');
-  try{const d=await apiCall({op:'checksave',pids:ids.slice(i,i+5)});(d.results||[]).forEach(x=>{x.s==='live'?live++:x.s==='removed'?del++:unk++})}
-  catch(e){if(e&&e.apiFatal){stop=e.message;break}unk+=Math.min(5,ids.length-i)}}
+ for(let i=0;i<ids.length;i+=2){w('Checking '+Math.min(i+2,ids.length)+' of '+ids.length+'...');
+  try{const d=await apiCall({op:'checksave',pids:ids.slice(i,i+2)});(d.results||[]).forEach(x=>{x.s==='live'?live++:x.s==='removed'?del++:unk++})}
+  catch(e){if(e&&e.apiFatal){stop=e.message;break}unk+=Math.min(2,ids.length-i)}}
  w(me&&me.name||'');try{await refresh()}catch(e){}
  alert((stop?'Stopped early: '+stop+'\n\n':'')+'Checked again with the Reddit API:\n'+live+' live\n'+del+' deleted'+(unk?'\n'+unk+' could not be confirmed (left as they were, tried again later)':''))}
 const chkIdsB=bid=>ST.pieces.filter(p=>p.brand_id===bid&&!p._arc&&p.url&&p.status!=='todo'&&(ST.tf==='all'||p.status===ST.tf)&&inDT(p)).map(p=>p.id);
@@ -814,6 +838,167 @@ function goHome(){try{if(typeof mnX==='function')mnX();
  if(!me&&!ST.tok)return;
  if(ST.asUser){ST.pvb=null;ST.pvt='';ST.mst='';draw();scrollTo(0,0);return}
  ST.bid=null;ST.panel='';ST.q='';ST.mopen=0;ST.mst='';ST.mtab='';ST.tf='all';if(me&&me.role!=='member')ST.tab='overview';draw();scrollTo(0,0)}catch(e){}}
+/* ================= Reddit search: search Reddit with the API and read posts in full (separate from everything else) ================= */
+const RS=()=>ST.rs||(ST.rs={mode:'search',ang:['all'],note:'',bm:null,q:'',sort:'relevance',time:'month',sub:'',minUp:'',minCom:'',excl:'',textOnly:false,nsfw:false,pages:1,order:'api',res:null,next:'',busy:'',err:'',cost:0,open:{},read:{},sel:{},hist:(()=>{try{return JSON.parse(localStorage.getItem('rm_rs_hist')||'[]')}catch(e){return[]}})()});
+const rsT=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
+const rsUrl=p=>p.permalink?('https://www.reddit.com'+p.permalink).replace(/^https:\/\/www\.reddit\.comhttps?:\/\/(www\.)?reddit\.com/,'https://www.reddit.com'):'';
+function rsSet(k,v){RS()[k]=v}
+/* the angles: each one turns the topic into a few searches people would really type, and spots matching posts by their words */
+const RSA=[
+ ['all','Everything',q=>[q],null],
+ ['need','People looking for a solution',q=>['looking for '+q,'recommend '+q,'best '+q],/\b(looking for|recommend|suggest|suggestions|any (good|ideas)|which .{0,30}should|best|need (a|an|some)|what (do|does) (you|everyone|people) use)\b/i],
+ ['help','Asking for help or a fix',q=>[q+' help',q+' problem',q+' not working'],/\b(help|issue|problem|stuck|error|not working|can'?t|how do i|struggl|fix)/i],
+ ['compare','Comparisons and alternatives',q=>[q+' vs',q+' alternative',q+' compared'],/\b(vs\.?|versus|alternatives?|compared?|comparison|switch(ed|ing)?|better than|instead of)\b/i],
+ ['review','Reviews and experiences',q=>[q+' review',q+' experience',q+' worth it'],/\b(review|experience|worth it|honest|been using|used it|my thoughts|after \d+ (days|weeks|months))\b/i],
+ ['complain','Complaints and frustrations',q=>[q+' frustrated',q+' worst',q+' scam'],/\b(frustrat|hate|worst|terrible|scam|awful|disappoint|rant|annoy|waste of)/i],
+ ['howto','How-to, tips and general info',q=>['how to '+q,q+' tips',q+' guide'],/\b(how to|how do|tips|guide|tutorial|explain|what is|eli5|beginner|basics)\b/i],
+ ['price','Prices and buying',q=>[q+' price',q+' cost',q+' cheap'],/\b(price|pricing|cost|cheap|afford|budget|buy|deal|discount|subscription|\$\d)/i],
+ ['news','News and discussions',q=>[q+' news',q+' discussion'],/\b(news|announce|launch|update|released?|discussion|thoughts on|opinion|what do you think)\b/i]];
+const rsAng=k=>RSA.find(x=>x[0]===k);
+function rsAngT(k){const r=RS();let a=r.ang.filter(x=>x!=='all');if(k==='all')a=[];else a=a.includes(k)?a.filter(x=>x!==k):a.concat(k);r.ang=a.length?a:['all'];rsDraw()}
+function rsPlan(){const r=RS(),q=r.q.trim(),qs=[];r.ang.forEach(k=>{const A=rsAng(k);if(A)A[2](q).forEach(x=>{if(!qs.includes(x))qs.push({q:x,ang:k})})});return qs.filter((x,i,a)=>a.findIndex(y=>y.q===x.q)===i)}
+function rsTag(p){const t=(p.title||'')+' '+(p.selftext||'');return RSA.filter(A=>A[3]&&A[3].test(t)).map(A=>A[0])}
+function rsKey(e){if(e.key==='Enter'){e.preventDefault();rsGo()}}
+function rsShown(){const r=RS();if(!r.res)return[];const ex=r.excl.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),sub=r.sub.replace(/^\/?r\//i,'').trim().toLowerCase(),mu=+r.minUp||0,mc=+r.minCom||0;
+ let L=r.res.filter(p=>(!sub||String(p.subreddit).toLowerCase()===sub)&&(p.score||0)>=mu&&(p.num_comments||0)>=mc&&(!r.textOnly||String(p.selftext||'').trim())&&(r.nsfw||!p.over_18)&&(!ex.length||!ex.some(w=>(p.title+' '+p.selftext).toLowerCase().includes(w))));
+ if(r.order==='new')L=L.slice().sort((a,b)=>(b.created_utc||0)-(a.created_utc||0));else if(r.order==='top')L=L.slice().sort((a,b)=>(b.score||0)-(a.score||0));else if(r.order==='com')L=L.slice().sort((a,b)=>(b.num_comments||0)-(a.num_comments||0));else if(r.order==='fit')L=L.slice().sort((a,b)=>rsFit(b)-rsFit(a)||(a._ord||0)-(b._ord||0));if(r.angF)L=L.filter(p=>(p._tags||[]).includes(r.angF)||(p._from||[]).includes(r.angF));return L}
+async function rsFetch(pages,more,tf){const r=RS(),sub=r.sub.replace(/^\/?r\//i,'').trim(),plan=more?(r.cur||[]):rsPlan();let got=0;r.cur=[];
+ for(let j=0;j<plan.length;j++){const P=plan[j];let cur=more?P.next:'';
+  for(let i=0;i<pages;i++){r.busy='Searching Reddit'+(plan.length>1?' ('+(j+1)+' of '+plan.length+': "'+P.q+'")':'')+(pages>1?' page '+(i+1):'')+'...';rsDraw();
+   const d=await apiCall({op:'search',query:P.q+(sub?' subreddit:'+sub:''),sort:r.sort,timeframe:tf||r.time,cursor:cur||undefined});r.cost+=Number(d.cost)||0;
+   const have={};r.res.forEach(p=>{have[p.id]=p});(d.posts||[]).forEach(p=>{if(have[p.id]){const o=have[p.id];o._from=(o._from||[]).concat(P.ang).filter((x,i,a)=>a.indexOf(x)===i)}else{p._from=[P.ang];p._tags=rsTag(p);p._ord=r.res.length;r.res.push(p);have[p.id]=p;got++}});cur=d.next||'';if(!cur)break}
+  if(cur)r.cur.push({q:P.q,ang:P.ang,next:cur})}
+ r.next=r.cur.length?'1':'';return got}
+const rsFit=p=>{const r=RS();if(r.ang.includes('all'))return 0;return r.ang.reduce((n,k)=>n+((p._tags||[]).includes(k)?2:0)+((p._from||[]).includes(k)?1:0),0)};
+async function rsGo(){const r=RS();if(!r.q.trim())return alert('Type what to search for.');const n=rsPlan().length*Math.max(1,+r.pages||1);if(n>24&&!confirm('This search makes '+n+' requests to the Reddit API (still well under one cent). Continue?'))return;r.res=[];r.next='';r.cur=[];r.note='';r.err='';r.open={};r.sel={};r.cost=0;if(!r.ang.includes('all'))r.order='fit';
+ r.hist=[r.q.trim()].concat(r.hist.filter(x=>x!==r.q.trim())).slice(0,10);try{localStorage.setItem('rm_rs_hist',JSON.stringify(r.hist))}catch(e){}
+ try{await rsFetch(Math.max(1,Math.min(5,+r.pages||1)));
+  // adaptive: very few results? look further back once
+  const W={hour:'day',day:'week',week:'month',month:'year',year:'all'};if(r.res.length<8&&W[r.time]){const t=W[r.time];await rsFetch(1,false,t);r.note='Only a few posts were found, so I also looked further back ('+({day:'past 24 hours',week:'past week',month:'past month',year:'past year',all:'any time'})[t]+').'}}catch(e){r.err=String(e&&e.message||e)}r.busy='';rsDraw()}
+async function rsMore(){const r=RS();if(!r.next)return;try{const n=await rsFetch(1,true);if(!n)toast('No more new posts.')}catch(e){r.err=String(e&&e.message||e)}r.busy='';rsDraw()}
+async function rsRead(id,quiet){const r=RS(),p=(r.res||[]).find(x=>x.id===id);if(!p)return;if(r.read[id]&&!r.read[id].err){if(!quiet){r.open[id]=!r.open[id];rsDraw()}return}
+ r.open[id]=true;r.read[id]={loading:true};if(!quiet)rsDraw();
+ try{const d=await apiCall({op:'read',url:rsUrl(p),pages:3,deep:true});r.cost+=Number(d.cost)||0;r.read[id]={post:d.post||p,comments:d.comments||[],more:!!d.more,total:d.total||0,all:false}}catch(e){r.read[id]={err:String(e&&e.message||e)}}if(!quiet)rsDraw()}
+async function rsReadTicked(){const r=RS(),ids=rsShown().filter(p=>r.sel[p.id]).map(p=>p.id);if(!ids.length)return alert('Tick the posts you want to read first.');
+ for(let i=0;i<ids.length;i++){r.busy='Reading '+(i+1)+' of '+ids.length+'...';rsDraw();await rsRead(ids[i],true)}r.busy='';rsDraw()}
+function rsTree(cs){const by={},kids={},top=[];cs.forEach(c=>{by[c.id]=c});cs.forEach(c=>{const pid=String(c.parent||'').replace(/^t1_/,'');if(pid&&by[pid]&&pid!==c.id)(kids[pid]=kids[pid]||[]).push(c);else top.push(c)});
+ const out=[],walk=(c,d)=>{if(out.length>2000||d>12)return;out.push([c,d]);(kids[c.id]||[]).sort((a,b)=>(b.score||0)-(a.score||0)).forEach(k=>walk(k,d+1))};top.sort((a,b)=>(b.score||0)-(a.score||0)).forEach(c=>walk(c,0));return out}
+function rsReadHtml(id){const r=RS(),R=r.read[id];if(!R)return '';if(R.loading)return '<div class="rsread s">Reading the post and its comments...</div>';if(R.err)return '<div class="rsread"><div class="warn">Could not read this post: '+esc(R.err)+'</div></div>';
+ const P=R.post||{},T=rsTree(R.comments),sh=R.all?T:T.slice(0,40);
+ return '<div class="rsread">'+(String(P.selftext||'').trim()?'<div class="rsbody">'+esc(P.selftext)+'</div>':'<div class="s">(No text in the post itself: it is a link, image or video.)</div>')
+  +'<h4>'+R.comments.length+' comment'+(R.comments.length==1?'':'s')+' read'+(R.more?' (of '+(R.total||'more')+' on the post; this is all the API gave)':'')+'</h4>'
+  +(sh.map(([c,d])=>'<div class="rsc" style="margin-left:'+Math.min(d,8)*18+'px"><div class="s"><b>u/'+esc(c.author||'?')+'</b> &middot; &#9650; '+(c.score||0)+(c.created_utc?' &middot; '+rsT(c.created_utc):'')+'</div><div class="rsct">'+esc(c.body)+'</div></div>').join('')||'<div class="s">No comments.</div>')
+  +(T.length>sh.length?'<button class="sm" onclick="RS().read[\''+id+'\'].all=true;rsDraw()">Show all '+T.length+' comments</button>':'')+'</div>'}
+function rsCard(p,i){const r=RS(),u=rsUrl(p),op=r.open[p.id];
+ return '<div class="rsp'+(r.sel[p.id]?' on':'')+'"><div class="rsh"><input type="checkbox" '+(r.sel[p.id]?'checked ':'')+'onchange="RS().sel[\''+p.id+'\']=this.checked;rsDraw()" aria-label="Tick this post"><div style="flex:1;min-width:0"><a class="rst" href="'+esc(u)+'" target="_blank" rel="noopener">'+esc(p.title)+'</a>'
+  +'<div class="s">r/'+esc(p.subreddit||'')+(p.author?' &middot; u/'+esc(p.author):'')+(p.created_utc?' &middot; '+rsT(p.created_utc):'')+' &middot; <b>&#9650; '+(p.score||0)+'</b> &middot; <b>'+(p.num_comments||0)+' comments</b>'+(p.locked?' &middot; locked':'')+(p.over_18?' &middot; NSFW':'')+'</div>'
+  +((p._tags||[]).length?'<div class="rsg">'+p._tags.slice(0,4).map(k=>'<span>'+esc(rsAng(k)[1])+'</span>').join('')+'</div>':'')+(!op&&String(p.selftext||'').trim()?'<div class="rss">'+esc(clip(String(p.selftext).replace(/\s+/g,' '),260))+'</div>':'')+'</div>'
+  +'<div class="rsa"><button class="sm'+(op?' on':'')+'" onclick="rsRead(\''+p.id+'\')">'+(op?'Close':'Read')+'</button><a class="btn sm" href="'+esc(u)+'" target="_blank" rel="noopener">Open on Reddit</a></div></div>'+(op?rsReadHtml(p.id):'')+'</div>'}
+function rsRows(L){const r=RS();return L.map(p=>{const R=r.read[p.id]||{},P=R.post||p;return{p,P,R,url:rsUrl(p)}})}
+function rsDl(kind){const r=RS(),L0=rsShown(),T=L0.filter(p=>r.sel[p.id]),L=T.length?T:L0;if(!L.length)return alert('Nothing to download.');const rows=rsRows(L),name='reddit-search-'+r.q.trim().replace(/[^a-z0-9]+/gi,'-').slice(0,40).toLowerCase()+'.'+(kind==='csv'?'csv':'txt');let blob;
+ if(kind==='csv'){const c=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';const H=['#','Title','Community','Author','Posted','Upvotes','Comments','Link','Post text','Comments read'];
+  blob=new Blob(['﻿'+[H].concat(rows.map((x,i)=>[i+1,x.p.title,'r/'+x.p.subreddit,x.p.author,rsT(x.p.created_utc),x.p.score,x.p.num_comments,x.url,x.P.selftext||'',(x.R.comments||[]).map(c=>'u/'+(c.author||'?')+' ('+(c.score||0)+'): '+c.body).join('\n---\n')])).map(r=>r.map(c).join(',')).join('\r\n')],{type:'text/csv'})}
+ else{const o=[];rows.forEach((x,i)=>{o.push('==== '+(i+1)+'. '+x.p.title+' ====','r/'+x.p.subreddit+' | u/'+(x.p.author||'')+' | '+rsT(x.p.created_utc)+' | '+(x.p.score||0)+' upvotes | '+(x.p.num_comments||0)+' comments',x.url,'',String(x.P.selftext||'(no text)'),'');
+   if(x.R.comments){o.push('--- COMMENTS ('+x.R.comments.length+') ---');rsTree(x.R.comments).forEach(([c,d])=>o.push('  '.repeat(d)+'u/'+(c.author||'?')+' ('+(c.score||0)+'): '+String(c.body).replace(/\n+/g,' ')))}o.push('','')});
+  blob=new Blob([o.join('\r\n')],{type:'text/plain'})}
+ const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function rsCopy(){const r=RS(),L0=rsShown(),T=L0.filter(p=>r.sel[p.id]),L=T.length?T:L0;const t=L.map(rsUrl).join('\n');(navigator.clipboard?navigator.clipboard.writeText(t):Promise.reject()).then(()=>toast(L.length+' link'+(L.length==1?'':'s')+' copied')).catch(()=>prompt('Copy these links:',t))}
+function rsTick(on){const r=RS();r.sel={};if(on)rsShown().forEach(p=>{r.sel[p.id]=true});rsDraw()}
+function rsBody(){const r=RS(),O=(k,a)=>a.map(x=>'<option value="'+x[0]+'"'+(String(r[k])===String(x[0])?' selected':'')+'>'+x[1]+'</option>').join(''),inp=(k,ph,w,t)=>'<input'+(t?' type="'+t+'"':'')+' style="width:'+w+'" placeholder="'+ph+'" value="'+esc(r[k])+'" oninput="rsSet(\''+k+'\',this.value)" onkeydown="rsKey(event)">';
+ let h='<div class="cb"><div class="row" style="margin:0;gap:10px;align-items:center"><input id="rs_q" style="flex:1;min-width:240px;font-size:16px;padding:12px 14px" placeholder="Search Reddit, for example: best CRM for small business" value="'+esc(r.q)+'" oninput="rsSet(\'q\',this.value);rsPlanTxt()" onkeydown="rsKey(event)"><button class="p" onclick="rsGo()"'+(r.busy?' disabled':'')+'>Search</button></div>'
+  +'<div class="rsang"><span class="s"><b>Angles</b> (pick one or more)</span><div>'+RSA.map(A=>'<button class="tb'+(r.ang.includes(A[0])?' on':'')+'" onclick="rsAngT(\''+A[0]+'\')">'+A[1]+'</button>').join('')+'</div>'+(r.q.trim()?'<span class="s">'+rsPlan().length+' search'+(rsPlan().length==1?'':'es')+': '+esc(rsPlan().map(x=>'"'+x.q+'"').join(', '))+'</span>':'')+'</div>'
+  +(r.hist.length?'<div class="row" style="margin:8px 0 0;gap:6px;align-items:center"><span class="s">Recent:</span>'+r.hist.map(x=>'<button class="tb" onclick="RS().q=this.dataset.q;rsGo()" data-q="'+esc(x)+'">'+esc(clip(x,40))+'</button>').join('')+'</div>':'')
+  +'<div class="rsf"><label class="dts"><span>Sort</span><select onchange="rsSet(\'sort\',this.value)">'+O('sort',[['relevance','Relevance'],['new','Newest'],['top','Top'],['hot','Hot']])+'</select></label>'
+  +'<label class="dts"><span>Posted</span><select onchange="rsSet(\'time\',this.value)">'+O('time',[['hour','Past hour'],['day','Past 24 hours'],['week','Past week'],['month','Past month'],['year','Past year'],['all','Any time']])+'</select></label>'
+  +'<label class="dts"><span>Community</span>'+inp('sub','any, or e.g. smallbusiness','190px')+'</label>'
+  +'<label class="dts"><span>Pages</span><select onchange="rsSet(\'pages\',this.value)">'+O('pages',[[1,'1 (about 25 posts)'],[2,'2'],[3,'3'],[5,'5']])+'</select></label></div>'
+  +'<details class="rsx"'+(r.minUp||r.minCom||r.excl||r.textOnly||r.nsfw?' open':'')+'><summary>More filters</summary><div class="rsf"><label class="dts"><span>At least</span>'+inp('minUp','0','70px','number')+'<span>upvotes</span></label><label class="dts"><span>At least</span>'+inp('minCom','0','70px','number')+'<span>comments</span></label><label class="dts"><span>Leave out words</span>'+inp('excl','hiring, giveaway','200px')+'</label>'
+  +'<label class="dts"><input type="checkbox" '+(r.textOnly?'checked ':'')+'onchange="rsSet(\'textOnly\',this.checked);rsDraw()"> Only posts with text</label><label class="dts"><input type="checkbox" '+(r.nsfw?'checked ':'')+'onchange="rsSet(\'nsfw\',this.checked);rsDraw()"> Show NSFW</label><button class="sm" onclick="rsDraw()">Apply</button></div></details>'
+  +'<p class="s" style="margin:10px 0 0">Uses the Reddit API (about a fraction of a cent per page of results, and per post read). Nothing here changes your brands, tasks or reports.</p></div>';
+ if(r.err)h+='<div class="warn">'+esc(r.err)+'</div>';if(r.busy)h+='<div class="note">'+esc(r.busy)+'</div>';
+ if(r.res){const L=rsShown(),nt=L.filter(p=>r.sel[p.id]).length,hid=r.res.length-L.length;
+  const AC=RSA.filter(A=>A[3]).map(A=>[A,r.res.filter(p=>(p._tags||[]).includes(A[0])||(p._from||[]).includes(A[0])).length]).filter(x=>x[1]);
+  if(r.note)h+='<div class="note">'+esc(r.note)+'</div>';
+  if(AC.length)h+='<div class="row" style="gap:6px;align-items:center;margin-bottom:0"><span class="s"><b>Show only</b></span><button class="tb'+(!r.angF?' on':'')+'" onclick="RS().angF=\'\';rsDraw()">All angles</button>'+AC.map(x=>'<button class="tb'+(r.angF===x[0][0]?' on':'')+'" onclick="RS().angF=\''+x[0][0]+'\';rsDraw()">'+x[0][1]+' ('+x[1]+')</button>').join('')+'</div>';
+  h+='<div class="row rsbar" style="align-items:center;gap:8px"><b>'+L.length+' post'+(L.length==1?'':'s')+'</b>'+(hid?'<span class="s">('+hid+' hidden by your filters)</span>':'')+'<span style="flex:1"></span>'
+   +'<label class="dts"><span>Show</span><select onchange="rsSet(\'order\',this.value);rsDraw()">'+O('order',(r.ang.includes('all')?[]:[['fit','Best match for the angles']]).concat([['api','As Reddit ranked them']]).concat([['new','Newest first'],['top','Most upvotes'],['com','Most comments']]))+'</select></label></div>'
+   +(L.length?'<div class="row" style="align-items:center;gap:6px;margin-top:0"><button class="sm" onclick="rsTick('+(nt===L.length?'false':'true')+')">'+(nt===L.length?'Untick all':'Tick all')+'</button>'+(nt?'<button class="sm p" onclick="rsReadTicked()">Read ticked ('+nt+')</button>':'')
+   +mnu('Download'+(nt?' ticked':''),['<button class="sm" onclick="rsDl(\'csv\')">Sheet (CSV)</button>','<button class="sm" onclick="rsDl(\'txt\')">Text file (with comments read)</button>','<button class="sm" onclick="rsCopy()">Copy links</button>'],'sm')+'<span class="s">'+(r.cost?'Cost so far: $'+r.cost.toFixed(4):'')+'</span></div>':'')
+   +(L.length?L.map(rsCard).join(''):'<div class="empty">'+(r.res.length?'Every post was hidden by your filters.':'Reddit found nothing for this search. Try other words, a longer time or Relevance.')+'</div>')
+   +(r.next?'<div class="row"><button onclick="rsMore()"'+(r.busy?' disabled':'')+'>Load more posts</button></div>':'')}
+ else if(!r.busy)h+='<div class="empty">Search for a topic, a question or a brand. You can then read any post in full with its comments, tick the ones you want, and download them.</div>';
+ return h}
+function rsPlanTxt(){clearTimeout(window.__rsp);window.__rsp=setTimeout(()=>{const a=document.activeElement&&document.activeElement.id==='rs_q';rsDraw();if(a){const e=$('rs_q');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}}},500)}
+function rsDraw(){const e=$('rs_main');if(e)e.innerHTML=RS().mode==='brand'?bmBody():rsBody()}
+const rsView=()=>{const r=RS();return '<h1>Reddit search</h1><div class="mu">Search Reddit with the API, read posts in full, and count where a brand is mentioned. This is separate from Reddit work and your brands.</div><div class="row" style="margin:14px 0 4px;gap:8px">'+[['search','Search topics'],['brand','Brand mentions']].map(x=>'<button class="tb'+(r.mode===x[0]?' on':'')+'" onclick="RS().mode=\''+x[0]+'\';draw()">'+x[1]+'</button>').join('')+'</div><div id="rs_main">'+(r.mode==='brand'?bmBody():rsBody())+'</div>'};
+const BMP=[['today','Today'],['yday','Yesterday'],['week','This week'],['lweek','Last week'],['d7','Last 7 days'],['month','This month'],['lmonth','Last month'],['d30','Last 30 days'],['d90','Last 3 months'],['custom','Pick dates']];
+const BM=()=>{const r=RS();return r.bm||(r.bm={name:'',alias:'',where:'both',per:'d30',from:'',to:'',deep:15,res:null,busy:'',err:'',note:'',cost:0,f:'all',sub:'',tone:'',ord:'new',read:{}})};
+function bmSet(k,v){BM()[k]=v}
+function bmRange(){const b=BM(),n=new Date(),d0=+new Date(n.getFullYear(),n.getMonth(),n.getDate()),DY=864e5,wk=d0-((new Date(d0).getDay()+6)%7)*DY,now=Date.now();
+ const R={today:[d0,now],yday:[d0-DY,d0],week:[wk,now],lweek:[wk-7*DY,wk],d7:[d0-6*DY,now],month:[+new Date(n.getFullYear(),n.getMonth(),1),now],lmonth:[+new Date(n.getFullYear(),n.getMonth()-1,1),+new Date(n.getFullYear(),n.getMonth(),1)],d30:[d0-29*DY,now],d90:[d0-89*DY,now]};
+ if(b.per==='custom')return[b.from?+new Date(b.from+'T00:00'):now-30*DY,b.to?+new Date(b.to+'T00:00')+DY:now];return R[b.per]||R.d30}
+const bmTf=a=>{const d=(Date.now()-a)/864e5;return d<=1?'day':d<=7?'week':d<=31?'month':d<=365?'year':'all'};
+const bmEsc=x=>x.replace(/[.*+?^${}()|[\]\\]/g,'\\$&');
+function bmRx(){const b=BM(),ws=[b.name].concat(b.alias.split(',')).map(x=>x.trim()).filter(Boolean);return ws.length?new RegExp('(^|[^a-z0-9])('+ws.map(bmEsc).join('|')+')(?![a-z0-9])','i'):null}
+const BMPOS=/\b(love|great|recommend|amazing|awesome|best|helped|worth it|happy|excellent|solid|works well|game changer)\b/i,BMNEG=/\b(scam|worst|terrible|avoid|awful|hate|refund|broken|useless|disappoint|waste|ripoff|rip-off|bad experience|don'?t use)\b/i;
+const bmTone=t=>{const p=BMPOS.test(t),n=BMNEG.test(t);return p&&!n?'pos':n&&!p?'neg':'mix'};
+function bmOurs(){const s=new Set();(ST.allP||ST.pieces||[]).forEach(p=>{if(!p.url)return;const c=String(p.url).match(/\/comments\/([a-z0-9]+)\/[^/?#]*\/([a-z0-9]+)/i),q=String(p.url).match(/\/comments\/([a-z0-9]+)/i);if(p.kind==='comment'&&c)s.add('c:'+c[2].toLowerCase());else if(q)s.add('p:'+q[1].toLowerCase())});return s}
+async function bmGo(){const b=BM();if(!b.name.trim())return alert('Type the brand name.');const rx=bmRx(),[a,z]=bmRange(),tf=bmTf(a),ours=bmOurs();
+ b.res=null;b.err='';b.note='';b.cost=0;b.read={};b.sub='';b.tone='';b.f='all';const M={},add=m=>{const k=m.type[0]+':'+m.id;if(!M[k]){m.ours=ours.has(k);M[k]=m}},inR=t=>t*1000>=a&&t*1000<z,posts={};
+ const go=async(q,cs)=>{let cur='';for(let i=0;i<8;i++){const d=await apiCall({op:cs?'csearch':'search',query:q,sort:'new',timeframe:tf,cursor:cur||undefined});b.cost+=Number(d.cost)||0;if(d.unsupported)return 'no';
+   const L=cs?(d.comments||[]):(d.posts||[]);let old=0;L.forEach(x=>{if(x.created_utc&&x.created_utc*1000<a)old++;cs?onC(x):onP(x)});cur=d.next||'';if(!cur||(L.length&&old===L.length))break}return 'ok'};
+ const onP=p=>{posts[p.id]=p;if(!p.created_utc||!inR(p.created_utc))return;const t=(p.title||'')+'\n'+(p.selftext||'');if(rx.test(t))add({type:'post',id:p.id,sub:p.subreddit,author:p.author,t:p.created_utc,score:p.score,ncom:p.num_comments,title:p.title,text:p.selftext||'',url:rsUrl(p),postTitle:p.title,postUrl:rsUrl(p),tone:bmTone(t),p})};
+ const onC=(c,P)=>{if(!c.created_utc||!inR(c.created_utc)||!rx.test(c.body||''))return;const pl=c.permalink?(/^https?:/.test(c.permalink)?c.permalink:'https://www.reddit.com'+c.permalink):'',pu=P?rsUrl(P):(c.post_url?(/^https?:/.test(c.post_url)?c.post_url:'https://www.reddit.com'+c.post_url):pl.replace(/[a-z0-9]+\/?$/i,''));
+  add({type:'comment',id:c.id,sub:(P&&P.subreddit)||c.sub||(pl.match(/\/r\/([^/]+)/)||[])[1]||'',author:c.author,t:c.created_utc,score:c.score,text:c.body,url:pl||(pu?pu+'comment/'+c.id+'/':''),postTitle:(P&&P.title)||c.post_title||'',postUrl:pu,tone:bmTone(c.body||'')})};
+ try{const names=[b.name].concat(b.alias.split(',')).map(x=>x.trim()).filter(Boolean);
+  for(const n of names){b.busy='Looking for posts that mention "'+n+'"...';rsDraw();await go('"'+n+'"');if(!Object.keys(posts).length)await go(n)}
+  if(b.where!=='posts'){
+   b.busy='Looking for comments that mention it...';rsDraw();let direct='no';for(const n of names){direct=await go('"'+n+'"',true);if(direct==='no')break}
+   // adaptive: also read the comments of the busiest posts where the brand comes up
+   const extra=[];for(const n of names.slice(0,2))for(const q of [n+' review',n+' alternative',n]){b.busy='Finding the conversations where it comes up ("'+q+'")...';rsDraw();const d=await apiCall({op:'search',query:q,sort:'relevance',timeframe:tf});b.cost+=Number(d.cost)||0;(d.posts||[]).forEach(p=>{posts[p.id]=p;onP(p)})}
+   const deep=Object.values(posts).filter(p=>(p.num_comments||0)>0&&(!p.created_utc||p.created_utc*1000>=a-60*864e5)).sort((x,y)=>(y.num_comments||0)-(x.num_comments||0)).slice(0,Math.max(0,+b.deep||0));
+   for(let i=0;i<deep.length;i++){b.busy='Reading comments: post '+(i+1)+' of '+deep.length+'...';rsDraw();try{const d=await apiCall({op:'read',url:rsUrl(deep[i]),pages:2});b.cost+=Number(d.cost)||0;(d.comments||[]).forEach(c=>onC(c,deep[i]))}catch(e){}}
+   b.note=(direct==='no'?'Comments were found by reading the comments of the '+deep.length+' busiest posts where '+b.name+' comes up (the API here has no direct comment search). Comments in other threads can be missed.':'Comments were found with the comment search, plus the comments of the '+deep.length+' busiest posts where it comes up.')}
+  if(b.where==='comments')Object.keys(M).forEach(k=>{if(k[0]==='p')delete M[k]});
+  b.res=Object.values(M)}catch(e){b.err=String(e&&e.message||e)}b.busy='';rsDraw()}
+function bmShown(){const b=BM();let L=(b.res||[]).filter(m=>(b.f==='all'||m.type===b.f)&&(!b.sub||m.sub===b.sub)&&(!b.tone||m.tone===b.tone));return L.slice().sort((x,y)=>b.ord==='top'?(y.score||0)-(x.score||0):b.ord==='old'?x.t-y.t:y.t-x.t)}
+function bmHl(t){const rx=bmRx();let s=esc(clip(String(t||'').replace(/\s+/g,' '),420));if(!rx)return s;const r2=new RegExp(rx.source,'gi');return s.replace(r2,(m,a,w)=>a+'<mark>'+w+'</mark>')}
+async function bmRead(i){const b=BM(),m=bmShown()[i];if(!m)return;const k=m.type+m.id;if(b.read[k]){b.read[k].open=!b.read[k].open;rsDraw();return}b.read[k]={open:true,loading:true};rsDraw();
+ try{const d=await apiCall({op:'read',url:m.postUrl,pages:3,deep:true});b.cost+=Number(d.cost)||0;b.read[k]={open:true,post:d.post||m.p||{},comments:d.comments||[],more:!!d.more}}catch(e){b.read[k]={open:true,err:String(e&&e.message||e)}}rsDraw()}
+function bmReadHtml(k,hl){const R=BM().read[k];if(!R||!R.open)return '';if(R.loading)return '<div class="rsread s">Reading...</div>';if(R.err)return '<div class="rsread"><div class="warn">'+esc(R.err)+'</div></div>';
+ const rx=bmRx(),T=rsTree(R.comments);return '<div class="rsread">'+(String((R.post||{}).selftext||'').trim()?'<div class="rsbody">'+esc(R.post.selftext)+'</div>':'')+'<h4>'+R.comments.length+' comments</h4>'
+  +T.slice(0,R.all?3000:60).map(([c,d])=>'<div class="rsc'+(c.id===hl?' hl':'')+'" style="margin-left:'+Math.min(d,8)*18+'px"><div class="s"><b>u/'+esc(c.author||'?')+'</b> &middot; &#9650; '+(c.score||0)+(rx&&rx.test(c.body||'')?' &middot; <b class="mtag">mentions it</b>':'')+'</div><div class="rsct">'+esc(c.body)+'</div></div>').join('')
+  +(T.length>60&&!R.all?'<button class="sm" onclick="BM().read[\''+k+'\'].all=true;rsDraw()">Show all '+T.length+'</button>':'')+'</div>'}
+function bmDl(){const L=bmShown();if(!L.length)return alert('Nothing to download.');const c=v=>'"'+String(v==null?'':v).replace(/"/g,'""')+'"';
+ const rows=[['#','Type','Date','Community','Author','Upvotes','Tone','Ours','Text','Link','Post title','Post link']].concat(L.map((m,i)=>[i+1,m.type,rsT(m.t),'r/'+m.sub,m.author,m.score,{pos:'positive',neg:'negative',mix:'neutral or mixed'}[m.tone],m.ours?'yes':'',m.type==='post'?m.title+'\n\n'+m.text:m.text,m.url,m.postTitle,m.postUrl]));
+ const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\ufeff'+rows.map(r=>r.map(c).join(',')).join('\r\n')],{type:'text/csv'}));a.download='mentions-'+BM().name.trim().replace(/[^a-z0-9]+/gi,'-').toLowerCase()+'.csv';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},500)}
+function bmBody(){const b=BM(),O=(k,a)=>a.map(x=>'<option value="'+x[0]+'"'+(String(b[k])===String(x[0])?' selected':'')+'>'+x[1]+'</option>').join(''),[a,z]=bmRange();
+ let h='<div class="cb"><div class="row" style="margin:0;gap:10px;align-items:center"><input id="bm_n" style="flex:1;min-width:200px;font-size:16px;padding:12px 14px" placeholder="Brand name, for example Dripify" value="'+esc(b.name)+'" oninput="bmSet(\'name\',this.value)" onkeydown="if(event.key===\'Enter\')bmGo()"><button class="p" onclick="bmGo()"'+(b.busy?' disabled':'')+'>Find mentions</button></div>'
+  +(ST.brands&&ST.brands.length?'<div class="row" style="margin:8px 0 0;gap:6px;align-items:center"><span class="s">Your brands:</span>'+ST.brands.filter(x=>!x.trashed_at&&!x.archived_at).slice(0,8).map(x=>'<button class="tb" data-n="'+esc(x.name)+'" onclick="BM().name=this.dataset.n;rsDraw()">'+esc(x.name)+'</button>').join('')+'</div>':'')
+  +'<div class="rsf"><label class="dts"><span>Other spellings</span><input style="width:230px" placeholder="optional, e.g. dripify.io, Drip ify" value="'+esc(b.alias)+'" oninput="bmSet(\'alias\',this.value)"></label>'
+  +'<label class="dts"><span>Look in</span><select onchange="bmSet(\'where\',this.value)">'+O('where',[['both','Posts and comments'],['posts','Posts only'],['comments','Comments only']])+'</select></label>'
+  +'<label class="dts"><span>Period</span><select onchange="bmSet(\'per\',this.value);rsDraw()">'+O('per',BMP)+'</select></label>'
+  +(b.per==='custom'?'<label class="dts"><span>From</span><input type="date" value="'+esc(b.from)+'" onchange="bmSet(\'from\',this.value)"></label><label class="dts"><span>To</span><input type="date" value="'+esc(b.to)+'" onchange="bmSet(\'to\',this.value)"></label>':'')
+  +'<label class="dts"><span>Read comments of</span><select onchange="bmSet(\'deep\',this.value)">'+O('deep',[[5,'5 posts (quick)'],[15,'15 posts'],[30,'30 posts (thorough)'],[0,'none']])+'</select></label></div>'
+  +'<p class="s" style="margin:10px 0 0">Counts every post and comment in the period that names the brand (whole word, any capital letters). Each search costs a fraction of a cent.</p></div>';
+ if(b.err)h+='<div class="warn">'+esc(b.err)+'</div>';if(b.busy)h+='<div class="note">'+esc(b.busy)+'</div>';
+ if(!b.res)return h+(b.busy?'':'<div class="empty">Type a brand and press Find mentions. You get how many times it was mentioned, where, by whom, the tone, and you can read every conversation.</div>');
+ const R=b.res,np=R.filter(m=>m.type==='post').length,nc=R.length-np,subs={};R.forEach(m=>{subs[m.sub]=(subs[m.sub]||0)+1});const S=Object.entries(subs).sort((x,y)=>y[1]-x[1]),no=R.filter(m=>m.ours).length,tn=k=>R.filter(m=>m.tone===k).length;
+ const span=(z-a)/864e5,bucket=span<=31?864e5:7*864e5,nb=Math.max(1,Math.ceil((z-a)/bucket)),B=new Array(nb).fill(0);R.forEach(m=>{const i=Math.floor((m.t*1000-a)/bucket);if(i>=0&&i<nb)B[i]++});const mx=Math.max(1,...B);
+ h+=(b.note?'<div class="note">'+esc(b.note)+'</div>':'')
+  +'<div class="kpi"><div class="k-live"><b>'+R.length+'</b>mentions</div><div class="k-chk"><b>'+np+'</b>in posts</div><div class="k-dr"><b>'+nc+'</b>in comments</div><div class="k-ink"><b>'+S.length+'</b>communities</div><div class="k-live"><b>'+tn('pos')+'</b>positive</div><div class="k-del"><b>'+tn('neg')+'</b>negative</div>'+(no?'<div class="k-chk"><b>'+no+'</b>by your team</div>':'')+'</div>'
+  +(R.length?'<div class="charts"><div class="cb"><b>Mentions over time</b><div class="s">'+(bucket===864e5?'per day':'per week')+', '+esc(BMP.find(x=>x[0]===b.per)[1].toLowerCase())+'</div><div class="bmt">'+B.map((v,i)=>'<div title="'+v+' on '+new Date(a+i*bucket).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'"><i style="height:'+Math.round(v/mx*100)+'%"></i></div>').join('')+'</div><div class="row s" style="justify-content:space-between;margin:4px 0 0"><span>'+new Date(a).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</span><span>'+new Date(z).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+'</span></div></div>'
+   +'<div class="cb"><b>Where it is mentioned</b><div class="s">click a community to see only its mentions</div>'+S.slice(0,8).map(([k,v])=>'<div class="bmb'+(b.sub===k?' on':'')+'" onclick="BM().sub=BM().sub===\''+esc(k)+'\'?\'\':\''+esc(k)+'\';rsDraw()"><span>r/'+esc(k)+'</span><i><em style="width:'+Math.round(v/S[0][1]*100)+'%"></em></i><b>'+v+'</b></div>').join('')+'</div></div>':'');
+ const L=bmShown();
+ h+='<div class="row rsbar" style="gap:6px;align-items:center">'+[['all','All ('+R.length+')'],['post','Posts ('+np+')'],['comment','Comments ('+nc+')']].map(x=>'<button class="tb'+(b.f===x[0]?' on':'')+'" onclick="BM().f=\''+x[0]+'\';rsDraw()">'+x[1]+'</button>').join('')
+  +'<label class="dts" style="margin-left:6px"><span>Tone</span><select onchange="BM().tone=this.value;rsDraw()">'+O('tone',[['','Any'],['pos','Positive'],['neg','Negative'],['mix','Neutral or mixed']])+'</select></label>'
+  +'<label class="dts"><span>Order</span><select onchange="BM().ord=this.value;rsDraw()">'+O('ord',[['new','Newest first'],['old','Oldest first'],['top','Most upvotes']])+'</select></label><span style="flex:1"></span>'+(b.sub?'<button class="sm" onclick="BM().sub=\'\';rsDraw()">Show all communities</button>':'')+'<button class="sm" onclick="bmDl()">Download (CSV)</button><span class="s">'+(b.cost?'Cost: $'+b.cost.toFixed(4):'')+'</span></div>'
+  +(L.length?L.map((m,i)=>{const k=m.type+m.id,R2=b.read[k];return '<div class="rsp"><div class="rsh"><span class="bmk '+m.type+'">'+(m.type==='post'?'Post':'Comment')+'</span><div style="flex:1;min-width:0">'
+   +(m.type==='post'?'<a class="rst" href="'+esc(m.url)+'" target="_blank" rel="noopener">'+bmHl(m.title)+'</a>':(m.postTitle?'<div class="s">On: <a href="'+esc(m.postUrl)+'" target="_blank" rel="noopener">'+esc(clip(m.postTitle,110))+'</a></div>':''))
+   +'<div class="s">r/'+esc(m.sub)+(m.author?' &middot; u/'+esc(m.author):'')+' &middot; '+rsT(m.t)+' &middot; &#9650; '+(m.score||0)+(m.type==='post'?' &middot; '+(m.ncom||0)+' comments':'')+' &middot; <span class="tone '+m.tone+'">'+({pos:'positive',neg:'negative',mix:'neutral'})[m.tone]+'</span>'+(m.ours?' &middot; <b class="ours">by your team</b>':'')+'</div>'
+   +'<div class="rss">'+bmHl(m.type==='post'?m.text||'':m.text)+'</div></div><div class="rsa">'+(m.postUrl?'<button class="sm'+(R2&&R2.open?' on':'')+'" onclick="bmRead('+i+')">'+(R2&&R2.open?'Close':'Read the conversation')+'</button>':'')+'<a class="btn sm" href="'+esc(m.url||m.postUrl)+'" target="_blank" rel="noopener">Open on Reddit</a></div></div>'+bmReadHtml(k,m.type==='comment'?m.id:'')+'</div>'}).join('')
+   :'<div class="empty">'+(R.length?'Nothing matches these filters.':'No mentions of '+esc(b.name)+' were found in this period. Try a longer period or other spellings.')+'</div>');
+ return h}
 function listHtml(b){
  const m=numbered(b.id),ps=ST.pieces.filter(p=>p.brand_id===b.id),n=s=>ps.filter(p=>p.status===s).length,aps=ps.filter(p=>!p._arc),na=s=>aps.filter(p=>p.status===s).length,odn=dueStats(ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at)).od,its=items(b.id),np=its.filter(i=>i.kind==='post').length,nc=its.length-np;
  const sv=surv(ps),kfA=st=>' kf'+(ST.tf===st?' on':'')+'" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\')this.click()" onclick="ST.tf=ST.tf===\''+st+'\'?\'all\':\''+st+'\';ST.lim=30;draw(true);kfGo()',kgo=t=>'<span class="kgo">'+t+' &rsaquo;</span>',kp='<div class="kpi"><div class="k-live'+kfA('live')+'"><b>'+np+'</b>live posts'+kgo('View')+'</div><div class="k-live'+kfA('live')+'"><b>'+nc+'</b>live comments'+kgo('View')+'</div><div class="k-chk'+kfA('checking')+'"><b>'+n('checking')+'</b>being confirmed'+kgo('View')+'</div><div class="k-del'+kfA('removed')+'"><b>'+n('removed')+'</b>deleted'+kgo('View')+'</div><div class="k-dr kf" role="button" tabindex="0" onclick="if(ST.panel!==\'drafts\')pn(\'drafts\');scrollTo({top:0,behavior:\'smooth\'})"><b>'+na('todo')+'</b>drafts to publish'+kgo('Open')+'</div>'+(odn?'<div class="k-del"><b>'+odn+'</b>tasks overdue</div>':'')+'<div class="k-ink"><b>'+(sv==null?'-':sv+'%')+'</b>still live</div><div><b>'+sumUp(ps)+'</b>upvotes (live)</div></div>';
@@ -3302,10 +3487,10 @@ const PERM_DEF0={
 const permLabel=k=>{for(const g of PERMS){const x=g[1].find(y=>y[0]===k);if(x)return x[1]}return k};
 const defOn=(role,p)=>((ST.rpd&&ST.rpd[role])||PERM_DEF0[role]||[]).includes(p);
 const permOn=(u,p)=>{const o=u.perms||{};return p in o?(o[p]===true||o[p]==='true'):defOn(u.role,p)};
-const tabOk=(t)=>{t=t||ST.tab;if(t==='earn'||t==='set')return isAdminU();if(t==='trash')return trashCan();if(t==='clients')return can('client_view');if(t==='team')return can('team_view');if(t==='reports')return can('reports_make');if(t==='find')return can('reddit_find')||can('reddit_draft');if(t==='messages')return true;return true};
+const tabOk=(t)=>{t=t||ST.tab;if(t==='earn'||t==='set')return isAdminU();if(t==='trash')return trashCan();if(t==='clients')return can('client_view');if(t==='team')return can('team_view');if(t==='reports')return can('reports_make');if(t==='find')return can('reddit_find')||can('reddit_draft');if(t==='rsearch')return can('reddit_find');if(t==='messages')return true;return true};
 function navTabs(){const npend=can('team_approve')?ST.profiles.filter(u=>u.status==='pending').length:0,t=[['overview','Overview'],['brands','Brands']];
  if(can('client_view'))t.push(['clients','Clients']);if(can('team_view'))t.push(['team','Team'+(npend?' ('+npend+')':'')]);if(isAdminU())t.push(['earn','Earnings']);
- if(can('reports_make'))t.push(['reports','Make reports']);if(can('reddit_find')||can('reddit_draft'))t.push(['find','Reddit work']);if(ST.v20!==false)t.push(['messages','Messages'+msgBadgeTxt()]);if(trashCan())t.push(['trash','Trash'+(trashTotal()?' ('+trashTotal()+')':'')]);if(isAdminU())t.push(['set','Settings']);return t}
+ if(can('reports_make'))t.push(['reports','Make reports']);if(can('reddit_find')||can('reddit_draft'))t.push(['find','Reddit work']);if(can('reddit_find'))t.push(['rsearch','Reddit search']);if(ST.v20!==false)t.push(['messages','Messages'+msgBadgeTxt()]);if(trashCan())t.push(['trash','Trash'+(trashTotal()?' ('+trashTotal()+')':'')]);if(isAdminU())t.push(['set','Settings']);return t}
 async function loadPerms(){ST.myperms=[];ST.v19=true;if(!me)return;if(me.role==='member'){const r=await sb.rpc('my_perms');ST.myperms=(!r.error&&r.data&&r.data.perms)||[];return}
  if(me.role==='admin'){ST.myperms=['*'];const r=await sb.from('role_perm_defaults').select('*');if(r.error){ST.v19=false}else{ST.rpd={supermanager:[],manager:[]};(r.data||[]).forEach(x=>{(ST.rpd[x.role]=ST.rpd[x.role]||[]).push(x.perm)})}return}
  const r=await sb.rpc('my_perms');if(r.error){ST.v19=false;return}ST.myperms=(r.data&&r.data.perms)||[]}
@@ -3553,7 +3738,7 @@ async function pMsgSend(){const t=String(PT.mdraft||'').trim();if(!t&&!(PT.mfl||
  const r=await sb.rpc('client_msg_send',{tok:PT.tok,msg:t,bid:PT.mb||null,cat:PT.mcat==='auto'?'':PT.mcat,fl:PT.mfl||[]});if(r.error)return alert(r.error.message||'Could not send');
  PT.m.messages.push(r.data);PT.mdraft='';PT.mfl=[];pMsgDraw()}
 
-const admView=()=>!tabOk()?(ST.tab='overview',admView()):ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='reports'?reportsView():ST.tab==='trash'?trashView():ST.tab==='find'?findView():ST.tab==='messages'?msgView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
+const admView=()=>!tabOk()?(ST.tab='overview',admView()):ST.asUser?memberPreview():ST.tab==='overview'?overviewView():ST.tab==='team'?teamView():ST.tab==='earn'?earnView():ST.tab==='reports'?reportsView():ST.tab==='trash'?trashView():ST.tab==='find'?findView():ST.tab==='rsearch'?rsView():ST.tab==='messages'?msgView():ST.tab==='set'?settingsView():ST.tab==='clients'?clientsView():ST.bid?brandPage():brandsView();
 function draw(soft){
  if(ST.hold)return;
  if(!me&&!ST.tok)return;
@@ -3561,7 +3746,7 @@ function draw(soft){
  const adm=isStaffU();
  const npend=0;
  $('nv').innerHTML=adm?navTabs().map(v=>'<button class="'+(ST.tab===v[0]?'on':'')+'" onclick="ST.tab=\''+v[0]+'\';ST.bid=null;ST.asUser=null;'+(v[0]==='find'?'rwHome();':'')+'draw()">'+v[1]+'</button>').join(''):memberNav();
- if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.bp||ST.tab==='reports'||ST.tab==='find'||ST.tab==='messages'||(!adm&&ST.mtab==='messages')||(ST.tab==='earn'&&(ST.ep||ST.pw))))$('app').innerHTML=adm?admView():(ST.mtab==='messages'?msgView():workView());return}
+ if(soft){const b=ST.brands.find(x=>x.id===ST.bid);if(adm&&b&&$('bl')){if(!ed()){$('bl').innerHTML=listHtml(b);if($('sg'))$('sg').innerHTML=sugHtml(b)}}else if(!adm&&$('wl')){if(!ed())$('wl').innerHTML=wList()}else if(!ed()&&!(ST.bp||ST.tab==='reports'||ST.tab==='find'||ST.tab==='rsearch'||ST.tab==='messages'||(!adm&&ST.mtab==='messages')||(ST.tab==='earn'&&(ST.ep||ST.pw))))$('app').innerHTML=adm?admView():(ST.mtab==='messages'?msgView():workView());return}
  $('app').innerHTML=adm?admView()+(isAdminU()?pricePanel():''):(ST.mtab==='messages'&&ST.v20!==false?msgView():workView());
  if(adm&&ST.bid&&$('kd'))scn();
 }
@@ -3642,9 +3827,9 @@ async function bootClient(tok){
 })();
 
 /* side menu: icons, and switch the shell on when there is a real menu (admins and managers) */
-(function(){const P={overview:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',brands:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/>',clients:'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.900 2.100 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 0 1 0 6.400"/><path d="M18.500 14.900c1.700.800 2.700 2.500 3 5.100"/>',earnings:'<circle cx="12" cy="12" r="9"/><path d="M15 9.200c-.5-1-1.600-1.600-3-1.600-1.700 0-3 .900-3 2.200 0 3 6 1.400 6 4.400 0 1.300-1.300 2.200-3 2.200-1.400 0-2.500-.600-3-1.600"/><path d="M12 5.800v12.400"/>',make:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',reddit:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.800-3.800"/>',messages:'<path d="M21 12a8 8 0 0 1-11.800 7L4 20l1.100-4.600A8 8 0 1 1 21 12z"/>',trash:'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.100-1.300l2-1.500-2-3.400-2.300.900a7 7 0 0 0-2.200-1.300L14 3h-4l-.400 2.400a7 7 0 0 0-2.200 1.300l-2.300-.900-2 3.400 2 1.500a7 7 0 0 0 0 2.600l-2 1.500 2 3.400 2.300-.900a7 7 0 0 0 2.200 1.300L10 21h4l.400-2.400a7 7 0 0 0 2.200-1.300l2.300.900 2-3.400-2-1.500c.100-.400.100-.900.100-1.300z"/>',my:'<path d="M5 12l4 4L19 6"/>',other:'<circle cx="12" cy="12" r="2"/>'};
+(function(){const P={overview:'<rect x="3" y="3" width="7" height="9" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/><rect x="3" y="16" width="7" height="5" rx="1.5"/>',brands:'<path d="M20.6 13.4l-7.2 7.2a2 2 0 0 1-2.8 0L3 13V3h10l7.6 7.6a2 2 0 0 1 0 2.8z"/><circle cx="7.5" cy="7.5" r="1.3"/>',clients:'<path d="M3 21V7l9-4 9 4v14"/><path d="M9 21v-6h6v6"/><path d="M3 21h18"/>',team:'<circle cx="9" cy="8" r="3.5"/><path d="M2.5 20c.6-3.4 3.2-5.5 6.5-5.5s5.900 2.100 6.500 5.500"/><path d="M16 4.800a3.500 3.500 0 0 1 0 6.400"/><path d="M18.500 14.900c1.700.800 2.700 2.500 3 5.100"/>',earnings:'<circle cx="12" cy="12" r="9"/><path d="M15 9.200c-.5-1-1.600-1.600-3-1.600-1.700 0-3 .900-3 2.200 0 3 6 1.400 6 4.400 0 1.300-1.300 2.200-3 2.200-1.400 0-2.500-.600-3-1.600"/><path d="M12 5.800v12.400"/>',make:'<path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h4"/>',reddit:'<rect x="3" y="7" width="18" height="13" rx="2"/><path d="M9 7V5a2 2 0 0 1 2-2h2a2 2 0 0 1 2 2v2"/><path d="M3 13h18"/>',search:'<circle cx="11" cy="11" r="7"/><path d="M20 20l-3.800-3.800"/>',messages:'<path d="M21 12a8 8 0 0 1-11.800 7L4 20l1.100-4.600A8 8 0 1 1 21 12z"/>',trash:'<path d="M4 7h16"/><path d="M9 7V4h6v3"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v5M14 11v5"/>',settings:'<circle cx="12" cy="12" r="3"/><path d="M19 12a7 7 0 0 0-.100-1.300l2-1.500-2-3.400-2.300.900a7 7 0 0 0-2.200-1.300L14 3h-4l-.400 2.400a7 7 0 0 0-2.200 1.300l-2.300-.900-2 3.400 2 1.500a7 7 0 0 0 0 2.600l-2 1.500 2 3.400 2.300-.900a7 7 0 0 0 2.200 1.300L10 21h4l.400-2.400a7 7 0 0 0 2.200-1.300l2.300.900 2-3.400-2-1.500c.100-.400.100-.900.100-1.300z"/>',my:'<path d="M5 12l4 4L19 6"/>',other:'<circle cx="12" cy="12" r="2"/>'};
  const fix=()=>{const nv=document.getElementById('nv');if(!nv)return;const bs=nv.querySelectorAll('button');document.body.classList.toggle('shell',bs.length>=4);
-  bs.forEach(b=>{if(b.querySelector('.ni'))return;const k=(b.textContent||'').trim().toLowerCase().split(/\s|\(/)[0];const sp=document.createElement('span');sp.className='ni';sp.setAttribute('aria-hidden','true');if(!b.title)b.title=(b.textContent||'').trim();sp.innerHTML='<svg viewBox="0 0 24 24">'+(P[k]||P.other)+'</svg>';b.insertBefore(sp,b.firstChild)})};
+  bs.forEach(b=>{if(b.querySelector('.ni'))return;const tx=(b.textContent||'').trim().toLowerCase(),k=/^reddit search/.test(tx)?'search':tx.split(/\s|\(/)[0];const sp=document.createElement('span');sp.className='ni';sp.setAttribute('aria-hidden','true');if(!b.title)b.title=(b.textContent||'').trim();sp.innerHTML='<svg viewBox="0 0 24 24">'+(P[k]||P.other)+'</svg>';b.insertBefore(sp,b.firstChild)})};
  const setMin=on=>{document.body.classList.toggle('sbmin',!!on);const t=document.getElementById('sbt');if(t){t.title=on?'Show the menu':'Hide the menu';t.setAttribute('aria-label',t.title);t.setAttribute('aria-expanded',on?'false':'true')}};
  window.sbToggle=()=>{const on=!document.body.classList.contains('sbmin');setMin(on);try{localStorage.setItem('rm_sbmin',on?'1':'')}catch(e){}};
  const go=()=>{const nv=document.getElementById('nv');if(!nv)return;const h=document.querySelector('header');if(h&&!document.getElementById('sbt')){const t=document.createElement('button');t.id='sbt';t.type='button';t.innerHTML='<svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></svg>';t.onclick=()=>window.sbToggle();h.insertBefore(t,h.firstChild)}
