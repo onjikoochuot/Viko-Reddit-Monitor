@@ -843,6 +843,8 @@ const RS=()=>ST.rs||(ST.rs={mode:'search',ang:['all'],note:'',bm:null,q:'',sort:
 const rsT=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
 const rsUrl=p=>p.permalink?('https://www.reddit.com'+p.permalink).replace(/^https:\/\/www\.reddit\.comhttps?:\/\/(www\.)?reddit\.com/,'https://www.reddit.com'):'';
 function rsSet(k,v){RS()[k]=v}
+function rsRange(){const r=RS();if(r.time!=='custom')return null;const a=r.from?+new Date(r.from+'T00:00'):0,b=r.to?+new Date(r.to+'T00:00')+864e5:Date.now()+864e5;return[a,b]}
+function rsTf(){const r=RS(),R=rsRange();if(!R)return r.time;if(!R[0])return 'all';const d=(Date.now()-R[0])/864e5;return d<=1?'day':d<=7?'week':d<=31?'month':d<=365?'year':'all'}
 /* the angles: each one turns the topic into a few searches people would really type, and spots matching posts by their words */
 const RSA=[
  ['all','Everything',q=>[q],null],
@@ -860,21 +862,21 @@ function rsPlan(){const r=RS(),q=r.q.trim(),qs=[];r.ang.forEach(k=>{const A=rsAn
 function rsTag(p){const t=(p.title||'')+' '+(p.selftext||'');return RSA.filter(A=>A[3]&&A[3].test(t)).map(A=>A[0])}
 function rsKey(e){if(e.key==='Enter'){e.preventDefault();rsGo()}}
 function rsShown(){const r=RS();if(!r.res)return[];const ex=r.excl.split(',').map(x=>x.trim().toLowerCase()).filter(Boolean),sub=r.sub.replace(/^\/?r\//i,'').trim().toLowerCase(),mu=+r.minUp||0,mc=+r.minCom||0;
- let L=r.res.filter(p=>(!sub||String(p.subreddit).toLowerCase()===sub)&&(p.score||0)>=mu&&(p.num_comments||0)>=mc&&(!r.textOnly||String(p.selftext||'').trim())&&(r.nsfw||!p.over_18)&&(!ex.length||!ex.some(w=>(p.title+' '+p.selftext).toLowerCase().includes(w))));
+ const RG=rsRange();let L=r.res.filter(p=>(!RG||(p.created_utc&&p.created_utc*1000>=RG[0]&&p.created_utc*1000<RG[1]))&&(!sub||String(p.subreddit).toLowerCase()===sub)&&(p.score||0)>=mu&&(p.num_comments||0)>=mc&&(!r.textOnly||String(p.selftext||'').trim())&&(r.nsfw||!p.over_18)&&(!ex.length||!ex.some(w=>(p.title+' '+p.selftext).toLowerCase().includes(w))));
  if(r.order==='new')L=L.slice().sort((a,b)=>(b.created_utc||0)-(a.created_utc||0));else if(r.order==='top')L=L.slice().sort((a,b)=>(b.score||0)-(a.score||0));else if(r.order==='com')L=L.slice().sort((a,b)=>(b.num_comments||0)-(a.num_comments||0));else if(r.order==='fit')L=L.slice().sort((a,b)=>rsFit(b)-rsFit(a)||(a._ord||0)-(b._ord||0));if(r.angF)L=L.filter(p=>(p._tags||[]).includes(r.angF)||(p._from||[]).includes(r.angF));return L}
 async function rsFetch(pages,more,tf){const r=RS(),sub=r.sub.replace(/^\/?r\//i,'').trim(),plan=more?(r.cur||[]):rsPlan();let got=0;r.cur=[];
  for(let j=0;j<plan.length;j++){const P=plan[j];let cur=more?P.next:'';
   for(let i=0;i<pages;i++){r.busy='Searching Reddit'+(plan.length>1?' ('+(j+1)+' of '+plan.length+': "'+P.q+'")':'')+(pages>1?' page '+(i+1):'')+'...';rsDraw();
-   const d=await apiCall({op:'search',query:P.q+(sub?' subreddit:'+sub:''),sort:r.sort,timeframe:tf||r.time,cursor:cur||undefined});r.cost+=Number(d.cost)||0;
+   const d=await apiCall({op:'search',query:P.q+(sub?' subreddit:'+sub:''),sort:r.sort,timeframe:tf||rsTf(),cursor:cur||undefined});r.cost+=Number(d.cost)||0;
    const have={};r.res.forEach(p=>{have[p.id]=p});(d.posts||[]).forEach(p=>{if(have[p.id]){const o=have[p.id];o._from=(o._from||[]).concat(P.ang).filter((x,i,a)=>a.indexOf(x)===i)}else{p._from=[P.ang];p._tags=rsTag(p);p._ord=r.res.length;r.res.push(p);have[p.id]=p;got++}});cur=d.next||'';if(!cur)break}
   if(cur)r.cur.push({q:P.q,ang:P.ang,next:cur})}
  r.next=r.cur.length?'1':'';return got}
 const rsFit=p=>{const r=RS();if(r.ang.includes('all'))return 0;return r.ang.reduce((n,k)=>n+((p._tags||[]).includes(k)?2:0)+((p._from||[]).includes(k)?1:0),0)};
-async function rsGo(){const r=RS();if(!r.q.trim())return alert('Type what to search for.');const n=rsPlan().length*Math.max(1,+r.pages||1);if(n>24&&!confirm('This search makes '+n+' requests to the Reddit API (still well under one cent). Continue?'))return;r.res=[];r.next='';r.cur=[];r.note='';r.err='';r.open={};r.sel={};r.cost=0;if(!r.ang.includes('all'))r.order='fit';
+async function rsGo(){const r=RS();if(!r.q.trim())return alert('Type what to search for.');if(r.time==='custom'&&!r.from)return alert('Pick the From date (To can stay empty for today).');if(r.time==='custom'&&r.to&&r.from&&r.to<r.from)return alert('The To date is before the From date.');const n=rsPlan().length*Math.max(1,+r.pages||1);if(n>24&&!confirm('This search makes '+n+' requests to the Reddit API (still well under one cent). Continue?'))return;r.res=[];r.next='';r.cur=[];r.note='';r.err='';r.open={};r.sel={};r.cost=0;if(!r.ang.includes('all'))r.order='fit';
  r.hist=[r.q.trim()].concat(r.hist.filter(x=>x!==r.q.trim())).slice(0,10);try{localStorage.setItem('rm_rs_hist',JSON.stringify(r.hist))}catch(e){}
  try{await rsFetch(Math.max(1,Math.min(5,+r.pages||1)));
   // adaptive: very few results? look further back once
-  const W={hour:'day',day:'week',week:'month',month:'year',year:'all'};if(r.res.length<8&&W[r.time]){const t=W[r.time];await rsFetch(1,false,t);r.note='Only a few posts were found, so I also looked further back ('+({day:'past 24 hours',week:'past week',month:'past month',year:'past year',all:'any time'})[t]+').'}}catch(e){r.err=String(e&&e.message||e)}r.busy='';rsDraw()}
+  const W={hour:'day',day:'week',week:'month',month:'year',year:'all'};if(r.res.length<8&&W[r.time]&&r.time!=='custom'){const t=W[r.time];await rsFetch(1,false,t);r.note='Only a few posts were found, so I also looked further back ('+({day:'past 24 hours',week:'past week',month:'past month',year:'past year',all:'any time'})[t]+').'}}catch(e){r.err=String(e&&e.message||e)}r.busy='';rsDraw()}
 async function rsMore(){const r=RS();if(!r.next)return;try{const n=await rsFetch(1,true);if(!n)toast('No more new posts.')}catch(e){r.err=String(e&&e.message||e)}r.busy='';rsDraw()}
 async function rsRead(id,quiet){const r=RS(),p=(r.res||[]).find(x=>x.id===id);if(!p)return;if(r.read[id]&&!r.read[id].err){if(!quiet){r.open[id]=!r.open[id];rsDraw()}return}
  r.open[id]=true;r.read[id]={loading:true};if(!quiet)rsDraw();
@@ -909,7 +911,8 @@ function rsBody(){const r=RS(),O=(k,a)=>a.map(x=>'<option value="'+x[0]+'"'+(Str
   +'<div class="rsang"><span class="s"><b>Angles</b> (pick one or more)</span><div>'+RSA.map(A=>'<button class="tb'+(r.ang.includes(A[0])?' on':'')+'" onclick="rsAngT(\''+A[0]+'\')">'+A[1]+'</button>').join('')+'</div>'+(r.q.trim()?'<span class="s">'+rsPlan().length+' search'+(rsPlan().length==1?'':'es')+': '+esc(rsPlan().map(x=>'"'+x.q+'"').join(', '))+'</span>':'')+'</div>'
   +(r.hist.length?'<div class="row" style="margin:8px 0 0;gap:6px;align-items:center"><span class="s">Recent:</span>'+r.hist.map(x=>'<button class="tb" onclick="RS().q=this.dataset.q;rsGo()" data-q="'+esc(x)+'">'+esc(clip(x,40))+'</button>').join('')+'</div>':'')
   +'<div class="rsf"><label class="dts"><span>Sort</span><select onchange="rsSet(\'sort\',this.value)">'+O('sort',[['relevance','Relevance'],['new','Newest'],['top','Top'],['hot','Hot']])+'</select></label>'
-  +'<label class="dts"><span>Posted</span><select onchange="rsSet(\'time\',this.value)">'+O('time',[['hour','Past hour'],['day','Past 24 hours'],['week','Past week'],['month','Past month'],['year','Past year'],['all','Any time']])+'</select></label>'
+  +'<label class="dts"><span>Posted</span><select onchange="rsSet(\'time\',this.value);rsDraw()">'+O('time',[['hour','Past hour'],['day','Past 24 hours'],['week','Past week'],['month','Past month'],['year','Past year'],['all','Any time'],['custom','Custom dates']])+'</select></label>'
+  +(r.time==='custom'?'<label class="dts"><span>From</span><input type="date" value="'+esc(r.from||'')+'" onchange="rsSet(\'from\',this.value);rsDraw()"></label><label class="dts"><span>To</span><input type="date" value="'+esc(r.to||'')+'" onchange="rsSet(\'to\',this.value);rsDraw()"></label>':'')
   +'<label class="dts"><span>Community</span>'+inp('sub','any, or e.g. smallbusiness','190px')+'</label>'
   +'<label class="dts"><span>Pages</span><select onchange="rsSet(\'pages\',this.value)">'+O('pages',[[1,'1 (about 25 posts)'],[2,'2'],[3,'3'],[5,'5']])+'</select></label></div>'
   +'<details class="rsx"'+(r.minUp||r.minCom||r.excl||r.textOnly||r.nsfw?' open':'')+'><summary>More filters</summary><div class="rsf"><label class="dts"><span>At least</span>'+inp('minUp','0','70px','number')+'<span>upvotes</span></label><label class="dts"><span>At least</span>'+inp('minCom','0','70px','number')+'<span>comments</span></label><label class="dts"><span>Leave out words</span>'+inp('excl','hiring, giveaway','200px')+'</label>'
@@ -920,7 +923,7 @@ function rsBody(){const r=RS(),O=(k,a)=>a.map(x=>'<option value="'+x[0]+'"'+(Str
   const AC=RSA.filter(A=>A[3]).map(A=>[A,r.res.filter(p=>(p._tags||[]).includes(A[0])||(p._from||[]).includes(A[0])).length]).filter(x=>x[1]);
   if(r.note)h+='<div class="note">'+esc(r.note)+'</div>';
   if(AC.length)h+='<div class="row" style="gap:6px;align-items:center;margin-bottom:0"><span class="s"><b>Show only</b></span><button class="tb'+(!r.angF?' on':'')+'" onclick="RS().angF=\'\';rsDraw()">All angles</button>'+AC.map(x=>'<button class="tb'+(r.angF===x[0][0]?' on':'')+'" onclick="RS().angF=\''+x[0][0]+'\';rsDraw()">'+x[0][1]+' ('+x[1]+')</button>').join('')+'</div>';
-  h+='<div class="row rsbar" style="align-items:center;gap:8px"><b>'+L.length+' post'+(L.length==1?'':'s')+'</b>'+(hid?'<span class="s">('+hid+' hidden by your filters)</span>':'')+'<span style="flex:1"></span>'
+  h+='<div class="row rsbar" style="align-items:center;gap:8px"><b>'+L.length+' post'+(L.length==1?'':'s')+'</b>'+(hid?'<span class="s">('+hid+' hidden by your filters'+(rsRange()?' and dates':'')+')</span>':'')+'<span style="flex:1"></span>'
    +'<label class="dts"><span>Show</span><select onchange="rsSet(\'order\',this.value);rsDraw()">'+O('order',(r.ang.includes('all')?[]:[['fit','Best match for the angles']]).concat([['api','As Reddit ranked them']]).concat([['new','Newest first'],['top','Most upvotes'],['com','Most comments']]))+'</select></label></div>'
    +(L.length?'<div class="row" style="align-items:center;gap:6px;margin-top:0"><button class="sm" onclick="rsTick('+(nt===L.length?'false':'true')+')">'+(nt===L.length?'Untick all':'Tick all')+'</button>'+(nt?'<button class="sm p" onclick="rsReadTicked()">Read ticked ('+nt+')</button>':'')
    +mnu('Download'+(nt?' ticked':''),['<button class="sm" onclick="rsDl(\'csv\')">Sheet (CSV)</button>','<button class="sm" onclick="rsDl(\'txt\')">Text file (with comments read)</button>','<button class="sm" onclick="rsCopy()">Copy links</button>'],'sm')+'<span class="s">'+(r.cost?'Cost so far: $'+r.cost.toFixed(4):'')+'</span></div>':'')
