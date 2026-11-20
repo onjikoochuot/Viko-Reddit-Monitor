@@ -33,6 +33,11 @@ const ONLY = process.env.REPORT_ID || '';
 const UA_CURL = 'Mozilla/5.0 (Linux; Android 14; Pixel 8) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Mobile Safari/537.36';
 const UA_WEB = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36';
 const GONE = ['[removed]', '[deleted]'];
+// the pictures of a Reddit post (main image, gallery, link preview), largest size, at most 8
+const rdImgs = (p) => { if (!p) return []; if (Array.isArray(p.images)) return p.images.slice(0, 8); const o = [], k = new Set(); const add = (u) => { u = String(u || '').replace(/&amp;/g, '&'); if (!/^https:\/\//.test(u)) return; const b = u.split('?')[0].split('/').pop(); if (k.has(b)) return; k.add(b); o.push(u); };
+  try { ((p.preview && p.preview.images) || []).forEach((i) => add(i.source && i.source.url)); Object.values(p.media_metadata || {}).forEach((m) => add(m && m.s && (m.s.u || m.s.gif))); const d = p.url_overridden_by_dest || ''; if (/\.(jpe?g|png|webp)(\?|$)/i.test(d) || /^https:\/\/i\.(redd\.it|imgur\.com)\//.test(d)) add(d); } catch {}
+  return o.slice(0, 8); };
+const picsHtml = (u) => { u = (u || []).filter((x) => /^https:\/\//.test(x)).slice(0, 4); return u.length ? '<div class="pics">' + u.map((x) => '<img src="' + esc(x) + '" onerror="this.remove()">').join('') + '</div>' : ''; };
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const log = (...a) => console.log(new Date().toISOString().slice(11, 19), ...a);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -399,10 +404,14 @@ const CARD_CSS = `*{box-sizing:border-box}body{margin:0;background:#fff;font-fam
  #c{width:900px;padding:22px 26px 20px;background:#faf8f4;border:1px solid #e6e2d9;border-left:8px solid #c26a1b;border-radius:14px}
  #c.cm{border-left-color:#2f5d4a;background:#f6f4ef}.tag{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.6px;color:#c26a1b;background:#fbebda;border-radius:999px;padding:3px 10px;margin-bottom:10px}
  .meta{font-size:13px;color:#6b7068;margin-bottom:8px}h1{font-size:23px;line-height:1.25;margin:0 0 10px;color:#14201a}.body{font-size:16px;line-height:1.55;white-space:pre-wrap;word-wrap:break-word;overflow-wrap:anywhere}
- .stats{margin-top:14px;font-size:15px;font-weight:700;color:#c26a1b}mark{background:#ffe94d;color:#000;padding:0 1px;border-radius:2px}.note{margin-top:10px;font-size:11.5px;color:#8a8f86}`;
+ .stats{margin-top:14px;font-size:15px;font-weight:700;color:#c26a1b}mark{background:#ffe94d;color:#000;padding:0 1px;border-radius:2px}.note{margin-top:10px;font-size:11.5px;color:#8a8f86}
+ .pics{display:flex;flex-wrap:wrap;gap:8px;margin:10px 0 4px}.pics img{display:block;max-width:100%;max-height:360px;border-radius:8px;border:1px solid #e6e2d9}.pics img:only-child{max-height:480px}`;
 async function renderCard(ctx, html) {
   const pg = await ctx.newPage();
-  try { await pg.setViewportSize({ width: 960, height: 800 }).catch(() => {}); await pg.setContent('<!doctype html><html><head><meta charset="utf-8"><style>' + CARD_CSS + '</style></head><body>' + html + '</body></html>', { waitUntil: 'load' });
+  try { await pg.setViewportSize({ width: 960, height: 800 }).catch(() => {}); await pg.setContent('<!doctype html><html><head><meta charset="utf-8"><meta name="referrer" content="no-referrer"><style>' + CARD_CSS + '</style></head><body>' + html + '</body></html>', { waitUntil: 'domcontentloaded' });
+    // wait for the pictures (at most 10 seconds); a picture that does not load is left out
+    await pg.evaluate(() => Promise.race([Promise.all([...document.images].map((i) => i.complete ? 0 : new Promise((r) => { i.onload = r; i.onerror = () => { i.remove(); r(); }; }))), new Promise((r) => setTimeout(r, 10000))])).catch(() => {});
+    await pg.evaluate(() => [...document.images].forEach((i) => { if (!i.complete || !i.naturalWidth) i.remove(); })).catch(() => {});
     return await (await pg.$('#c')).screenshot({ type: 'png', timeout: 20000 }); }
   finally { await pg.close().catch(() => {}); }
 }
@@ -414,7 +423,7 @@ async function typedShot(ctx, pair, words) { // returns the same shape as shoot(
   const when = fmtDate(Math.floor(Date.now() / 1000));
   const pt = hlText(p.selftext || '', words), pti = hlText(p.title || '', words), ct = hlText(c.body || '', words);
   const stat = (a) => a.filter(Boolean).join('  ·  ');
-  const postHtml = '<div id="c"><div class="tag">TYPED-UP COPY OF THE POST</div><div class="meta">' + esc(stat(['r/' + (p.subreddit || subOf(pair.post)), p.author ? 'Posted by u/' + p.author : '', fmtDate(p.created_utc)])) + '</div><h1>' + pti.html + '</h1>' + (pt.html ? '<div class="body">' + pt.html + '</div>' : '') +
+  const postHtml = '<div id="c"><div class="tag">TYPED-UP COPY OF THE POST</div><div class="meta">' + esc(stat(['r/' + (p.subreddit || subOf(pair.post)), p.author ? 'Posted by u/' + p.author : '', fmtDate(p.created_utc)])) + '</div><h1>' + pti.html + '</h1>' + (pt.html ? '<div class="body">' + pt.html + '</div>' : '') + picsHtml(p.images) +
     '<div class="stats">' + esc(stat([p.score != null && p.score !== '' ? '▲ ' + Number(p.score).toLocaleString('en-US') + ' upvotes' : '', p.num_comments ? Number(p.num_comments).toLocaleString('en-US') + ' comments' : ''])) + '</div><div class="note">Copied from Reddit data on ' + esc(when) + '. Not a screenshot.</div></div>';
   const comHtml = '<div id="c" class="cm"><div class="tag" style="color:#2f5d4a;background:#e3efe9">TYPED-UP COPY OF THE COMMENT</div><div class="meta">' + esc(stat([c.author ? 'u/' + c.author : '', c.top === false ? 'a reply' : '', fmtDate(c.created_utc)])) + '</div><div class="body">' + ct.html + '</div>' +
     '<div class="stats" style="color:#2f5d4a">' + esc(c.score != null ? '▲ ' + c.score + ' point' + (Number(c.score) === 1 ? '' : 's') : '') + '</div><div class="note">Copied from Reddit data on ' + esc(when) + '. Not a screenshot.</div></div>';
@@ -427,7 +436,7 @@ async function typedPostOnly(ctx, postUrl, words) {
   const p = card.post || {}; if (!p.title && !p.selftext) return null;
   const when = fmtDate(Math.floor(Date.now() / 1000)), stat = (a) => a.filter(Boolean).join('  ·  ');
   const pt = hlText(p.selftext || '', words), pti = hlText(p.title || '', words);
-  const html = '<div id="c"><div class="tag">TYPED-UP COPY OF THE POST</div><div class="meta">' + esc(stat(['r/' + (p.subreddit || subOf(postUrl)), p.author ? 'Posted by u/' + p.author : '', fmtDate(p.created_utc)])) + '</div><h1>' + pti.html + '</h1>' + (pt.html ? '<div class="body">' + pt.html + '</div>' : '') +
+  const html = '<div id="c"><div class="tag">TYPED-UP COPY OF THE POST</div><div class="meta">' + esc(stat(['r/' + (p.subreddit || subOf(postUrl)), p.author ? 'Posted by u/' + p.author : '', fmtDate(p.created_utc)])) + '</div><h1>' + pti.html + '</h1>' + (pt.html ? '<div class="body">' + pt.html + '</div>' : '') + picsHtml(p.images) +
     '<div class="stats">' + esc(stat([p.score != null && p.score !== '' ? '▲ ' + Number(p.score).toLocaleString('en-US') + ' upvotes' : '', p.num_comments ? Number(p.num_comments).toLocaleString('en-US') + ' comments' : ''])) + '</div><div class="note">Copied from Reddit data on ' + esc(when) + '. Not a screenshot.</div></div>';
   const removed = !!(p.removed_by_category || p.removed) || GONE.includes(String(p.selftext || '').trim());
   return { post: await renderCard(ctx, html), postText: (p.title || '') + ' ' + (p.selftext || ''), hits: { post: pt.n + pti.n, comment: 0 }, typed: true, created: p.created_utc || 0, removed };
@@ -578,7 +587,7 @@ async function runFind(job) {
     if (gone) { bad.push(p.id); continue; }
     const sc = scorePost(p, { topics, brand, exclude, subs, now });
     if (sc.score < (+process.env.MIN_SCORE || 25)) continue;
-    res.push({ title: String(p.title || '').slice(0, 220), url: 'https://www.reddit.com' + p.permalink, sub: p.subreddit, created: new Date(p.created_utc * 1000).toISOString(), comments: p.num_comments || 0, upvotes: p.score || 0, relevance: sc.score, why: sc.why.slice(0, 4), brand_mentioned: sc.brandMentioned, snippet: String(p.selftext || '').replace(/\s+/g, ' ').trim().slice(0, 220), body: String(p.selftext || '').replace(/\r/g, '').trim().slice(0, 1500), author: p.author || '' });
+    res.push({ title: String(p.title || '').slice(0, 220), url: 'https://www.reddit.com' + p.permalink, sub: p.subreddit, created: new Date(p.created_utc * 1000).toISOString(), comments: p.num_comments || 0, upvotes: p.score || 0, relevance: sc.score, why: sc.why.slice(0, 4), brand_mentioned: sc.brandMentioned, snippet: String(p.selftext || '').replace(/\s+/g, ' ').trim().slice(0, 220), body: String(p.selftext || '').replace(/\r/g, '').trim().slice(0, 1500), author: p.author || '', images: rdImgs(p) });
   }
   res.sort((a, b) => b.relevance - a.relevance || new Date(b.created) - new Date(a.created));
   const top = res.slice(0, want);
