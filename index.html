@@ -407,6 +407,7 @@ mark{background:#FFE58A;color:inherit;padding:0 2px;border-radius:3px}
 .xpb{background:#fff;border-radius:14px;max-width:820px;width:100%;max-height:86vh;display:flex;flex-direction:column;padding:18px 20px;box-shadow:0 30px 60px -20px rgba(0,0,0,.5)}
 .xpb pre{flex:1;overflow:auto;background:#F6F8F7;border-radius:10px;padding:12px;font-size:12px;line-height:1.45;white-space:pre-wrap;word-break:break-word;margin:0 0 8px}
 .pics{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0 10px}.pics a{display:block;line-height:0}.pics img{height:150px;max-width:280px;object-fit:cover;border-radius:8px;border:1px solid #e6e2d9;background:#f3f1ec}.pics a:hover img{border-color:#c26a1b}
+.rsh{display:flex;gap:10px;align-items:center;padding:10px 12px;border:1px solid #e6e2d9;border-radius:10px;margin:0 0 6px;cursor:pointer;background:#fff}.rsh:hover{border-color:#c26a1b;background:#fffaf4}.rsh .t{font-weight:600}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -849,7 +850,7 @@ function goHome(){try{if(typeof mnX==='function')mnX();
  if(ST.asUser){ST.pvb=null;ST.pvt='';ST.mst='';draw();scrollTo(0,0);return}
  ST.bid=null;ST.panel='';ST.q='';ST.mopen=0;ST.mst='';ST.mtab='';ST.tf='all';if(me&&me.role!=='member')ST.tab='overview';draw();scrollTo(0,0)}catch(e){}}
 /* ================= Reddit search: search Reddit with the API and read posts in full (separate from everything else) ================= */
-const RS=()=>ST.rs||(ST.rs={mode:'search',ang:['all'],note:'',bm:null,q:'',sort:'relevance',time:'month',sub:'',minUp:'',minCom:'',excl:'',textOnly:false,nsfw:false,pages:1,order:'api',res:null,next:'',busy:'',err:'',cost:0,open:{},read:{},sel:{},hist:(()=>{try{return JSON.parse(localStorage.getItem('rm_rs_hist')||'[]')}catch(e){return[]}})()});
+const RS=()=>ST.rs||(ST.rs=RSH.boot?rshRevive(RSH.boot):{mode:'search',ang:['all'],note:'',bm:null,q:'',sort:'relevance',time:'month',sub:'',minUp:'',minCom:'',excl:'',textOnly:false,nsfw:false,pages:1,order:'api',res:null,next:'',busy:'',err:'',cost:0,open:{},read:{},sel:{},hist:(()=>{try{return JSON.parse(localStorage.getItem('rm_rs_hist')||'[]')}catch(e){return[]}})()});
 const rsT=t=>t?new Date(t*1000).toLocaleDateString('en-GB',{day:'numeric',month:'short',year:'numeric'}):'';
 const rsUrl=p=>p.permalink?('https://www.reddit.com'+p.permalink).replace(/^https:\/\/www\.reddit\.comhttps?:\/\/(www\.)?reddit\.com/,'https://www.reddit.com'):'';
 function rsSet(k,v){RS()[k]=v}
@@ -952,8 +953,49 @@ function rsBody(){const r=RS(),O=(k,a)=>a.map(x=>'<option value="'+x[0]+'"'+(Str
  else if(!r.busy)h+='<div class="empty">Search for a topic, a question or a brand. You can then read any post in full with its comments, tick the ones you want, and download them.</div>';
  return h}
 function rsPlanTxt(){clearTimeout(window.__rsp);window.__rsp=setTimeout(()=>{const a=document.activeElement&&document.activeElement.id==='rs_q';rsDraw();if(a){const e=$('rs_q');if(e){e.focus();e.setSelectionRange(e.value.length,e.value.length)}}},500)}
-function rsDraw(){const e=$('rs_main');if(e)e.innerHTML=rsMain()}
-const rsView=()=>{const r=RS();return '<h1>Reddit search</h1><div class="mu">Search Reddit with the API, read posts in full, and count where a brand is mentioned. This is separate from Reddit work and your brands.</div><div class="row" style="margin:14px 0 4px;gap:8px">'+[['search','Search topics'],['brand','Brand mentions'],['site','Links to a website'],['links','Open Reddit links'],['other','Other sites']].map(x=>'<button class="tb'+(r.mode===x[0]?' on':'')+'" onclick="RS().mode=\''+x[0]+'\';draw()">'+x[1]+'</button>').join('')+'</div><div id="rs_main">'+rsMain()+'</div>'};
+function rsDraw(){const e=$('rs_main');if(e)e.innerHTML=rsMain();rshSoon()}
+/* ================= Reddit search: kept after a reload, plus a history of past searches =================
+   Everything (results, what was read, ticks, comments, transcripts) is saved in this browser (IndexedDB),
+   so a reload or closing the tab loses nothing. Each search is also kept in History, always as its latest version. */
+const RSH={db:null,boot:null,list:[],open:false,t:0,ready:false};
+const rshDb=()=>RSH.db||(RSH.db=new Promise((ok,no)=>{try{const q=indexedDB.open('viko_rs',1);q.onupgradeneeded=()=>{q.result.createObjectStore('kv')};q.onsuccess=()=>ok(q.result);q.onerror=()=>no(q.error)}catch(e){no(e)}}));
+async function rshGet(k){try{const d=await rshDb();return await new Promise(ok=>{const q=d.transaction('kv').objectStore('kv').get(k);q.onsuccess=()=>ok(q.result);q.onerror=()=>ok(null)})}catch(e){return null}}
+async function rshPut(k,v){try{const d=await rshDb();await new Promise(ok=>{const t=d.transaction('kv','readwrite');t.objectStore('kv').put(v,k);t.oncomplete=ok;t.onerror=ok;t.onabort=ok})}catch(e){}}
+const rshClean=o=>JSON.parse(JSON.stringify(o,(k,v)=>k==='_pics'||k==='im'?undefined:(k==='busy'||k==='err')?'':v));
+function rshRevive(x){const r=rshClean(x);if(!r.open)r.open={};if(!r.read)r.read={};if(!r.sel)r.sel={};[r.bm,r.bms,r.lk,r.os].forEach(o=>{if(o){o.busy='';o.err='';Object.values(o.read||{}).forEach(R=>{if(R&&R.loading)delete R.loading})}});Object.values(r.read).forEach(R=>{if(R&&R.loading)delete R.loading});
+ try{r.hist=JSON.parse(localStorage.getItem('rm_rs_hist')||'[]')}catch(e){}if(r.os)try{r.os.pick=JSON.parse(localStorage.getItem('rm_os_pick')||'{}')}catch(e){}return r}
+// which search the page is showing now, as one history entry (null when there is nothing worth keeping yet)
+function rshCur(){const r=ST.rs;if(!r)return null;const m=r.mode,n=o=>o&&o.res?(Array.isArray(o.res)?o.res.length:(o.res.items||o.res.mentions||o.res.posts||[]).length||1):0;
+ if(m==='search'&&r.res&&r.q.trim()){const sub={q:r.q,ang:r.ang,note:r.note,sort:r.sort,time:r.time,sub:r.sub,minUp:r.minUp,minCom:r.minCom,excl:r.excl,textOnly:r.textOnly,nsfw:r.nsfw,pages:r.pages,order:r.order,res:r.res,next:r.next,cost:r.cost,open:r.open,read:r.read,sel:r.sel,from:r.from,to:r.to};
+  return{key:'search|'+r.q.trim().toLowerCase()+'|'+(r.ang||[]).join(','),mode:m,label:r.q.trim(),n:r.res.length,nr:Object.keys(r.read||{}).length,nt:Object.values(r.sel||{}).filter(Boolean).length,sub}}
+ const o=m==='brand'?r.bm:m==='site'?r.bms:m==='links'?r.lk:m==='other'?r.os:null;if(!o||!o.res)return null;
+ const lab=m==='links'?String(o.text||'').trim().split(/\s+/)[0]+(String(o.text||'').trim().split(/\s+/).length>1?' (+'+(String(o.text).trim().split(/\s+/).length-1)+' more)':''):m==='other'?OSN(o.site)+': '+o.q.trim():String(o.name||'').trim();if(!lab.trim())return null;
+ const sub=Object.assign({},o);if(m==='other'){delete sub.cat;delete sub.pick}
+ return{key:m+'|'+lab.toLowerCase(),mode:m,label:lab,n:n(o),nr:Object.keys(o.read||{}).length,nt:Object.values(o.sel||{}).filter(Boolean).length,sub}}
+function rshSoon(){clearTimeout(RSH.t);RSH.t=setTimeout(rshSave,700)}
+async function rshSave(){const r=ST.rs;if(!r||!RSH.ready)return;const busy=r.busy||[r.bm,r.bms,r.lk,r.os].some(o=>o&&o.busy);
+ await rshPut('current',rshClean(Object.assign({},r,{os:r.os?Object.assign({},r.os,{cat:r.os.cat}):r.os})));
+ if(busy)return;const c=rshCur();if(!c)return;c.t=Date.now();const e=rshClean(c);RSH.list=[e].concat(RSH.list.filter(x=>x.key!==e.key)).slice(0,40);await rshPut('hist',RSH.list);if(RSH.open){const h=$('rs_hist');if(h)h.innerHTML=rshHtml()}}
+function rshOpen(i){const e=RSH.list[i];if(!e)return;const r=RS(),d=rshClean(e.sub);
+ if(e.mode==='search'){Object.assign(r,d,{busy:'',err:'',msg:''});if(!r.open)r.open={};if(!r.read)r.read={};if(!r.sel)r.sel={}}
+ else{const o=Object.assign(d,{busy:'',err:''});if(e.mode==='brand')r.bm=o;else if(e.mode==='site')r.bms=o;else if(e.mode==='links')r.lk=o;else if(e.mode==='other'){const old=r.os||OS();r.os=Object.assign({},old,o,{cat:old.cat,pick:old.pick,busy:'',err:''})}}
+ r.mode=e.mode;RSH.open=false;draw();toast('Opened: '+e.label)}
+function rshDel(i){RSH.list.splice(i,1);rshPut('hist',RSH.list);const h=$('rs_hist');if(h)h.innerHTML=rshHtml();const b=$('rs_hb');if(b)b.textContent='History ('+RSH.list.length+')'}
+function rshClear(){if(!confirm('Remove all '+RSH.list.length+' searches from History? (Your brands and reports are not touched.)'))return;RSH.list=[];rshPut('hist',[]);draw()}
+function rshHtml(){const T={search:'Search topics',brand:'Brand mentions',site:'Links to a website',links:'Open Reddit links',other:'Other sites'},q=(RSH.q||'').toLowerCase(),L=RSH.list.map((e,i)=>[e,i]).filter(([e])=>!q||(e.label+' '+T[e.mode]).toLowerCase().includes(q));
+ const when=t=>{const d=(Date.now()-t)/60000;return d<1?'just now':d<60?Math.round(d)+' min ago':d<1440?Math.round(d/60)+' h ago':new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+' '+new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})};
+ if(!RSH.list.length)return '<div class="empty" style="margin:0">No searches yet. Every search you make here is kept, with what you read and ticked, so you can come back to it.</div>';
+ return '<div class="row" style="margin:0 0 8px;gap:8px;align-items:center"><input style="flex:1;min-width:180px" placeholder="Find a past search" value="'+esc(RSH.q||'')+'" oninput="RSH.q=this.value;$(\'rs_hl\').innerHTML=rshRows()"><button class="sm" onclick="rshClear()">Clear all</button></div><div id="rs_hl">'+rshRows()+'</div>'}
+function rshRows(){const T={search:'Search topics',brand:'Brand mentions',site:'Links to a website',links:'Open Reddit links',other:'Other sites'},q=(RSH.q||'').toLowerCase(),L=RSH.list.map((e,i)=>[e,i]).filter(([e])=>!q||(e.label+' '+T[e.mode]).toLowerCase().includes(q));
+ const when=t=>{const d=(Date.now()-t)/60000;return d<1?'just now':d<60?Math.round(d)+' min ago':d<1440?Math.round(d/60)+' h ago':new Date(t).toLocaleDateString('en-GB',{day:'numeric',month:'short'})+', '+new Date(t).toLocaleTimeString('en-GB',{hour:'2-digit',minute:'2-digit'})};
+ if(!L.length)return '<div class="s">Nothing matches.</div>';
+ return L.map(([e,i])=>'<div class="rsh" onclick="rshOpen('+i+')" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\')rshOpen('+i+')"><div style="flex:1;min-width:0"><div class="t">'+esc(clip(e.label,90))+'</div><div class="s">'+T[e.mode]+' &middot; '+e.n+' result'+(e.n==1?'':'s')+(e.nr?' &middot; '+e.nr+' read':'')+(e.nt?' &middot; '+e.nt+' ticked':'')+' &middot; '+when(e.t)+'</div></div><span class="btn sm p">Open</span><button class="sm" title="Remove from History" onclick="event.stopPropagation();rshDel('+i+')">&times;</button></div>').join('')}
+// start: load what was saved, then show it if the page has not been used yet
+(async()=>{const[c,h]=await Promise.all([rshGet('current'),rshGet('hist')]);RSH.list=Array.isArray(h)?h:[];
+ if(c&&!ST.rs){RSH.boot=c}else if(c&&ST.rs&&!ST.rs.res&&![ST.rs.bm,ST.rs.bms,ST.rs.lk,ST.rs.os].some(o=>o&&o.res)){const m=ST.rs.mode;ST.rs=rshRevive(c);ST.rs.mode=m||ST.rs.mode}
+ RSH.ready=true;if(ST.tab==='rsearch')draw()})();
+addEventListener('pagehide',()=>{if(RSH.ready)rshSave()});
+const rsView=()=>{const r=RS();rshSoon();return '<h1>Reddit search</h1><div class="mu">Search Reddit with the API, read posts in full, and count where a brand is mentioned. This is separate from Reddit work and your brands.</div><div class="row" style="margin:14px 0 4px;gap:8px">'+[['search','Search topics'],['brand','Brand mentions'],['site','Links to a website'],['links','Open Reddit links'],['other','Other sites']].map(x=>'<button class="tb'+(r.mode===x[0]?' on':'')+'" onclick="RS().mode=\''+x[0]+'\';draw()">'+x[1]+'</button>').join('')+'<span style="flex:1"></span><button id="rs_hb" class="sm'+(RSH.open?' p':'')+'" onclick="RSH.open=!RSH.open;draw()" title="Your past searches, with what you read and ticked">History ('+RSH.list.length+')</button></div>'+(RSH.open?'<div class="cb" id="rs_hist" style="margin:8px 0 12px">'+rshHtml()+'</div>':'')+'<div id="rs_main">'+rsMain()+'</div>'};
 const rsMain=()=>{const m=RS().mode;return m==='brand'||m==='site'?bmBody():m==='links'?lkBody():m==='other'?osBody():rsBody()};
 const BMP=[['today','Today'],['yday','Yesterday'],['week','This week'],['lweek','Last week'],['d7','Last 7 days'],['month','This month'],['lmonth','Last month'],['d30','Last 30 days'],['d90','Last 3 months'],['custom','Pick dates']];
 const BM=()=>{const r=RS();if(r.mode==='site')return r.bms||(r.bms={kind:'site',name:'',alias:'',where:'both',per:'d30',from:'',to:'',deep:15,res:null,busy:'',err:'',note:'',cost:0,f:'all',sub:'',tone:'',ord:'new',read:{}});return r.bm||(r.bm={kind:'brand',name:'',alias:'',where:'both',per:'d30',from:'',to:'',deep:15,res:null,busy:'',err:'',note:'',cost:0,f:'all',sub:'',tone:'',ord:'new',read:{}})};
