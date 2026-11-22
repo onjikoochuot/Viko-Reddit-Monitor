@@ -700,7 +700,7 @@ async function runJob(job) {
       const cdp = await ctx.newCDPSession(page);
       await cdp.send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 1400, deviceScaleFactor: 1.6, mobile: false });
     }
-    let n = 0, stopAs = '';
+    let n = 0, stopAs = '', shotFails = 0; // screenshots that failed in a row (after 3, typed-up copies go first, with a screenshot tried now and then)
     for (const raw of pairs) {
       n++;
       try { const st = await sb('/rest/v1/report_jobs?id=eq.' + job.id + '&select=status'); if (st && st[0] && st[0].status !== 'running') { stopAs = st[0].status; break; } } catch { /* keep going if the check itself fails */ }
@@ -746,13 +746,17 @@ async function runJob(job) {
           gone('comment'); continue; // could not be checked now: the website had marked it deleted
         }
         let shot = null; const errs = [];
-        // FIRST: the typed-up copy from the Reddit API (fast, and Reddit cannot block it). Set SCREENSHOT_FIRST=1 to go back to screenshots first.
-        if (process.env.SCREENSHOT_FIRST !== '1') { try { shot = await typedShot(ctx, pair, kws); } catch (e) { errs.push('typed copy: ' + String(e.message).split('\n')[0].slice(0, 120)); log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); } }
-        if (!shot) for (const layout of ['modern']) { // BACK-UP: a real screenshot of the Reddit page // old Reddit is not used: it needs a login and is being phased out
-          try { shot = await shoot(page, pair, kws, layout, n + '_' + layout); break; } catch (e) { errs.push(layout + ': ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, layout, 'layout failed:', String(e.message).split('\n')[0]); }
+        // A real screenshot first. When a screenshot cannot be taken (Reddit blocks it, the page will not load), the post and
+        // comment are typed up from the Reddit API instead, so a report can be all screenshots, all typed-up, or a mix.
+        // After 3 screenshots fail in a row, typed-up copies go first (faster), and a screenshot is tried again every 8th item.
+        const typedFirst = process.env.TYPED_FIRST === '1' || (shotFails >= 3 && n % 8 !== 0);
+        if (typedFirst) { try { shot = await typedShot(ctx, pair, kws); } catch (e) { errs.push('typed copy: ' + String(e.message).split('\n')[0].slice(0, 120)); } }
+        if (!shot) {
+          try { shot = await shoot(page, pair, kws, 'modern', n + '_modern'); shotFails = 0; }
+          catch (e) { shotFails++; errs.push('screenshot: ' + String(e.message).split('\n')[0].slice(0, 160)); log(n + '/' + pairs.length, 'screenshot failed:', String(e.message).split('\n')[0]); }
         }
-        if (!shot && process.env.SCREENSHOT_FIRST === '1') { // screenshots-first mode: the typed-up copy is the back-up
-          try { shot = await typedShot(ctx, pair, kws); } catch (e) { log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); }
+        if (!shot && !typedFirst) {
+          try { shot = await typedShot(ctx, pair, kws); } catch (e) { errs.push('typed copy: ' + String(e.message).split('\n')[0].slice(0, 120)); log(n + '/' + pairs.length, 'typed copy failed:', String(e.message).split('\n')[0]); }
           if (shot) log(n + '/' + pairs.length, 'screenshot not possible, typed-up copy used');
         }
         if (!shot) { skip('Could not capture the page. ' + errs.join(' || ').slice(0, 330), true); continue; }
@@ -799,7 +803,7 @@ async function runJob(job) {
     const nTyped = items.filter((x) => x.typed && !x.gone).length, nGone = items.filter((x) => x.gone).length, nLive = items.length - nGone;
     let note = kws.length && noHit ? noHit + ' comment' + (noHit === 1 ? '' : 's') + ' did not show the highlight word on the page.' : null;
     if (escalate) note = 'Partly ready: ' + retryable + (job.source === 'posts' ? ' post' : ' engagement') + (retryable === 1 ? '' : 's') + ' could not be captured on GitHub. Your computer will redo the whole report to include them (needs the Keep_running window open).';
-    if (nTyped) note = (note ? note + ' ' : '') + (process.env.SCREENSHOT_FIRST === '1' ? nTyped + ' of ' + nLive + ' could not be screenshotted and were typed up instead (marked in the PDF).' : nTyped + ' of ' + nLive + ' typed up from the Reddit API' + (nLive - nTyped ? ', ' + (nLive - nTyped) + ' screenshotted because the API could not give them' : '') + '.');
+    if (nTyped) note = (note ? note + ' ' : '') + (nLive - nTyped ? (nLive - nTyped) + ' screenshotted, ' : '') + nTyped + ' typed up from the Reddit API because a screenshot could not be taken (marked in the PDF).';
     if (nGone) note = (note ? note + ' ' : '') + (nLive ? nLive + ' live and ' : '') + nGone + ' deleted (deleted ones are listed with their links, without screenshots).';
     await patchJob(job.id, { status: 'done', retry_local: escalate, file_path: objPath, included: items.length, skipped, progress: pairs.length, finished_at: new Date().toISOString(), note });
     log('report saved:', items.length, 'included,', skipped.length, 'skipped,', Math.round(pdf.length / 1024), 'KB');

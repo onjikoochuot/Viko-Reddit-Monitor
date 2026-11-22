@@ -1,8 +1,10 @@
 name: Reddit checker
 
 on:
-  schedule:
-    - cron: '*/5 * * * *'   # GitHub's fastest schedule. Each run works for about 4.5 minutes.
+  # The automatic timer is off: the Supabase checker (VIKO hyper-service) now checks every link every 2 minutes
+  # with the new rules and a daily cap. Running both doubled the API cost and could undo its answers.
+  # schedule:
+  #   - cron: '*/5 * * * *'
   workflow_dispatch:         # lets you press "Run workflow" to test it by hand
 
 concurrency:

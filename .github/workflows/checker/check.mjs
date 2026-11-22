@@ -66,15 +66,22 @@ async function getJson(path) {
 }
 
 async function look(url, kind) {
-  const path = new URL(url).pathname.replace(/\/+$/, '');
+  let path = new URL(url).pathname.replace(/\/+$/, '');
+  // a comment: always ask for the comment's own page (/comments/POST/_/COMMENT), whatever form the link was saved in
+  const m = path.match(/^\/r\/(\w+)\/comments\/(\w+)(?:\/[^/]*)?(?:\/(?:comment\/)?(\w+))?$/i);
+  const cid = kind === 'comment' && m && m[3] ? m[3].toLowerCase() : '';
+  if (cid) path = '/r/' + m[1] + '/comments/' + m[2] + '/_/' + cid;
   const res = await getJson(path);
-  if (res.gone) return { s: 'removed' };
+  if (res.gone && kind !== 'comment') return { s: 'removed' };
+  if (res.gone) throw new Error('Reddit answered 404 for the comment page (not proof of anything)');
   const j = res.j;
   if (!Array.isArray(j) || !j[0] || !j[0].data || !j[0].data.children[0]) throw new Error('unexpected answer from Reddit');
   const po = j[0].data.children[0].data;
   if (kind === 'comment') {
-    const c = j[1] && j[1].data.children[0];
-    if (!c || c.kind !== 't1') return { s: 'removed' };
+    // find the comment by its id (never "the first comment of the thread")
+    const find = (arr) => { for (const x of arr || []) { if (x && x.kind === 't1') { if (!cid || String(x.data.id).toLowerCase() === cid) return x; const r = find(x.data.replies && x.data.replies.data && x.data.replies.data.children); if (r) return r; } } return null; };
+    const c = find(j[1] && j[1].data && j[1].data.children);
+    if (!c) throw new Error('the comment was not in Reddit\'s answer (not proof of anything)');
     const d = c.data;
     const rep = d.replies && d.replies.data ? d.replies.data.children.filter((x) => x.kind === 't1').length : 0;
     return { s: GONE.includes(d.body) || d.author === '[deleted]' ? 'removed' : 'live', sc: d.score, rp: rep, t: po.title, n: snipOf(d.body) };
@@ -98,6 +105,27 @@ async function showIp() {
   catch (e) { log('proxy test failed:', e.message); }
 }
 
+/* ---- Reddit API first (through the website's reddit-api function). Anything it is not sure about is checked the old way, through the proxy. ---- */
+let apiUntil = 0;
+async function apiCheck(items) {
+  if (process.env.API_CHECK === '0' || Date.now() < apiUntil || !items.length) return null;
+  const ac = new AbortController(); const tm = setTimeout(() => ac.abort(), 60000);
+  try {
+    const r = await fetch(SB + '/functions/v1/reddit-api', { method: 'POST', signal: ac.signal,
+      headers: { 'Content-Type': 'application/json', apikey: PUB, 'x-checker-key': KEY, ...(PUB.startsWith('eyJ') ? { Authorization: 'Bearer ' + PUB } : {}) },
+      body: JSON.stringify({ op: 'check', items: items.map((p) => ({ url: p.url, kind: p.kind })) }) });
+    const t = await r.text(); let j = null; try { j = JSON.parse(t); } catch {}
+    if (!j || j.ok !== true) {
+      const code = j && j.code, why = (j && (j.message || j.code)) || ('HTTP ' + r.status);
+      apiUntil = Date.now() + (['no_credit', 'bad_key', 'no_key'].includes(code) || r.status === 404 ? 30 : 5) * 60000;
+      log('Reddit API check not used (' + String(why).slice(0, 100) + '), using the proxy instead');
+      return null;
+    }
+    return j.results || null;
+  } catch (e) { apiUntil = Date.now() + 5 * 60000; log('Reddit API check not used (' + String(e.message).slice(0, 80) + '), using the proxy instead'); return null; }
+  finally { clearTimeout(tm); }
+}
+
 /* ---- main loop ---- */
 async function main() {
   const end = Date.now() + RUN_MS;
@@ -109,9 +137,18 @@ async function main() {
     try { due = await rpc('checker_due', { k: KEY }); } catch (e) { log('database problem:', e.message); }
     due = due || [];
     log(due.length ? 'checking ' + due.length : 'nothing due (' + done + ' checked this run)');
-    for (const p of due) {
+    const api = await apiCheck(due);
+    let nApi = 0;
+    for (let i = 0; i < due.length; i++) {
+      const p = due[i];
       if (Date.now() > end + 60000) break;
       let r, err;
+      const a = api && api[i];
+      if (a && a.s && a.s !== 'unknown') { // the Reddit API was sure
+        r = { s: a.s, sc: a.score ?? null, rp: a.replies ?? null, t: a.title ?? null, n: a.snip ?? null }; nApi++;
+        try { await rpc('checker_report', { k: KEY, pid: p.id, st: r.s, sc: r.sc, rp: r.rp, ttl: r.t, msg: null, snip: r.n }); done++; } catch (e) { log('could not save result:', e.message); }
+        continue;
+      }
       for (let attempt = 0; attempt < 2; attempt++) {
         try { r = await look(p.url, p.kind); err = null; break; }
         catch (e) { err = e; if (e.slow && attempt === 0 && await rotate()) continue; break; }
@@ -125,6 +162,7 @@ async function main() {
       if (err && err.slow) { log('Reddit said slow down, pausing 2 min'); pauseUntil = Date.now() + 120000; break; }
       await sleep(GAP_MS);
     }
+    if (nApi) log(nApi + ' of ' + due.length + ' answered by the Reddit API');
     if (!due.length || Date.now() < pauseUntil) await sleep(Math.min(POLL_MS, Math.max(0, end - Date.now())));
   }
   log('run finished,', done, 'checked');
