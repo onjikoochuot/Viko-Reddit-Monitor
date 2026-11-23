@@ -815,6 +815,27 @@ html[data-theme=dark] .note.prog .bar i{background:#1e8a5e}
 html[data-theme=dark] .gwpl{border:1px solid #48443a}
 html[data-theme=dark] .gwpi{border-bottom:1px solid #443f34}
 html[data-theme=dark] .gwpi:last-child{border-bottom:0}
+
+/* ===== button hover: stronger lift (light) and a clear glow (dark) ===== */
+button,.btn{transition:background-color .15s,border-color .15s,color .15s,box-shadow .18s,transform .15s}
+button:hover:not(:disabled),.btn:hover{transform:translateY(-2px);box-shadow:0 8px 18px -6px rgba(14,42,46,.38),0 0 0 1px rgba(14,42,46,.18)}
+button.p:hover:not(:disabled),button.p.tb:hover:not(:disabled){transform:translateY(-2px);box-shadow:0 12px 26px -8px rgba(255,90,31,.85),0 0 0 2px rgba(255,90,31,.28)}
+button.dng:hover:not(:disabled){box-shadow:0 8px 18px -6px rgba(194,59,78,.5),0 0 0 1px rgba(194,59,78,.3)}
+header button:hover:not(:disabled){box-shadow:0 0 0 1px rgba(255,255,255,.45),0 6px 16px -6px rgba(0,0,0,.5)}
+body.shell nav button:hover{background:rgba(14,42,46,.1);box-shadow:inset 3px 0 0 rgba(255,90,31,.55)}
+body.shell nav button.on:hover{box-shadow:inset 3px 0 0 var(--accent)}
+.etabs button:hover,.mnp>button:hover,.mnp>.btn:hover{transform:none;box-shadow:none}
+
+html[data-theme=dark] button:hover:not(:disabled),html[data-theme=dark] .btn:hover{background:#1f3236;border-color:#8fe3ec;color:#ffffff;transform:translateY(-3px) scale(1.04);box-shadow:0 0 0 1px #8fe3ec,0 0 16px 3px rgba(110,220,232,.55),0 0 34px 6px rgba(110,220,232,.25),0 12px 26px -8px rgba(0,0,0,.8)}
+html[data-theme=dark] button.p:hover:not(:disabled),html[data-theme=dark] button.p.tb:hover:not(:disabled){background:#ff6a33;border-color:#ffb08f;color:#1a0d07;box-shadow:0 0 0 2px #ffb08f,0 0 22px 6px rgba(255,106,51,.75),0 0 48px 12px rgba(255,90,31,.35),0 14px 28px -8px rgba(0,0,0,.8)}
+html[data-theme=dark] button.dng:hover:not(:disabled){background:#3a1820;border-color:#ff8a9b;color:#ffd5dc;box-shadow:0 0 0 1px #ff8a9b,0 0 18px 4px rgba(255,100,125,.55),0 0 36px 8px rgba(255,100,125,.25)}
+html[data-theme=dark] header button:hover:not(:disabled){background:rgba(255,255,255,.16);border-color:#fff;color:#fff;box-shadow:0 0 0 1px #fff,0 0 18px 4px rgba(255,255,255,.35)}
+html[data-theme=dark] body.shell nav button:hover{background:rgba(143,227,236,.14);color:#fff;transform:none;box-shadow:inset 3px 0 0 #8fe3ec,0 0 16px 0 rgba(110,220,232,.25)}
+html[data-theme=dark] body.shell nav button.on:hover{box-shadow:inset 3px 0 0 var(--accent),0 0 16px 0 rgba(255,90,31,.3)}
+html[data-theme=dark] .etabs button:hover{color:#fff;transform:none;box-shadow:0 2px 0 0 #8fe3ec;text-shadow:0 0 12px rgba(143,227,236,.8);background:transparent}
+html[data-theme=dark] .mnp>button:hover,html[data-theme=dark] .mnp>.btn:hover{transform:none;background:#1f3236;box-shadow:inset 3px 0 0 #8fe3ec}
+html[data-theme=dark] #thm:hover svg{transform:rotate(-20deg) scale(1.1);transition:transform .2s}
+@media (prefers-reduced-motion:reduce){button:hover,.btn:hover,html[data-theme=dark] button:hover:not(:disabled),html[data-theme=dark] .btn:hover,html[data-theme=dark] button.p:hover:not(:disabled){transform:none}}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button><button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="thmtip" id="thm_t">Switch to dark mode</span></button></header>
 <nav id="nv"></nav><main id="app"></main>
