@@ -415,9 +415,9 @@ mark{background:#FFE58A;color:inherit;padding:0 2px;border-radius:3px}
 /* ===== dark mode (generated from the light colours) ===== */
 #thm{position:relative;width:42px;height:42px;padding:0;display:inline-flex;align-items:center;justify-content:center;border-radius:12px;flex:none}
 #thm svg{width:22px;height:22px;display:block}
-#thm .tip{position:absolute;top:calc(100% + 8px);right:0;white-space:nowrap;background:#0b1214;color:#fff;font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transform:translateY(-3px);pointer-events:none;transition:opacity .12s,transform .12s;z-index:200}
-#thm:hover .tip,#thm:focus-visible .tip{opacity:1;transform:none}
-html[data-theme=dark] #thm .tip{background:#f4f7f6;color:#0e2a2e}
+#thm .thmtip{position:absolute;top:calc(100% + 8px);right:0;white-space:nowrap;background:#0b1214;color:#fff;font-size:12.5px;font-weight:600;padding:6px 10px;border-radius:8px;box-shadow:0 6px 18px rgba(0,0,0,.25);opacity:0;transform:translateY(-3px);pointer-events:none;transition:opacity .12s,transform .12s;z-index:200}
+#thm:hover .thmtip,#thm:focus-visible .thmtip{opacity:1;transform:none}
+html[data-theme=dark] #thm .thmtip{background:#f4f7f6;color:#0e2a2e}
 html[data-theme=dark] .logo,html[data-theme=dark] header{color:#fff}
 html[data-theme=dark]{color-scheme:dark}
 html[data-theme=dark] body{background:#0d1517;color:#dfe7e6}
@@ -816,11 +816,11 @@ html[data-theme=dark] .gwpl{border:1px solid #48443a}
 html[data-theme=dark] .gwpi{border-bottom:1px solid #443f34}
 html[data-theme=dark] .gwpi:last-child{border-bottom:0}
 </style></head><body>
-<header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button><button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="tip" id="thm_t">Switch to dark mode</span></button></header>
+<header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button><button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="thmtip" id="thm_t">Switch to dark mode</span></button></header>
 <nav id="nv"></nav><main id="app"></main>
 <script>
 
-const THMB='<button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="tip" id="thm_t">Switch to dark mode</span></button>';
+const THMB='<button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="thmtip" id="thm_t">Switch to dark mode</span></button>';
 function thmIs(){return document.documentElement.getAttribute('data-theme')==='dark'}
 function thmPaint(){const d=thmIs(),b=document.getElementById('thm');if(!b)return;document.getElementById('thm_i').innerHTML=d?'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="4.5"/><path d="M12 2v2.5M12 19.5V22M4.2 4.2l1.8 1.8M18 18l1.8 1.8M2 12h2.5M19.5 12H22M4.2 19.8 6 18M18 6l1.8-1.8"/></svg>':'<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20.5 14.2A8.5 8.5 0 0 1 9.8 3.5a8.5 8.5 0 1 0 10.7 10.7z"/></svg>';const t=d?'Switch to light mode':'Switch to dark mode';document.getElementById('thm_t').textContent=t;b.setAttribute('aria-label',t);const m=document.querySelector('meta[name=theme-color]');if(m)m.setAttribute('content',d?'#0d1517':'#0E2A2E')}
 function thmToggle(){const d=!thmIs();if(d)document.documentElement.setAttribute('data-theme','dark');else document.documentElement.removeAttribute('data-theme');try{localStorage.setItem('rm_theme',d?'dark':'light')}catch(e){}thmPaint();try{if(typeof draw==='function'&&ST&&ST.me)draw()}catch(e){}}
