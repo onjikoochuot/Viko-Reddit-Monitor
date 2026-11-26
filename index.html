@@ -836,6 +836,22 @@ html[data-theme=dark] .etabs button:hover{color:#fff;transform:none;box-shadow:0
 html[data-theme=dark] .mnp>button:hover,html[data-theme=dark] .mnp>.btn:hover{transform:none;background:#1f3236;box-shadow:inset 3px 0 0 #8fe3ec}
 html[data-theme=dark] #thm:hover svg{transform:rotate(-20deg) scale(1.1);transition:transform .2s}
 @media (prefers-reduced-motion:reduce){button:hover,.btn:hover,html[data-theme=dark] button:hover:not(:disabled),html[data-theme=dark] .btn:hover,html[data-theme=dark] button.p:hover:not(:disabled){transform:none}}
+
+.selbar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:14px 0 4px;padding:10px 12px;border:1px dashed var(--ln,#D9E1E0);border-radius:12px}
+.selbar.on{border-style:solid;border-color:#C23B4E;background:rgba(194,59,78,.05)}
+.selbar .seln{font-size:13px}
+.selbar button:disabled{opacity:.45;cursor:not-allowed;transform:none;box-shadow:none}
+.tsel{display:inline-flex;align-items:center;margin-right:10px;vertical-align:middle;cursor:pointer}
+.tsel input{width:20px;height:20px;margin:0;accent-color:#C23B4E;cursor:pointer}
+.task.tseld{outline:2px solid #C23B4E;outline-offset:-2px;background:rgba(194,59,78,.04)}
+html[data-theme=dark] .selbar{border-color:#2c3d40}
+html[data-theme=dark] .selbar.on{border-color:#ff8a9b;background:rgba(255,100,125,.08)}
+html[data-theme=dark] .task.tseld{outline-color:#ff8a9b;background:rgba(255,100,125,.07)}
+html[data-theme=dark] .tsel input{accent-color:#ff8a9b}
+
+.imphow{margin:10px 0;padding:10px 12px;border:1px solid var(--ln,#D9E1E0);border-radius:12px}
+.imphow summary{cursor:pointer}
+.imphow select{min-width:200px}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button><button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="thmtip" id="thm_t">Switch to dark mode</span></button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -1108,69 +1124,136 @@ function dlTasks(fmt){
  else fsave(nm+'.txt',toText(d,b),'text/plain');
 }
 const dlHtml=b=>'<div class="cb"><div class="row" style="margin:0"><b>Download tasks</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">A clear work order for whoever publishes (a person or your posting tool). Every step says exactly what to do. <b>New posts</b> show the post title and post body. <b>Comments</b> show the link of the post to comment under and the comment text, with no title. Excel also has a &ldquo;How to read&rdquo; sheet.</p><div class="row"><select id="dsel"><option value="todo">Only tasks still to publish</option><option value="all">All tasks (including published)</option></select><button class="p" onclick="dlTasks(\'xlsx\')">Excel</button><button onclick="dlTasks(\'json\')">JSON</button><button onclick="dlTasks(\'txt\')">Text</button></div></div>';
+
+/* ===== smart task import: reads any layout and learns from corrections ===== */
+const LR={rows:null};
+async function lrLoad(){if(LR.rows)return LR.rows;let rows=null;try{const{data,error}=await sb.from('learned_rules').select('kind,key,rule,uses');if(!error&&Array.isArray(data))rows=data}catch(e){}
+ let loc=[];try{loc=JSON.parse(localStorage.getItem('rm_learned')||'[]')}catch(e){}
+ if(!rows){rows=loc;LR.local=true}else loc.forEach(r=>{if(!rows.some(x=>x.kind===r.kind&&x.key===r.key))rows.push(r)});LR.rows=rows;return rows}
+const lrGet=(kind,key)=>(LR.rows||[]).find(r=>r.kind===kind&&r.key===key);
+async function lrSave(kind,key,rule){if(!LR.rows)await lrLoad();const o=lrGet(kind,key);if(o)o.rule=rule;else LR.rows.push({kind,key,rule,uses:0});
+ try{localStorage.setItem('rm_learned',JSON.stringify(LR.rows.slice(-400)))}catch(e){}
+ if(!LR.local){try{const{error}=await sb.from('learned_rules').upsert({kind,key,rule,updated_at:new Date().toISOString()});if(error)LR.local=true}catch(e){LR.local=true}}}
+const IF={title:'Post title',body:'Post body',text:'Text (post body or comment)',comment:'Comment (one per column)',thread:'Link of the post to comment under',sub:'Subreddit',type:'Type (post or comment)',task:'Task number or group',links:'Links to include',ignore:'Not used (ignore)'};
+const hNorm=h=>String(h||'').toLowerCase().replace(/\s+/g,' ').trim();
+const RTHREAD=/reddit\.com\/r\/[^\s/]+\/comments\/[a-z0-9]+/i;
+function colGuess(h,vals){const k=hNorm(h),L=lrGet('col',k);if(L&&L.rule&&IF[L.rule.f])return {f:L.rule.f,how:'learned'};
+ const v=vals.filter(x=>String(x).trim()),n=v.length||1,share=re=>v.filter(x=>re.test(String(x))).length/n,avg=v.reduce((a,x)=>a+String(x).length,0)/n;
+ const by=f=>({f,how:'name'});
+ if(/published|live link|your link|final link|^date|^due|status|^step$|what to do|how to|^notes?$|assigned|^owner|^posted by|^account/.test(k))return by('ignore');
+ if(/^(task|task ?(no\.?|#|id|number)|group|^no\.?$|^#$|^id$)$/.test(k))return by('task');
+ if(/^category$/.test(k))return by('ignore');if(/^(type|kind|post or comment|post\/comment)$/.test(k))return by('type');
+ if(/subreddit|^sub$|communit/.test(k))return by('sub');
+ if(/comment (goes )?under|thread|parent|post (link|url)|reddit (link|url)|original post|^link to post/.test(k))return by('thread');
+ if(/links? to include|website|landing|^links$/.test(k))return by('links');
+ if(/title|headline|subject|question/.test(k))return by('title');
+ if(/text to publish|^text$|content|draft|copy|message/.test(k))return by('text');
+ if(/post body|^body$|description|post text|^post$/.test(k))return by('body');
+ if(/comment|reply|response|answer/.test(k))return by('comment');
+ if(/^(link|url|links)$/.test(k))return share(RTHREAD)>=.5?by('thread'):by('links');
+ if(!v.length)return {f:'ignore',how:'empty'};
+ if(share(RTHREAD)>=.5)return {f:'thread',how:'content'};
+ if(share(/^\s*\/?r\/[A-Za-z0-9_]+\s*$/)>=.5)return {f:'sub',how:'content'};
+ if(share(/^\s*(new )?(post|comment)s?\b/i)>=.6)return {f:'type',how:'content'};
+ if(share(/^\s*\d+\s*$/)>=.8)return {f:'task',how:'content'};
+ if(avg<=140&&share(/\?\s*$/)>=.3)return {f:'title',how:'content'};
+ if(avg>40)return {f:'text',how:'content'};
+ return {f:'ignore',how:'unsure'}}
+function rowsToTasks(rows,map){
+ const tasks=[],groups={};let t=null;const cols=Object.keys(map||{});
+ const get=(r,f)=>cols.filter(c=>map[c]===f).map(c=>String(r[c]==null?'':r[c]).trim()).filter(Boolean);
+ rows.forEach(r=>{
+  const g=get(r,'task')[0]||'',ty=(get(r,'type')[0]||'').toLowerCase(),sub=(get(r,'sub')[0]||'').replace(/^\/?r\//i,''),thAll=get(r,'thread').join(' '),th=(thAll.match(RTHREAD)?thAll.match(/https?:\/\/\S+/)||[thAll]:[''])[0],ti=get(r,'title').join(' '),bd=get(r,'body').join('\n\n'),tx=get(r,'text').join('\n\n'),cms=get(r,'comment'),ln=get(r,'links').join(' ');
+  if(!ti&&!bd&&!tx&&!cms.length&&!th)return;
+  const kind=/comment/.test(ty)?'comment':/post/.test(ty)?'post':(ti||bd)?'post':'comment';let tk;
+  if(g&&groups[g])tk=groups[g];
+  else if(!g&&kind==='comment'&&t&&!ti&&(!th||t.thread===norm(th)))tk=t;
+  else{tk={label:g&&isNaN(g)?g:'',sub,thread:kind==='comment'&&th?norm(th):'',pieces:[]};tasks.push(tk);if(g)groups[g]=tk}
+  if(!tk.sub)tk.sub=sub;
+  if(kind==='comment'&&th&&!tk.pieces.some(p=>p.kind==='post'))tk.thread=norm(th);
+  if(kind==='post'){const body=bd||tx;tk.pieces.push({kind:'post',ptitle:ti,body,links:lk(ln)});if(bd&&tx)tk.pieces.push({kind:'comment',body:tx,links:[]})}
+  else if(tx)tk.pieces.push({kind:'comment',body:tx,links:lk(ln)});
+  cms.forEach(c=>tk.pieces.push({kind:'comment',body:c,links:[]}));t=tk});
+ return tasks}
+/* text, Word and PDF: labels such as "Title:" or "Reply:" are read; unknown labels can be taught once */
+const LBL={task:/^(task|post \d+ title)$/,tasknum:/^(task number|task no\.?|number)$/,sub:/^(subreddit|community|sub)$/,thread:/^(thread|post to comment under|comment under|thread link|post link|post url|reddit link|parent post|link to post|original post)$/,link:/^(link|url)$/,title:/^(post title|title|headline|subject|question)$/,body:/^(post body|body|post text|description|post)$/,comment:/^(comment text|comment|comment \d+|first comment|reply|reply \d+|response|answer|comment reply)$/,links:/^(links|links to include|website|landing page)$/,ignore:/^(category|step|what to do|attachments|status|published link|due|deadline|notes?|assigned to|account|date|type|kind)$/};
+function lblField(k){k=hNorm(k);const L=lrGet('label',k);if(L&&L.rule&&L.rule.f)return L.rule.f;for(const f in LBL)if(LBL[f].test(k))return f;return ''}
+function textLabels(s){const c={};String(s).split(/\r?\n/).forEach(l=>{const m=l.match(/^\s*[-*•]?\s*\**([A-Za-z][A-Za-z0-9 #()\/]{0,32}?)\**\s*:\s*\S/);if(m){const k=hNorm(m[1]);if(k.split(' ').length<=5)c[k]=(c[k]||0)+1}});return c}
 function parseText(s){
- const tasks=[],MK=/^\s*(TASK NUMBER|TASK|CATEGORY|STEP|WHAT TO DO|SUBREDDIT|THREAD|POST TO COMMENT UNDER|POST TITLE|TITLE|POST BODY|BODY|COMMENT TEXT|COMMENT|LINKS|ATTACHMENTS|STATUS|PUBLISHED LINK)\s*:\s*(.*)$/i;let t=null,cur=null,last=null;
- const nt=()=>{t={label:'',sub:'',thread:'',pieces:[]};tasks.push(t);cur=null;last=null};
+ const tasks=[];let t=null,cur=null,last=null;
+ const nt=lbl=>{t={label:lbl||'',sub:'',thread:'',pieces:[]};tasks.push(t);cur=null;last=null};
  const post=()=>{let p=t.pieces.find(x=>x.kind==='post');if(!p){p={kind:'post',ptitle:'',body:'',links:[]};t.pieces.unshift(p)}return p};
- s.split(/\r?\n/).forEach(line=>{
-  if(/^\s*(={3,}|-{3,})\s*$/.test(line)){t=null;cur=null;last=null;return}
-  const m=line.match(MK);
-  if(m){const k=m[1].toUpperCase(),v=m[2];
-   if(k==='TASK'){nt();t.label=v.trim();return}
+ String(s).replace(/\*\*|__/g,'').split(/\r?\n/).forEach(raw=>{const line=raw.replace(/^\s*#+\s*/,'');
+  if(/^\s*(={3,}|-{3,}|_{3,})\s*$/.test(line)){t=null;cur=null;last=null;return}
+  const hd=line.match(/^\s*(task|post|comment)\s*#?\s*(\d+)\s*[:.)\-–—]?\s*(.{0,80})$/i);
+  if(hd&&!/:\s*\S/.test(line.replace(/^\s*\w+\s*#?\s*\d+\s*:/,''))){nt((hd[1][0].toUpperCase()+hd[1].slice(1).toLowerCase())+' '+hd[2]);if(/post/i.test(hd[1])&&hd[3].trim()&&!/^r\//i.test(hd[3].trim()))post().ptitle=hd[3].trim();return}
+  const m=line.match(/^\s*[-*•]?\s*([A-Za-z][A-Za-z0-9 #()\/]{0,32}?)\s*:\s*(.*)$/),f=m?lblField(m[1]):'';
+  if(m&&f&&f!=='ignore'){const v=m[2];
+   if(f==='task'){nt(v.trim());return}
    if(!t)nt();
-   if(k==='SUBREDDIT'){t.sub=v.trim().replace(/^r\//i,'');cur=null}
-   else if(k==='THREAD'||k==='POST TO COMMENT UNDER'){if(/reddit\.com\/r\//i.test(v))t.thread=norm(v);cur=null}
-   else if(k==='POST TITLE'||k==='TITLE'){const p=post();p.ptitle=v.trim();last=p;cur={o:p,f:'ptitle'}}
-   else if(k==='POST BODY'||k==='BODY'){const p=post();p.body=v;last=p;cur={o:p,f:'body'}}
-   else if(k==='COMMENT'||k==='COMMENT TEXT'){const p={kind:'comment',body:v,links:[]};t.pieces.push(p);last=p;cur={o:p,f:'body'}}
-   else if(k==='LINKS'){if(last)last.links=last.links.concat(lk(v));cur=null}
-   else cur=null;
+   if(f==='tasknum'){cur=null;return}
+   if(f==='sub'){t.sub=v.trim().replace(/^\/?r\//i,'');cur=null}
+   else if(f==='thread'||f==='link'){if(RTHREAD.test(v))t.thread=norm((v.match(/https?:\/\/\S+/)||[v])[0]);else if(last)last.links=last.links.concat(lk(v));cur=null}
+   else if(f==='title'){const p=post();p.ptitle=v.trim();last=p;cur={o:p,f:'ptitle'}}
+   else if(f==='body'){const p=post();p.body=v;last=p;cur={o:p,f:'body'}}
+   else if(f==='comment'){const p={kind:'comment',body:v,links:[]};t.pieces.push(p);last=p;cur={o:p,f:'body'}}
+   else if(f==='links'){if(last)last.links=last.links.concat(lk(v));cur=null}
    return}
+  if(m&&f==='ignore'){cur=null;return}
+  if(!cur&&t&&RTHREAD.test(line)&&/^\s*\S+\s*$/.test(line)&&!t.thread&&!t.pieces.some(p=>p.kind==='post')){t.thread=norm(line.trim());return}
+  if(!cur&&t&&/^\s*\/?r\/[A-Za-z0-9_]+\s*$/.test(line)&&!t.sub){t.sub=line.trim().replace(/^\/?r\//i,'');return}
   if(cur)cur.o[cur.f]+='\n'+line;
  });
  tasks.forEach(x=>x.pieces.forEach(p=>{p.body=(p.body||'').trim();if(p.ptitle!=null)p.ptitle=p.ptitle.trim()}));
- return tasks;
-}
-function rowsToTasks(rows){
- const key=(r,n)=>{for(const k of Object.keys(r))if(n.includes(k.trim().toLowerCase()))return String(r[k]).trim();return''};
- const tasks=[],groups={};let t=null;
- rows.forEach(r=>{
-  const g=key(r,['task no.','task','task id','task #','group']),ty=key(r,['type','kind']).toLowerCase(),sub=key(r,['subreddit','sub']).replace(/^r\//i,''),th=key(r,['comment goes under this post (link)','thread link','thread','parent post','post link']),ti=key(r,['title','post title','post title (new posts only)']),tx=key(r,['text to publish (post body or comment)','text','body','comment','content','draft']),ln=key(r,['links to include','links','link']);
-  if(!ti&&!tx&&!th)return;
-  const kind=ty.includes('comment')?'comment':ty.includes('post')?'post':ti?'post':'comment';let tk;
-  if(g&&groups[g])tk=groups[g];
-  else if(!g&&kind==='comment'&&t&&(!/reddit\.com/i.test(th)||t.thread===norm(th)))tk=t;
-  else{tk={label:g&&isNaN(g)?g:'',sub,thread:kind==='comment'&&/reddit\.com/i.test(th)?norm(th):'',pieces:[]};tasks.push(tk);if(g)groups[g]=tk}
-  if(!tk.sub)tk.sub=sub;
-  if(kind==='comment'&&/reddit\.com/i.test(th)&&!tk.pieces.some(p=>p.kind==='post'))tk.thread=norm(th);
-  tk.pieces.push(kind==='post'?{kind,ptitle:ti,body:tx,links:lk(ln)}:{kind,body:tx,links:lk(ln)});t=tk;
- });
- return tasks;
-}
+ if(tasks.length)return tasks;
+ /* no labels at all: every paragraph is one task */
+ return String(s).split(/\n\s*\n/).map(b=>b.trim()).filter(Boolean).map(b=>{const u=(b.match(RTHREAD)?b.match(/https?:\/\/\S*reddit\.com\/r\/\S+/i):null);
+  if(u){const txt=b.replace(u[0],'').trim();return {label:'',sub:'',thread:norm(u[0]),pieces:txt?[{kind:'comment',body:txt,links:[]}]:[],guess:true}}
+  const ls=b.split('\n');return {label:'',sub:'',thread:'',pieces:[{kind:'post',ptitle:ls[0].trim(),body:ls.slice(1).join('\n').trim(),links:[]}],guess:true}})}
 function vet(tasks){
- tasks.forEach(t=>{t.err='';t.pieces=t.pieces.filter(p=>p.kind==='post'?(p.ptitle||p.body):p.body);
+ tasks.forEach(t=>{t.err='';t.fix='';t.pieces=t.pieces.filter(p=>p.kind==='post'?(p.ptitle||p.body):p.body);
   const hp=t.pieces.some(p=>p.kind==='post'),po=t.pieces.find(p=>p.kind==='post');
-  if(!t.pieces.length)t.err='Nothing to post';else if(po&&!po.ptitle)t.err='Post has no title';
-  else if(!hp&&!/reddit\.com\/r\//i.test(t.thread))t.err='Comments need a thread link';
-  if(!t.sub&&t.thread)t.sub=info(t.thread).sub});
- return tasks.filter(t=>t.pieces.length||t.err);
-}
-async function pdfText(buf){await lsc(PJ);pdfjsLib.GlobalWorkerOptions.workerSrc=PW;const pdf=await pdfjsLib.getDocument({data:buf}).promise;let out='';
- for(let i=1;i<=pdf.numPages;i++){const c=await(await pdf.getPage(i)).getTextContent();let y=null,line='';c.items.forEach(it=>{const yy=it.transform[5];if(y!==null&&Math.abs(yy-y)>2){out+=line+'\n';line=''}line+=it.str;y=yy});out+=line+'\n'}return out}
-let IMP=[];
+  if(po&&!po.ptitle&&po.body){const fl=po.body.split(/\n|(?<=[.?!])\s/)[0].trim();po.ptitle=fl.slice(0,200);po.body=po.body.slice(fl.length).trim()||po.body;t.fix='Title taken from the first line'}
+  if(!t.sub&&t.thread)t.sub=info(t.thread).sub;
+  if(!t.pieces.length)t.err='Nothing to post';
+  else if(!hp&&!RTHREAD.test(t.thread))t.err='needlink'});
+ return tasks.filter(t=>t.pieces.length||t.err)}
+let IMP=[],IMS=null;
 async function onFile(inp){
- const f=inp.files[0];if(!f)return;inp.value='';const ext=f.name.split('.').pop().toLowerCase();let ts;
+ const f=inp.files[0];if(!f)return;inp.value='';const ext=f.name.split('.').pop().toLowerCase();$('imp').innerHTML='<p class="s">Reading '+esc(f.name)+'...</p>';await lrLoad();
  try{
-  if(['xlsx','xls','csv'].includes(ext)){const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});ts=rowsToTasks(XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]],{defval:''}))}
-  else if(ext==='docx'){await lsc(MJ);ts=parseText((await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value)}
-  else if(ext==='pdf')ts=parseText(await pdfText(await f.arrayBuffer()));
-  else if(ext==='txt'||ext==='md')ts=parseText(await f.text());
-  else return alert('Please use an Excel, CSV, Word (.docx), PDF or text file');
- }catch(e){return alert('That file could not be read: '+(e.message||e))}
- IMP=vet(ts);const ok=IMP.filter(t=>!t.err);
- $('imp').innerHTML='<div class="cb"><b>'+esc(f.name)+'</b>: found '+IMP.length+' task(s), '+ok.length+' ready to import.'+(IMP.length?'<table><tr><th>Task</th><th>Subreddit</th><th>Post title</th><th>Comments</th><th>Check</th></tr>'+IMP.map(t=>{const po=t.pieces.find(p=>p.kind==='post');return '<tr><td>'+esc(t.label||(po?po.ptitle:'Comments'))+'</td><td>'+(t.sub?'r/'+esc(t.sub):'-')+'</td><td>'+esc(po?po.ptitle:'-')+'</td><td>'+t.pieces.filter(p=>p.kind==='comment').length+'</td><td>'+(t.err?'<span class="rd">'+t.err+' (will be skipped)</span>':'<span class="gr">OK</span>')+'</td></tr>'}).join('')+'</table>':'<p class="s">Nothing was recognized. Download the template below to see the layout.</p>')
-  +'<div class="row">'+(ok.length?'<button class="p" onclick="doImport()">Import '+ok.length+' task(s)</button>':'')+'<button onclick="$(\'imp\').innerHTML=\'\'">Cancel</button></div></div>';
-}
+  if(['xlsx','xls','csv','ods'].includes(ext)){const wb=XLSX.read(await f.arrayBuffer(),{type:'array'});let best=null;
+   wb.SheetNames.forEach(sn=>{if(/how to read|instructions|readme/i.test(sn))return;const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});if(!best||rows.length>best.length)best=rows});
+   const rows=best||[],heads=[];rows.slice(0,200).forEach(r=>Object.keys(r).forEach(k=>{if(!heads.includes(k))heads.push(k)}));
+   const map={},how={};heads.forEach(h=>{const g=colGuess(h,rows.slice(0,60).map(r=>r[h]));map[h]=g.f;how[h]=g.how});
+   IMS={kind:'rows',name:f.name,rows,heads,map,how}}
+  else{let text='';
+   if(ext==='docx'){await lsc(MJ);text=(await mammoth.extractRawText({arrayBuffer:await f.arrayBuffer()})).value}
+   else if(ext==='pdf')text=await pdfText(await f.arrayBuffer());
+   else if(['txt','md','text','rtf'].includes(ext))text=await f.text();
+   else return($('imp').innerHTML=''),alert('Please use an Excel, CSV, Word (.docx), PDF or text file');
+   IMS={kind:'text',name:f.name,text}}
+ }catch(e){$('imp').innerHTML='';return alert('That file could not be read: '+(e.message||e))}
+ impRun()}
+function impRun(){if(!IMS)return;const S=IMS;IMP=vet(S.kind==='rows'?rowsToTasks(S.rows,S.map):parseText(S.text));impDraw()}
+async function impCol(h,f){const S=IMS;S.map[h]=f;S.how[h]='you';await lrSave('col',hNorm(h),{f});toast('Learned: the column "'+h+'" is '+IF[f].toLowerCase()+'. It will be read this way next time.');impRun()}
+async function impLbl(k,f){await lrSave('label',k,{f:f||'none'});toast(f&&f!=='none'?'Learned: "'+k+':" means '+(IF[f==='link'?'thread':f]||f).toLowerCase()+'.':'Learned: "'+k+':" is part of the text.');impRun()}
+function impLink(i,v){const t=IMP[i];if(!t)return;v=String(v||'').trim();if(RTHREAD.test(v)){t.thread=norm(v.match(/https?:\/\/\S+/)?v.match(/https?:\/\/\S+/)[0]:v);t.err='';if(!t.sub)t.sub=info(t.thread).sub}impDraw()}
+function impAsPost(i){const t=IMP[i];if(!t)return;const c=t.pieces[0];t.pieces[0]={kind:'post',ptitle:c.body.split(/\n|(?<=[.?!])\s/)[0].slice(0,200),body:c.body,links:c.links||[]};t.err='';t.fix='Made into a new post';impDraw()}
+function impDraw(){const S=IMS;if(!S)return;const ok=IMP.filter(t=>!t.err);
+ let how='';
+ if(S.kind==='rows'){how='<details class="imphow"'+(ok.length&&ok.length===IMP.length?'':' open')+'><summary><b>How I read the columns</b> (change any that are wrong: I remember it for next time)</summary><div class="scrollx"><table class="et"><tr><th>Column in your file</th><th>Example</th><th>Read as</th></tr>'+S.heads.map(h=>{const ex=(S.rows.find(r=>String(r[h]).trim())||{})[h];return '<tr><td><b>'+esc(h)+'</b>'+(S.how[h]==='learned'||S.how[h]==='you'?' <span class="chip ok">learned</span>':'')+'</td><td class="s">'+esc(clip(String(ex==null?'':ex),70))+'</td><td><select onchange="impCol(\''+esc(String(h).replace(/\\/g,'\\\\').replace(/'/g,"\\'"))+'\',this.value)">'+Object.keys(IF).map(f=>'<option value="'+f+'"'+(S.map[h]===f?' selected':'')+'>'+IF[f]+'</option>').join('')+'</select></td></tr>'}).join('')+'</table></div></details>'}
+ else{const c=textLabels(S.text),unk=Object.keys(c).filter(k=>c[k]>=2&&!lblField(k)&&!lrGet('label',k)),known=Object.keys(c).filter(k=>lblField(k)&&lblField(k)!=='ignore');
+  how='<details class="imphow"'+(unk.length||!ok.length?' open':'')+'><summary><b>How I read the text</b>'+(unk.length?' ('+unk.length+' label'+(unk.length==1?'':'s')+' I do not know yet)':'')+'</summary>'
+   +(known.length?'<p class="s">Understood: '+known.map(k=>'<b>'+esc(k)+':</b> = '+esc(({task:'new task',tasknum:'task number',link:'link',thread:'post link'})[lblField(k)]||(IF[lblField(k)]||lblField(k)).toLowerCase())).join(', ')+'</p>':'')
+   +(unk.length?'<p class="s">Tell me what these labels mean once and I will remember it for every future upload:</p><div class="scrollx"><table class="et">'+unk.map(k=>'<tr><td><b>'+esc(k)+':</b> <span class="s">('+c[k]+' times)</span></td><td><select onchange="impLbl(\''+esc(k.replace(/'/g,"\\'"))+'\',this.value)"><option value="">Choose...</option><option value="none">Part of the text (not a label)</option><option value="task">Starts a new task</option><option value="title">Post title</option><option value="body">Post body</option><option value="comment">A comment</option><option value="thread">Link of the post to comment under</option><option value="sub">Subreddit</option><option value="links">Links to include</option><option value="ignore">Not used (ignore)</option></select></td></tr>').join('')+'</table></div>':'')
+   +(IMP.some(t=>t.guess)?'<p class="s">No labels were found, so each paragraph was read as one task (a paragraph with a Reddit link is a comment under that post, any other paragraph is a new post). Check the preview.</p>':'')+'</details>'}
+ const rows=IMP.map((t,i)=>{const po=t.pieces.find(p=>p.kind==='post'),nc=t.pieces.filter(p=>p.kind==='comment').length;
+  const chk=t.err==='needlink'?'<div class="s rd">Needs the link of the post to comment under</div><input placeholder="Paste the Reddit post link" style="min-width:220px" onchange="impLink('+i+',this.value)"> <button class="sm" onclick="impAsPost('+i+')">Make it a new post instead</button>':t.err?'<span class="rd">'+esc(t.err)+' (will be skipped)</span>':'<span class="gr">OK</span>'+(t.fix?'<div class="s">'+esc(t.fix)+'</div>':'');
+  return '<tr><td>'+esc(t.label||(po?'New post':'Comments'))+'</td><td>'+(t.sub?'r/'+esc(t.sub):'-')+'</td><td>'+esc(clip(po?po.ptitle:(t.pieces[0]?t.pieces[0].body:''),90))+'</td><td>'+nc+'</td><td>'+chk+'</td></tr>'}).join('');
+ $('imp').innerHTML='<div class="cb"><b>'+esc(S.name)+'</b>: found '+IMP.length+' task'+(IMP.length==1?'':'s')+', '+ok.length+' ready to import.'+how
+  +(IMP.length?'<div class="scrollx"><table class="et"><tr><th>Task</th><th>Subreddit</th><th>Post title or first text</th><th>Comments</th><th>Check</th></tr>'+rows+'</table></div>':'<p class="s">Nothing was found yet. Open <b>How I read</b> above and tell me what the columns or labels mean.</p>')
+  +'<div class="row">'+(ok.length?'<button class="p" onclick="doImport()">Import '+ok.length+' task'+(ok.length==1?'':'s')+'</button>':'')+'<button onclick="IMS=null;IMP=[];$(\'imp\').innerHTML=\'\'">Cancel</button></div>'+(LR.local?'<p class="s">What I learn is kept in this browser until the database update is installed.</p>':'')+'</div>'}
 async function doImport(){
  const ok=IMP.filter(t=>!t.err);$('imp').innerHTML='<p class="s">Importing...</p>';
  for(const t of ok){
@@ -1179,7 +1262,8 @@ async function doImport(){
   const{error:e2}=await sb.from('pieces').insert(t.pieces.map((p,i)=>({task_id:r.id,brand_id:ST.bid,sort:i,kind:p.kind,ptitle:p.ptitle||null,body:p.body||'',links:p.links||[]})));
   if(e2){alert(e2.message);break}
  }
- IMP=[];$('imp').innerHTML='';delete ST.attBrands[ST.bid];await load();draw();alert(ok.length+' task(s) imported.');
+ if(IMS&&IMS.kind==='rows')for(const h of IMS.heads)if(IMS.how[h]!=='learned'&&IMS.how[h]!=='you'&&IMS.map[h]!=='ignore')await lrSave('col',hNorm(h),{f:IMS.map[h]});
+ IMP=[];IMS=null;$('imp').innerHTML='';delete ST.attBrands[ST.bid];await load();draw();alert(ok.length+' task(s) imported.');
 }
 function dlTemplate(kind){
  if(kind==='xlsx'){const r=[HEAD2,
@@ -1190,7 +1274,7 @@ function dlTemplate(kind){
   const ws=XLSX.utils.aoa_to_sheet(r);ws['!cols']=[8,26,26,9,11,52,18,40,70,52,30,24,12,45].map(w=>({wch:w}));const wb=XLSX.utils.book_new();XLSX.utils.book_append_sheet(wb,ws,'Tasks');XLSX.writeFile(wb,'tasks-template.xlsx')}
  else fsave('tasks-template.txt','TASK: Post with two comments\nSUBREDDIT: r/devops\nPOST TITLE: Best CRM for a 10-person team?\nPOST BODY: The body of the post goes here.\nIt can run over several lines.\nLINKS: https://example.com\nCOMMENT TEXT: First comment on that post.\nCOMMENT TEXT: Second comment on that post.\n====\nTASK: Comment on an existing post\nSUBREDDIT: r/saas\nPOST TO COMMENT UNDER: https://www.reddit.com/r/saas/comments/abc123/some_thread/\nCOMMENT TEXT: Your comment text goes here.\n====\n','text/plain');
 }
-const importHtml=()=>'<div class="cb"><div class="row" style="margin:0"><b>Import tasks from a file</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Upload an Excel, CSV, Word (.docx), PDF or text file that follows the template layout. You will see a preview and can confirm before anything is added.</p><div class="row"><label class="btn">Choose file<input type="file" accept=".xlsx,.xls,.csv,.docx,.pdf,.txt,.md" hidden onchange="onFile(this)"></label><button onclick="dlTemplate(\'xlsx\')">Excel template</button><button onclick="dlTemplate(\'txt\')">Text / Word template</button></div><div id="imp"></div></div>';
+const importHtml=()=>'<div class="cb"><div class="row" style="margin:0"><b>Import tasks from a file</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Upload tasks in any layout: Excel, CSV, Word (.docx), PDF or text. I work out which column or label is the title, the text, the comment and the post link. If I get one wrong, change it once in the preview and I remember it for everyone next time. Nothing is added until you press Import.</p><div class="row"><label class="btn">Choose file<input type="file" accept=".xlsx,.xls,.csv,.ods,.docx,.pdf,.txt,.md" hidden onchange="onFile(this)"></label><button onclick="dlTemplate(\'xlsx\')">Excel template</button><button onclick="dlTemplate(\'txt\')">Text / Word template</button></div><div id="imp"></div></div>';
 
 /* ---------- brands (admin) ---------- */
 async function newBrand(){const n=prompt('Brand name');if(!n||!n.trim())return;const{data,error}=await sb.from('brands').insert({name:n.trim()}).select().single();if(error)return alert(error.message);ST.bid=data.id;await load();draw()}
@@ -1238,7 +1322,7 @@ function taskCard(t,mode,m){
  const acts=(drf?(can('task_assign')?asgSel(t):'')+G('work_add','<button onclick="addC(\''+t.id+'\')">+ Comment</button>')+'<label class="dl" title="Deadline (optional)"><span class="s">Due</span><input type="date" value="'+esc(t.due_on||'')+'" onchange="setDue(\''+t.id+'\',this.value)"></label>'
 +G('work_delete','<button onclick="trashTask(\''+t.id+'\')">Trash</button>')
   :mnu('Task',[G('brand_archive','<button onclick="arcTask(\''+t.id+'\')">Archive</button><button title="Pinned tasks are never archived automatically" onclick="keepTask(\''+t.id+'\','+(t.keep?0:1)+')">'+(t.keep?'Unpin':'Pin')+'</button>'),G('work_delete','<button class="dng" onclick="trashTask(\''+t.id+'\')">Trash</button>')]));
- return '<div class="task'+(catOf(t)==='comment'?' cc':'')+'"><div class="row" style="margin:0"><div style="flex:1"><div class="t"><span class="num2">'+esc(tnum(t,m))+'</span>'+esc(tlabel(t))+(t.keep?' <span class="chip at">Pinned</span>':'')+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment under <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this post</a>':'')+(t.assignee?' &middot; assigned to '+esc(pname(t.assignee)):'')+' '+dueChip(t)+'</div></div><div class="a">'+acts+'</div></div>'+shown.map(p=>pc(p,true)).join('')+'</div>';
+ return '<div class="task'+(catOf(t)==='comment'?' cc':'')+(drf&&SEL.drafts.has(t.id)?' tseld':'')+'"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+(drf&&can('work_delete')?selBox('drafts',t.id):'')+'<span class="num2">'+esc(tnum(t,m))+'</span>'+esc(tlabel(t))+(t.keep?' <span class="chip at">Pinned</span>':'')+'</div><div class="s">'+(t.sub?'r/'+esc(t.sub):'')+(t.thread?' &middot; comment under <a href="'+esc(t.thread)+'" target="_blank" rel="noopener">this post</a>':'')+(t.assignee?' &middot; assigned to '+esc(pname(t.assignee)):'')+' '+dueChip(t)+'</div></div><div class="a">'+acts+'</div></div>'+shown.map(p=>pc(p,true)).join('')+'</div>';
 }
 /* ---- dates: show work done in a period, newest or oldest first (admin, team members, clients, reports) ---- */
 const DT={r:'',f:'',t:'',s:''};try{Object.assign(DT,JSON.parse(localStorage.getItem('rm_dt')||'{}'))}catch(e){}
@@ -1361,8 +1445,11 @@ async function rsPdf(){const r=RS(),L0=rsShown(),T=L0.filter(p=>r.sel[p.id]),L=T
   const pages=ppBuild({brand_name:'Reddit: '+r.q.trim().slice(0,50)},list,{sub:'Reddit posts found for "'+r.q.trim().slice(0,80)+'"'+(r.ang.includes('all')?'':' ('+r.ang.map(k=>(rsAng(k)||[])[1]).join(', ')+')')+', typed up with their first comments.'});
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([ppPdf(pages)],{type:'application/pdf'}));a.download='reddit-'+r.q.trim().replace(/[^a-z0-9]+/gi,'-').toLowerCase().slice(0,40)+'-post-pages.pdf';document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},800);
   r.msg='Post pages ready: '+L.length+' post'+(L.length==1?'':'s')+', '+pages.length+' pages.'}catch(e){r.err='Could not make the PDF: '+String(e&&e.message||e).slice(0,140)}r.busy='';rsDraw()}
-function rsWriteBar(n){const B=rwAll().filter(b=>!b.trashed_at&&!b.archived_at);if(!can('reddit_draft')||!B.length)return '';return '<div class="row" style="align-items:center;gap:6px;margin:6px 0 0"><span class="s"><b>Write for a brand:</b></span><select id="rs_wb"><option value="">Pick a brand...</option>'+B.map(b=>'<option value="'+b.id+'"'+((FQ().bid===b.id)?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select><button class="sm" onclick="rsWrite(\'comment\')"'+(n?'':' disabled')+'>Write comments on ticked ('+n+')</button><button class="sm" onclick="rsWrite(\'post\')"'+(n?'':' disabled')+'>Write new posts inspired by them</button></div>'}
+function rsWriteBar(n){const B=rwAll().filter(b=>!b.trashed_at&&!b.archived_at);if(!can('reddit_draft')||!B.length)return '';return '<div class="row" style="align-items:center;gap:6px;margin:6px 0 0"><span class="s"><b>Write for a brand:</b></span><select id="rs_wb" onchange="RS().wb=this.value"><option value="">Pick a brand...</option>'+B.map(b=>'<option value="'+b.id+'"'+(((RS().wb||FQ().bid)===b.id)?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select><button class="sm" onclick="rsWrite(\'comment\')"'+(n?'':' disabled')+'>Write comments on ticked ('+n+')</button><button class="sm" onclick="rsWrite(\'post\')"'+(n?'':' disabled')+'>Write new posts inspired by them</button></div>'}
+function osWriteBar(n){const B=rwAll().filter(b=>!b.trashed_at&&!b.archived_at);if(!can('reddit_draft')||!B.length)return '';return '<div class="row" style="align-items:center;gap:6px;margin:6px 0 0"><span class="s"><b>Write for a brand:</b></span><select id="rs_wb" onchange="RS().wb=this.value"><option value="">Pick a brand...</option>'+B.map(b=>'<option value="'+b.id+'"'+(((RS().wb||FQ().bid)===b.id)?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select><button class="sm" onclick="rsWrite(\'post\')"'+(n?'':' disabled')+'>Write new Reddit posts inspired by ticked ('+n+')</button></div>'}
 async function rsWrite(kind){const bid=($('rs_wb')||{}).value;if(!bid)return alert('Pick the brand to write for first.');const r=RS(),m=r.mode;let use=[];
+ if(m==='other'){const o=OS();use=osShown().filter(x=>o.sel[osKey(x)]).map(x=>{const R=o.read[osKey(x)]||{};return{url:x.url,title:x.title||clip(x.text||'',90),sub:'',body:String(R.text||x.text||'')+(R.transcript?'\nTranscript: '+String(R.transcript).slice(0,600):''),snippet:'',top:(R.comments||[]).slice(0,5).map(c=>({a:c.author||'',s:c.likes||0,t:String(c.text||'').slice(0,600)}))}});
+  use=use.filter((x,i,a)=>x.url&&a.findIndex(y=>y.url===x.url)===i);if(!use.length)return alert('Tick the results first.');ST.tab='find';gwSetBrand(bid);gwBatchFrom(use,'post','');draw();return}
  if(m==='brand'||m==='site'){const b=BM();use=bmShown().filter(x=>b.sel&&b.sel[x.type+x.id]&&!x.net).map(x=>({url:x.postUrl||x.url,title:x.postTitle||x.title||'',sub:x.sub,body:x.type==='post'?x.text||'':'',snippet:x.type==='comment'?'A comment there says: '+String(x.text||'').slice(0,300):''}))}
  else use=rsShown().filter(p=>r.sel[p.id]).map(p=>{const R=r.read[p.id];return{url:rsUrl(p),title:p.title,sub:p.subreddit,body:String((R&&R.post&&R.post.selftext)||p.selftext||''),snippet:'',top:R&&R.comments?R.comments.filter(c=>c.top!==false).slice(0,5).map(c=>({a:c.author||'',s:c.score||0,t:String(c.body||'').slice(0,1500)})):[]}});
  use=use.filter((x,i,a)=>x.url&&a.findIndex(y=>y.url===x.url)===i);if(!use.length)return alert('Tick the posts first.');
@@ -1559,7 +1646,7 @@ function osBody(){const o=OS(),site=o.site,cat=o.cat[site];if(!cat&&!o.busy){set
  if(!o.res)return h+(o.busy?'':'<div class="empty">Pick a site, type a topic and press Search. Read any result in full with its comments'+(site==='youtube'?' and the video transcript':'')+', tick the ones you want and make a PDF.</div>');
  const L=osShown(),nt=L.filter(x=>o.sel[osKey(x)]).length,O=(a)=>a.map(x=>'<option value="'+x[0]+'"'+(o.order===x[0]?' selected':'')+'>'+x[1]+'</option>').join('');
  h+=angShow(o,o.res,'OS()')+fltHtml('os',{rel:1})+'<div class="row rsbar" style="align-items:center;gap:8px"><b>'+L.length+' result'+(L.length==1?'':'s')+'</b>'+(o.res.length>L.length?'<span class="s">('+(o.res.length-L.length)+' hidden by the dates)</span>':'')+'<span style="flex:1"></span><label class="dts"><span>Show</span><select onchange="OS().order=this.value;rsDraw()">'+O([['api','As the site ranked them'],['new','Newest first'],['views','Most views'],['likes','Most likes'],['com','Most comments']])+'</select></label></div>'
-  +(L.length?'<div class="row" style="align-items:center;gap:6px;margin-top:0"><button class="sm" onclick="osTick('+(nt===L.length?'false':'true')+')">'+(nt===L.length?'Untick all':'Tick all')+'</button>'+(nt&&osCanRead()?'<button class="sm" onclick="osReadTicked()">Read ticked in full ('+nt+')</button>':'')+'<button class="sm p" onclick="osPdf()"'+(o.busy?' disabled':'')+'>Make PDF'+(nt?' ('+nt+')':'')+'</button><button class="sm" onclick="osCsv()">Download (CSV)</button><span class="s">'+(o.cost?'Cost so far: $'+o.cost.toFixed(4):'')+'</span></div>':'')
+  +(L.length?'<div class="row" style="align-items:center;gap:6px;margin-top:0"><button class="sm" onclick="osTick('+(nt===L.length?'false':'true')+')">'+(nt===L.length?'Untick all':'Tick all')+'</button>'+(nt&&osCanRead()?'<button class="sm" onclick="osReadTicked()">Read ticked in full ('+nt+')</button>':'')+'<button class="sm p" onclick="osPdf()"'+(o.busy?' disabled':'')+'>Make PDF'+(nt?' ('+nt+')':'')+'</button><button class="sm" onclick="osCsv()">Download (CSV)</button><span class="s">'+(o.cost?'Cost so far: $'+o.cost.toFixed(4):'')+'</span></div>'+osWriteBar(nt):'')
   +L.map((x,i)=>{const k=osKey(x),op=o.open[k],R=o.read[k];return '<div class="rsp'+(o.sel[k]?' on':'')+'"><div class="rsh"><input type="checkbox" '+(o.sel[k]?'checked ':'')+'onchange="OS().sel[\''+esc(k)+'\']=this.checked;rsDraw()">'
    +(x.thumb&&/^https:/.test(x.thumb)?'<img src="'+esc(x.thumb)+'" alt="" style="width:120px;height:68px;object-fit:cover;border-radius:8px;flex:none" loading="lazy" referrerpolicy="no-referrer">':'')
    +'<div style="flex:1;min-width:0">'+(x.url?'<a class="rst" href="'+esc(x.url)+'" target="_blank" rel="noopener">':'<div class="rst">')+esc(x.title||clip(String(x.text||'').replace(/\s+/g,' '),140))+(x.url?'</a>':'</div>')
@@ -1684,7 +1771,7 @@ function listHtml(b){
  const sv=surv(ps),kfA=st=>' kf'+(ST.tf===st?' on':'')+'" role="button" tabindex="0" onkeydown="if(event.key===\'Enter\')this.click()" onclick="ST.tf=ST.tf===\''+st+'\'?\'all\':\''+st+'\';ST.lim=30;draw(true);kfGo()',kgo=t=>'<span class="kgo">'+t+' &rsaquo;</span>',kp='<div class="kpi"><div class="k-live'+kfA('live')+'"><b>'+np+'</b>live posts'+kgo('View')+'</div><div class="k-live'+kfA('live')+'"><b>'+nc+'</b>live comments'+kgo('View')+'</div><div class="k-chk'+kfA('checking')+'"><b>'+n('checking')+'</b>being confirmed'+kgo('View')+'</div><div class="k-del'+kfA('removed')+'"><b>'+n('removed')+'</b>deleted'+kgo('View')+'</div><div class="k-dr kf" role="button" tabindex="0" onclick="if(ST.panel!==\'drafts\')pn(\'drafts\');scrollTo({top:0,behavior:\'smooth\'})"><b>'+na('todo')+'</b>drafts to publish'+kgo('Open')+'</div>'+(odn?'<div class="k-del"><b>'+odn+'</b>tasks overdue</div>':'')+'<div class="k-ink"><b>'+(sv==null?'-':sv+'%')+'</b>still live</div><div><b>'+sumUp(ps)+'</b>upvotes (live)</div></div>';
  const rp='<div class="row"><button class="p" onclick="mkRepOpen(\''+b.id+'\')" title="Checks every link in the dates you pick, then makes a PDF with screenshots (or typed-up copies when a screenshot cannot be taken)">Make report of work done</button><button class="p" onclick="dlBrand(\''+b.id+'\')">Download report (live only)</button><button onclick="dlBrand(\''+b.id+'\',1)">Full overview (with deleted)</button></div>';
  const groups=mode=>CATS.map(c=>{const arr=ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at&&m[t.id]&&m[t.id].k===c[0]).sort(bySeq(m)).map(t=>taskCard(t,mode,m)).filter(Boolean);if(!arr.length)return '';const sh=arr.slice(0,ST.lim);return '<div class="cat'+(c[0]==='comment'?' cc':'')+'">'+c[1]+' <small>'+arr.length+'</small></div>'+sh.join('')+(arr.length>sh.length?'<div class="row"><button onclick="ST.lim+=30;draw(true)">Show 30 more ('+(arr.length-sh.length)+' left)</button></div>':'')}).join('');
- const drafts=ST.panel==='drafts'?'<div class="cb"><div class="row" style="margin:0"><b>Drafts waiting to be published ('+na('todo')+')</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div>'+(groups('drafts')||'<div class="empty" style="margin-top:12px">No drafts waiting. Use <b>+ Add work</b> to add some.</div>')+'</div>':'';
+ const drafts=ST.panel==='drafts'?'<div class="cb"><div class="row" style="margin:0"><b>Drafts waiting to be published ('+na('todo')+')</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div>'+selBar('drafts',draftIds(b))+(groups('drafts')||'<div class="empty" style="margin-top:12px">No drafts waiting. Use <b>+ Add work</b> to add some.</div>')+'</div>':'';
  const chips=[['all','All'],['live','Live'],['checking','Confirming'],['removed','Deleted']].map(f=>'<button class="tb'+(ST.tf===f[0]?' on':'')+'" onclick="ST.tf=\''+f[0]+'\';draw(true)">'+f[1]+' ('+(f[0]==='all'?aps.filter(p=>p.url&&inDT(p)).length:aps.filter(p=>p.status===f[0]&&inDT(p)).length)+')</button>').join('');
  const trk=dtSort('new')==='task'?groups('track'):(()=>{const ord=dtSort('new'),lw=t=>Math.max(0,...(ST.pby[t.id]||[]).filter(p=>p.url&&inDT(p)&&(ST.tf==='all'||p.status===ST.tf)).map(pWhen));
   const arr=ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at&&m[t.id]).map(t=>[t,lw(t)]).sort((x,y)=>ord==='old'?(x[1]||9e15)-(y[1]||9e15):y[1]-x[1]).map(x=>taskCard(x[0],'track',m)).filter(Boolean);if(!arr.length)return '';const sh=arr.slice(0,ST.lim);
@@ -1917,6 +2004,29 @@ function dueBar(bid){const ts=ST.tasks.filter(t=>!t.archived_at&&(!bid||t.brand_
  return ''}
 const reload=async()=>{await load();draw()};
 async function setDue(id,v){if(needV6())return;const{error}=await sb.from('tasks').update({due_on:v||null}).eq('id',id);if(error)return alert(error.message);await reload();toast(v?'Deadline saved':'Deadline cleared')}
+
+/* ---- select several tasks (drafts, archive, trash) ---- */
+const SEL={drafts:new Set(),arc:new Set(),trash:new Set()};const SELIDS={drafts:[],arc:[],trash:[]};
+function selBox(k,id){return '<label class="tsel" title="Select" onclick="event.stopPropagation()"><input type="checkbox" data-k="'+k+'" value="'+id+'"'+(SEL[k].has(id)?' checked':'')+' onchange="selT(\''+k+'\',this.value,this.checked)" aria-label="Select this task"></label>'}
+function draftIds(b){const m=numbered(b.id);return ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at&&m[t.id]&&(ST.pby[t.id]||[]).some(p=>!p.url)&&matchQ(t,ST.pby[t.id]||[],m)).map(t=>t.id)}
+function selT(k,id,on){if(on)SEL[k].add(id);else SEL[k].delete(id);const c=document.querySelector('input.tsel_in[value="'+id+'"]');document.querySelectorAll('input[data-k="'+k+'"][value="'+id+'"]').forEach(x=>{x.checked=on;const t=x.closest('.task');if(t)t.classList.toggle('tseld',on)});selPaint(k)}
+function selLive(k){const ok=new Set(SELIDS[k]);return [...SEL[k]].filter(id=>ok.has(id))}
+function selAll(k){const all=SELIDS[k],on=selLive(k).length<all.length;SEL[k].clear();if(on)all.forEach(id=>SEL[k].add(id));document.querySelectorAll('input[data-k="'+k+'"]').forEach(x=>{x.checked=on;const t=x.closest('.task');if(t)t.classList.toggle('tseld',on)});selPaint(k)}
+function selPaint(k){const n=selLive(k).length,all=SELIDS[k].length,b=document.getElementById('selbar_'+k);if(!b)return;b.querySelector('.selall').textContent=n&&n===all?'Untick all':'Select all ('+all+')';b.querySelector('.seln').textContent=n?n+' selected':'Tick drafts to delete several at once, or Select all';b.querySelectorAll('.selact').forEach(x=>{x.disabled=!n;const l=x.getAttribute('data-l');x.textContent=l+(n?' ('+n+')':'')});b.classList.toggle('on',!!n)}
+function selBar(k,ids){SELIDS[k]=ids;if(!ids.length||!can('work_delete'))return '';const n=selLive(k).length;
+ const acts=k==='drafts'?[['Delete selected drafts','dng',"selDo('drafts','del')"]]:k==='arc'?[['Restore selected','',"selDo('arc','restore')"],['Move selected to Trash','dng',"selDo('arc','trash')"]]:[['Restore selected','',"selDo('trash','restore')"],['Delete selected forever','dng',"selDo('trash','purge')"]];
+ const tip=k==='drafts'?'Tick drafts to delete several at once, or Select all':'Tick tasks to act on several at once, or Select all';
+ return '<div class="selbar'+(n?' on':'')+'" id="selbar_'+k+'"><button class="sm selall" onclick="selAll(\''+k+'\')">'+(n&&n===ids.length?'Untick all':'Select all ('+ids.length+')')+'</button><span class="seln s">'+(n?n+' selected':tip)+'</span><span style="flex:1"></span>'+acts.map(a=>'<button class="sm selact '+a[1]+'" data-l="'+a[0]+'"'+(n?'':' disabled')+' onclick="'+a[2]+'">'+a[0]+(n?' ('+n+')':'')+'</button>').join('')+'</div>'}
+async function selDo(k,what){const ids=selLive(k);if(!ids.length)return;if(needV6())return;const N=ids.length,pl=N===1?'':'s';
+ if(k==='drafts'){const mixed=ids.filter(id=>(ST.pby[id]||[]).some(p=>p.url)),only=ids.filter(id=>!mixed.includes(id));
+  if(!confirm('Delete '+N+' draft'+pl+'?\n\n'+(only.length?only.length+' go'+(only.length===1?'es':'')+' to Trash (you can restore them for '+trashDays()+' days).':'')+(mixed.length?'\n'+mixed.length+' already ha'+(mixed.length===1?'s':'ve')+' published items: only the unpublished drafts are removed, the published items stay.':'')))return;
+  if(only.length&&!(await updTasks(only,{trashed_at:nowIso()})))return;
+  const pids=[];mixed.forEach(id=>(ST.pby[id]||[]).forEach(p=>{if(!p.url)pids.push(p.id)}));
+  for(let i=0;i<pids.length;i+=100){const{error}=await sb.from('pieces').delete().in('id',pids.slice(i,i+100));if(error)return alert(error.message)}
+  SEL.drafts.clear();await reload();toast(N+' draft'+pl+' deleted'+(only.length?' (find them in Trash)':''));return}
+ if(what==='restore'){if(!(await updTasks(ids,{archived_at:null,trashed_at:null})))return;SEL[k].clear();await reload();toast('Restored '+N+' task'+pl);return}
+ if(what==='trash'){if(!confirm('Move '+N+' task'+pl+' to Trash?\n\nYou can restore them for '+trashDays()+' days. Money earned from published items is kept.'))return;if(!(await updTasks(ids,{trashed_at:nowIso()})))return;SEL[k].clear();await reload();toast('Moved '+N+' task'+pl+' to Trash');return}
+ if(what==='purge'){if(!confirm('Delete '+N+' task'+pl+' forever? This cannot be undone.'))return;for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('tasks').delete().in('id',ids.slice(i,i+100));if(error)return alert(error.message)}SEL[k].clear();await reload();toast('Deleted '+N+' task'+pl+' forever')}}
 async function updTasks(ids,patch){if(needV6())return false;for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('tasks').update(patch).in('id',ids.slice(i,i+100));if(error){alert(error.message);return false}}return true}
 async function setBrandDue(on){if(needV6())return;const v=on?$('bdue').value:'';if(on&&!v)return alert('Pick a date first.');const{error}=await sb.from('brands').update({due_on:v||null}).eq('id',ST.bid);if(error)return alert(error.message);await reload();toast(v?'Brand deadline saved':'Brand deadline cleared')}
 async function setRange(){const b=ST.bid,k=$('dk').value,a=+$('d1').value,z=+$('d2').value||a,d=$('dd').value;if(!a||!d)return alert('Fill in the first number and the deadline.');
@@ -1940,12 +2050,12 @@ function dlPanel(b){const m=numbered(b.id),mx=k=>Math.max(0,...ST.tasks.filter(t
 const miniPc=p=>'<div class="pc"><div class="row" style="margin:0"><b>'+(p.kind==='post'?'Post':'Comment')+'</b>'+chip(p.status)+'<span class="s">'+(p.published_at?'published '+D(p.published_at)+' &middot; '+up(p.score):'not published')+'</span><span style="flex:1"></span>'+(p.url?'<a class="btn" href="'+esc(p.url)+'" target="_blank" rel="noopener">'+(p.kind==='post'?'View post':'View comment')+'</a>':'')+'</div>'+DV(p)+'</div>';
 function arcRow(t,m,mode){const ps=ST.pby[t.id]||[],when=mode==='trash'?'in Trash, '+daysLeft(t.trashed_at)+' days left':'archived '+D(t.archived_at);
  const btns=mode==='trash'?'<button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button><button onclick="purgeTask(\''+t.id+'\')">Delete forever</button>':'<button class="p" onclick="restoreTask(\''+t.id+'\')">Restore</button><button onclick="trashTask(\''+t.id+'\')">Trash</button>';
- return '<div class="task'+(catOf(t)==='comment'?' cc':'')+'"><div class="row" style="margin:0"><div style="flex:1"><div class="t"><span class="num2">'+esc(tnum(t,m)||tn2(t))+'</span>'+esc(tlabel(t))+'</div><div class="s">'+when+' &middot; '+ps.length+' item'+(ps.length==1?'':'s')+(t.sub?' &middot; r/'+esc(t.sub):'')+'</div></div><div class="a">'+btns+'</div></div><details><summary>Show items</summary>'+(ps.map(miniPc).join('')||'<div class="s">No items.</div>')+'</details></div>'}
+ return '<div class="task'+(catOf(t)==='comment'?' cc':'')+(SEL[mode].has(t.id)?' tseld':'')+'"><div class="row" style="margin:0"><div style="flex:1"><div class="t">'+(can('work_delete')?selBox(mode,t.id):'')+'<span class="num2">'+esc(tnum(t,m)||tn2(t))+'</span>'+esc(tlabel(t))+'</div><div class="s">'+when+' &middot; '+ps.length+' item'+(ps.length==1?'':'s')+(t.sub?' &middot; r/'+esc(t.sub):'')+'</div></div><div class="a">'+btns+'</div></div><details><summary>Show items</summary>'+(ps.map(miniPc).join('')||'<div class="s">No items.</div>')+'</details></div>'}
 function arcPanel(b){const m=numbered(b.id),all=ST.tasks.filter(t=>t.brand_id===b.id&&t.archived_at&&matchQ(t,ST.pby[t.id]||[],m)).sort((x,y)=>new Date(y.archived_at)-new Date(x.archived_at)),fin=ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at&&isDone(t)).length,n=all.length;
  return '<div class="cb"><div class="row" style="margin:0"><b>Archive ('+n+')</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Finished work that is out of the way but kept. It is still tracked and still counted in reports and in your client\'s totals. Your team no longer sees it. '+(ST.set.auto_archive_on===false?'Automatic archiving is off.':'Finished tasks move here by themselves '+ST.set.auto_archive_days+' days after their last item was published.')+'</p><div class="row"><button class="p" onclick="arcFinished()">Archive all finished tasks now ('+fin+')</button></div>'
- +(all.slice(0,ST.alim).map(t=>arcRow(t,m,'arc')).join('')||'<div class="empty">Nothing archived yet.</div>')+(n>ST.alim?'<div class="row"><button onclick="ST.alim+=30;draw()">Show 30 more ('+(n-ST.alim)+' left)</button></div>':'')+'</div>'}
+ +selBar('arc',all.map(t=>t.id))+(all.slice(0,ST.alim).map(t=>arcRow(t,m,'arc')).join('')||'<div class="empty">Nothing archived yet.</div>')+(n>ST.alim?'<div class="row"><button onclick="ST.alim+=30;draw()">Show 30 more ('+(n-ST.alim)+' left)</button></div>':'')+'</div>'}
 function trashPanel(b){const m=numbered(b.id),ts=ST.trashT.filter(t=>t.brand_id===b.id).sort((x,y)=>new Date(y.trashed_at)-new Date(x.trashed_at));
- return '<div class="cb"><div class="row" style="margin:0"><b>Trash ('+ts.length+')</b><span style="flex:1"></span>'+(ts.length?G('work_delete','<button class="dng" onclick="emptyTaskTrash(\''+b.id+'\')">Empty trash</button>'):'')+'<button onclick="pn(\'\')">Close</button></div><p class="s">Removed tasks wait here for '+trashDays()+' days and can be restored. After that they are deleted for good. Money already earned from published items is always kept.</p>'+(ts.map(t=>arcRow(t,m,'trash')).join('')||'<div class="empty">Trash is empty.</div>')+'</div>'}
+ return '<div class="cb"><div class="row" style="margin:0"><b>Trash ('+ts.length+')</b><span style="flex:1"></span>'+(ts.length?G('work_delete','<button class="dng" onclick="emptyTaskTrash(\''+b.id+'\')">Empty trash</button>'):'')+'<button onclick="pn(\'\')">Close</button></div><p class="s">Removed tasks wait here for '+trashDays()+' days and can be restored. After that they are deleted for good. Money already earned from published items is always kept.</p>'+selBar('trash',ts.map(t=>t.id))+(ts.map(t=>arcRow(t,m,'trash')).join('')||'<div class="empty">Trash is empty.</div>')+'</div>'}
 function closeHtml(b){const open=ST.tasks.filter(t=>t.brand_id===b.id&&!t.archived_at),fin=open.filter(isDone).length;
  return '<div class="cb"><div class="row" style="margin:0"><b>Close out this brand</b><span style="flex:1"></span><button onclick="pn(\'\')">Close</button></div><p class="s">Use this when a campaign is finished. Nothing is deleted. The brand and its work go to the Archive, your team stops seeing it, and your client can still see the results. You can restore it any time.</p><div class="row"><button class="p" onclick="closeOut()">Download final report and archive the brand</button><button onclick="arcFinished()">Only archive finished tasks ('+fin+')</button><button onclick="arcBrand()">Archive the brand without a report</button></div></div>'}
 async function arcTask(id){if(await updTasks([id],{archived_at:nowIso()})){await reload();toast('Archived. Find it under Archive on this brand.')}}
@@ -3679,7 +3789,7 @@ function gwBatchFrom(use,kind,job){const q=FQ(),B=GWB(),snap=use.map(r=>({url:r.
  B.kind=kind==='comment'?'comment':'post';B.job=job||'';B.prompt='';B.paste='';if(B.kind==='comment'){B.posts=snap;B.insp=null}else{B.insp=snap;B.posts=null}B.n=snap.length;
  q.view='batch';q.err='';q.msg=snap.length+' post'+(snap.length==1?' is':'s are')+' ready '+(B.kind==='comment'?'to comment on':'as inspiration for new posts')+'. 1) Press Make the instructions. 2) Copy them into ChatGPT or Claude. 3) Paste the answer at the bottom and press Turn it into drafts.';fqDraw();window.scrollTo({top:0,behavior:'smooth'})}
 function gwBDrop(i,w){const B=GWB(),L=w==='insp'?B.insp:B.posts;if(!L)return;L.splice(i,1);B.n=L.length||1;B.prompt='';fqDraw()}
-function gwBList(L,w){return '<div class="gwpl">'+L.map((r,i)=>'<div class="gwpi"><span class="s">'+(i+1)+'.</span><a href="'+esc(r.url)+'" target="_blank" rel="noopener">'+esc(clip(r.title||r.url,100))+'</a><span class="s">r/'+esc(r.sub||'?')+'</span><span style="flex:1"></span><button class="sm" title="Leave this post out" onclick="gwBDrop('+i+',\''+w+'\')">&times;</button></div>').join('')+'</div>'}
+function gwBList(L,w){return '<div class="gwpl">'+L.map((r,i)=>'<div class="gwpi"><span class="s">'+(i+1)+'.</span><a href="'+esc(r.url)+'" target="_blank" rel="noopener">'+esc(clip(r.title||r.url,100))+'</a><span class="s">'+(r.sub?'r/'+esc(r.sub):esc(String(r.url||'').replace(/^https?:\/\/(www\.)?/,'').split('/')[0]))+'</span><span style="flex:1"></span><button class="sm" title="Leave this post out" onclick="gwBDrop('+i+',\''+w+'\')">&times;</button></div>').join('')+'</div>'}
 function gwSet(id,k,v){const d=(FQ().drafts||[]).find(x=>x.id===id);if(d)d[k]=v}
 async function gwSave(id,what,quiet){const q=FQ(),d=(q.drafts||[]).find(x=>x.id===id);if(!d)return false;gwHist(d,what||'Edited');d.updated_at=gwNowS();
  const{id:_i,created_at,...rest}=d;const{error}=await sb.from('reddit_drafts').update(rest).eq('id',id);if(!noErr(error))return false;if(!quiet)fqDraw();return true}
@@ -3888,6 +3998,7 @@ async function wdFile(inp){const f=inp.files[0];if(!f)return;inp.value='';WD.bus
  catch(e){WD.msg=e.message||String(e);WD.res=null}
  WD.busy=false;wdRedraw()}
 const wdRedraw=()=>{const e=$('wd_box');if(e)e.innerHTML=wdBody();else draw()};
+function wdHand(i,pid){const R=WD.res;if(!R||!pid)return;const it=R.u[i],p=R.todo.find(x=>x.id===pid);if(!it||!p)return;R.u.splice(i,1);R.todo=R.todo.filter(x=>x.id!==pid);R.m.push({it,p,t:ST.tasks.find(x=>x.id===p.task_id)||{},how:'hand',sim:wdSim(it.text,p.body),on:true});wdRedraw()}
 function wdTog(i,on){if(WD.res&&WD.res.m[i]){WD.res.m[i].on=on;wdRedraw()}}
 async function wdApply(){const R=WD.res;if(!R)return;const use=R.m.filter(x=>x.on);if(!use.length)return alert('Nothing is ticked.');
  if(!confirm('Send '+use.length+' published link'+(use.length==1?'':'s')+' to tracking? Those tasks will be marked as published and checked on Reddit.'))return;
@@ -3899,11 +4010,12 @@ async function wdApply(){const R=WD.res;if(!R)return;const use=R.m.filter(x=>x.o
 function wdBody(){const R=WD.res,b=ST.brands.find(x=>x.id===ST.bid);
  if(WD.busy)return '<div class="s">Working...</div>';
  let h=WD.msg?'<div class="hint" style="margin:10px 0">'+esc(WD.msg)+'</div>':'';if(!R)return h;
- const how={post:['Same post','ok'],text:['Wording matches','ok'],order:['Best guess. Check it','warn']};
+ const how={post:['Same post','ok'],text:['Wording matches','ok'],order:['Best guess. Check it','warn'],hand:['Matched by you','ok']};
  const tl=x=>{const t=x.t||{},m=numbered(ST.bid);return esc(tnum(t,m)+' '+(t.sub?'r/'+t.sub:''))+'<div class="s">'+esc(clip((x.p.kind==='post'?x.p.ptitle:x.p.body)||'',70))+'</div>'};
  h+='<div class="row" style="margin:10px 0 6px"><b>'+R.m.filter(x=>x.on).length+' of '+R.m.length+' will go to tracking</b><span style="flex:1"></span><label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><input type="checkbox" '+(WD.saveText?'checked':'')+' onchange="WD.saveText=this.checked"><span class="s">Also save the wording they actually published</span></label></div>';
  if(R.m.length)h+='<div class="scrollx"><table class="et"><tr><th></th><th>Published link</th><th>Task it matches</th><th>Match</th></tr>'+R.m.map((x,i)=>'<tr'+(x.on?'':' style="opacity:.6"')+'><td><input type="checkbox" '+(x.on?'checked':'')+' onchange="wdTog('+i+',this.checked)" aria-label="Send to tracking"></td><td><a href="'+esc(x.it.url)+'" target="_blank" rel="noopener">'+esc(clip(x.it.url.replace(/^https?:\/\/(www\.)?reddit\.com/,''),48))+'</a>'+(x.it.text&&x.sim<.98&&x.how!=='post'?'':'')+'</td><td>'+tl(x)+'</td><td><span class="chip '+how[x.how][1]+'">'+how[x.how][0]+'</span>'+(x.it.text&&x.sim<.8?'<div class="s">wording was edited</div>':'')+'</td></tr>').join('')+'</table></div>';
- if(R.u.length)h+='<details style="margin-top:10px" open><summary><b>'+R.u.length+' link'+(R.u.length==1?'':'s')+' matched no task</b> (nothing will change for these)</summary><div class="s">'+R.u.map(u=>'<a href="'+esc(u.url)+'" target="_blank" rel="noopener">'+esc(clip(u.url,80))+'</a>').join('<br>')+'</div></details>';
+ if(R.u.length){const m=numbered(ST.bid),opts=R.todo.map(p=>{const t=ST.tasks.find(x=>x.id===p.task_id)||{};return '<option value="'+p.id+'">'+esc(clip(tnum(t,m)+' '+(p.kind==='post'?'post: '+(p.ptitle||''):'comment: '+(p.body||'')),80))+'</option>'}).join('');
+  h+='<details style="margin-top:10px" open><summary><b>'+R.u.length+' link'+(R.u.length==1?'':'s')+' matched no task</b>. Pick the task each one belongs to, or leave it.</summary><div class="scrollx"><table class="et">'+R.u.map((u,i)=>'<tr><td><a href="'+esc(u.url)+'" target="_blank" rel="noopener">'+esc(clip(u.url.replace(/^https?:\/\/(www\.)?reddit\.com/,''),60))+'</a></td><td>'+(opts?'<select onchange="wdHand('+i+',this.value)"><option value="">Belongs to task...</option>'+opts+'</select>':'<span class="s">No open tasks left</span>')+'</td></tr>').join('')+'</table></div></details>'}
  if(R.dup.length)h+='<div class="s" style="margin-top:8px">'+R.dup.length+' link'+(R.dup.length==1?' is':'s are')+' already tracked, so they were skipped.</div>';
  h+='<div class="s" style="margin-top:10px"><b>'+R.todo.length+' task'+(R.todo.length==1?'':'s')+' still to do.</b> Anything without a matching link stays available to be published again.</div>';
  h+='<div class="row" style="margin-top:12px">'+(R.m.length?'<button class="p" onclick="wdApply()">Send '+R.m.filter(x=>x.on).length+' to tracking</button>':'')+'<button onclick="WD.res=null;WD.items=null;WD.msg=\'\';wdRedraw()">Cancel</button></div>';
@@ -4092,7 +4204,7 @@ function gwBatchPrompt(){
   L.push('','FORMAT. Plain text only, no bold. For each post:','Reply 1','Comment: (text)'+((cpp||1)>1?'\nComment: (a different comment, different length)':''),'(then a blank line, then Reply 2, and so on. The number is the number of the post above.)');
   L.push('','COMMENT RULES','- Answer what the poster actually asked first, with specific advice they can act on. The comment must be useful even if the brand is deleted from it.','- When the brand is mentioned it is one small, natural part of the comment, never the centre, and it can sit next to other options.','- Vary the length across comments: some one sentence, some three or four, some longer. No two alike.');
  }else{
-  if(B.insp&&B.insp.length){L.push('REAL POSTS FOR INSPIRATION','These are real posts people wrote. Use them to understand the needs, wording and situations. Do NOT copy them or reuse their titles.');B.insp.forEach((r,i)=>L.push('','Example '+(i+1)+': r/'+(r.sub||'?')+' | '+(r.title||''),'Text: '+String(r.body||r.snippet||'(no text)').replace(/\s+/g,' ').slice(0,500)));L.push('')}
+  if(B.insp&&B.insp.length){L.push('REAL POSTS FOR INSPIRATION','These are real posts people wrote. Use them to understand the needs, wording and situations. Do NOT copy them or reuse their titles.');B.insp.forEach((r,i)=>{L.push('','Example '+(i+1)+': '+(r.sub?'r/'+r.sub:'from '+String(r.url||'').replace(/^https?:\/\/(www\.)?/,'').split('/')[0])+' | '+(r.title||''),'Text: '+String(r.body||r.snippet||'(no text)').replace(/\s+/g,' ').slice(0,600));(r.top||[]).slice(0,3).forEach(c=>L.push('Top reply ('+(c.s||0)+' upvotes): '+String(c.t||'').replace(/\s+/g,' ').slice(0,280)))});const iS=[...new Set(B.insp.map(r=>r.sub).filter(Boolean))];if(iS.length)L.push('','Post in these communities (where the examples came from) unless another one clearly fits better: '+iS.map(x=>'r/'+x).join(', '));L.push('')}
   L.push('STEP 3. WRITE '+n+' POSTS');L.push('The brand plan is fixed for each post:');plan.forEach((t,i)=>L.push('Post '+(i+1)+': '+GW_PLACE[t]));
   if(cpp)L.push('Each post gets '+cpp+' comments written as other people replying to it.');
   L.push('','FORMAT. Plain text only, no bold. For each post:','Post 1','Subreddit: (a community where this post fits)','Title: (text)','Body: (text)',cpp?'Comment: (text)'+(cpp>1?'\n(repeat "Comment:" '+cpp+' times in total, each a different length)':''):'','(then a blank line, then Post 2, and so on)');
@@ -4110,15 +4222,22 @@ function gwBatchMake(){const B=GWB();if(B.kind==='comment'&&!(B.posts&&B.posts.l
 function gwBatchCopy(){const B=GWB();if(!B.prompt)B.prompt=gwBatchPrompt();gwCopy(B.prompt,'Instructions copied. Paste them into ChatGPT or Claude, then paste the answer into the box below.')}
 /* turn pasted AI text into drafts */
 function gwParse(text){
- const t=String(text||'').replace(/\r/g,'').replace(/\*\*|__/g,'').replace(/^\s*#+\s*/gm,'').replace(/^\s*[-_=]{3,}\s*$/gm,''),parts=t.split(/^[ \t]*(Post|Reply)[ \t]*#?[ \t]*(\d+)[^\n]*$/gim),out=[];
- for(let i=1;i+2<parts.length;i+=3){const num=+parts[i+1],blk=parts[i+2]||'';if(!num)continue;const it={n:num,title:'',body:'',sub:'',comments:[]};let cur=null;
-  blk.split('\n').forEach(line=>{const m=line.match(/^\s*(Subreddit|Community|Title|Body|Comment(?:\s*\d+)?|First comment|User\s*[A-Z])\s*:\s*(.*)$/i);
-   if(m){const k=m[1].toLowerCase().replace(/\s+\d+$/,'');cur=/^(comment|first comment|user)/.test(k)?{c:m[2]}:k;if(cur.c!==undefined)it.comments.push(cur);else if(k==='title')it.title=m[2];else if(k==='body')it.body=m[2];else it.sub=m[2].replace(/^\/?r\//i,'').trim()}
+ let t=String(text||'').replace(/\r/g,'').replace(/\*\*|__|`/g,'').replace(/^\s*#+\s*/gm,'').replace(/^\s*[-_=]{3,}\s*$/gm,'').replace(/^\s*[-*•]\s+(?=(Subreddit|Community|Title|Body|Text|Comment|Comments|First comment|Reply|User)\b)/gim,'');
+ t=t.replace(/^\s*(Post|Reply)\s*#?\s*(\d+)\s*[:.)\-–—]/gim,(m,a,b)=>a+' '+b+'\n').replace(/^[ \t]*(Post|Reply)[ \t]*#?[ \t]*(\d+)[^\n]*?\b(Title)\s*:/gim,(m,a,b)=>a+' '+b+'\nTitle:');
+ let parts=t.split(/^[ \t]*(Post|Reply)[ \t]*#?[ \t]*(\d+)\b[^\n]*$/gim);
+ if(parts.length<4){const blocks=t.split(/^(?=[ \t]*(?:Title|Comment)\s*:)/gim).filter(b=>/^\s*(Title|Comment)\s*:/i.test(b));if(/^\s*Title\s*:/im.test(t)){let n=0;parts=[''];t.split(/^(?=[ \t]*Title\s*:)/gim).forEach(b=>{if(/^\s*Title\s*:/i.test(b)){n++;parts.push('Post',String(n),b)}})}}
+ const out=[];
+ for(let i=1;i+2<parts.length;i+=3){const num=+parts[i+1],blk=parts[i+2]||'';if(!num)continue;const it={n:num,title:'',body:'',sub:'',comments:[]};let cur=null,inList=false;
+  blk.split('\n').forEach(line=>{const m=line.match(/^\s*(Subreddit|Community|Title|Post title|Body|Text|Post body|Comments?(?:\s*\d+)?(?:\s*\([^)]*\))?|First comment|Reply(?:\s*\d+)?|User\s*[A-Z0-9]+)\s*:\s*(.*)$/i);
+   if(m){let k=m[1].toLowerCase().replace(/\s*\(.*\)$/,'').replace(/\s+\d+$/,'');if(k==='post title')k='title';if(k==='text'||k==='post body')k='body';
+    if(k==='comments'){inList=true;cur=null;if(m[2].trim()){cur={c:m[2]};it.comments.push(cur)}return}
+    inList=false;cur=/^(comment|first comment|user|reply)/.test(k)?{c:m[2]}:k;if(cur.c!==undefined)it.comments.push(cur);else if(k==='title')it.title=m[2].replace(/^["“]|["”]$/g,'');else if(k==='body')it.body=m[2];else it.sub=m[2].replace(/^\/?r\//i,'').trim()}
+   else if(inList&&/^\s*(?:[-*•]|\d+[.)])\s+\S/.test(line)){cur={c:line.replace(/^\s*(?:[-*•]|\d+[.)])\s+/,'')};it.comments.push(cur)}
    else if(cur){if(typeof cur==='string'){if(cur==='title')it.title+=(it.title?' ':'')+line.trim();else if(cur==='body')it.body+='\n'+line;else it.sub+=line.trim()}else cur.c+='\n'+line}});
-  it.title=it.title.trim();it.body=it.body.trim();it.sub=it.sub.trim();it.comments=it.comments.map(x=>x.c.trim()).filter(Boolean);out.push(it)}
+  it.title=it.title.trim();it.body=it.body.trim();it.sub=it.sub.replace(/^\/?r\//i,'').trim();it.comments=it.comments.map(x=>x.c.trim()).filter(Boolean);out.push(it)}
  return out}
 async function gwBatchMakeDrafts(){if(needV18())return;const q=FQ(),B=GWB(),b=gwBrand();if(!b)return;if(!can('reddit_draft'))return alert('You are not allowed to write drafts.');
- const items=gwParse(B.paste);if(!items.length)return alert('I could not find "Post 1" or "Reply 1" lines in what you pasted. Ask the AI to use the exact format from the instructions.');
+ const items=gwParse(B.paste);if(!items.length)return alert('I could not find any posts in what you pasted. Each post needs a "Title:" line (or a "Post 1" line). Ask the AI to use the format from the instructions, or paste the whole answer again.');
  const isC=B.kind==='comment',posts=isC?gwBPosts():[],p=q.prof||{},N=isC?posts.length:Math.max(1,parseInt(B.n)||items.length),plan=gwPlan(B,N),topics=(p.keywords||[]).slice(0,3);let made=0,skip=0,filled=0,over=0,kept=0,same=0;
  const normT=t=>String(t||'').toLowerCase().replace(/\s+/g,' ').trim();
  B.busy=true;fqDraw();
@@ -4132,7 +4251,7 @@ async function gwBatchMakeDrafts(){if(needV18())return;const q=FQ(),B=GWB(),b=gw
   else{if(!it.title&&!it.body){skip++;continue}
    const twin=(q.drafts||[]).find(x=>x.kind==='post'&&x.status!=='archived'&&normT(x.title)&&normT(x.title)===normT(it.title));
    if(twin){if(twin.status!=='pushed'){if(normT(twin.body)===normT(it.body)){same++;continue}twin.body=it.body;twin.first_comment=it.comments[0]||twin.first_comment||'';if(twin.status==='review'||twin.status==='approved')twin.status='draft';if(await gwSave(twin.id,'Post replaced by a new batch',true)){made++;over++}}else kept++;continue}
-   const extra=it.comments.slice(1);const d=await gwNew('post',{inspired_by:B.insp&&B.insp.length?B.insp.map(x=>({url:x.url,title:x.title,sub:x.sub})):undefined,sub:it.sub||(p.subs||[])[0]||'',title:it.title,body:it.body,first_comment:it.comments[0]||'',topics,mention:({title:'title',body:'post',comment:'comment',none:'none'})[place]||'natural',training:!!B.training,notes:'Written from a batch'+(extra.length?'\n\nOther comments the AI wrote for this post (use them later as replies):\n'+extra.map((c,i)=>(i+2)+'. '+c).join('\n'):'')});if(d)made++}}
+   const extra=it.comments.slice(1);const d=await gwNew('post',{inspired_by:B.insp&&B.insp.length?B.insp.map(x=>({url:x.url,title:x.title,sub:x.sub})):undefined,sub:it.sub||(B.insp&&B.insp.length?(B.insp[(it.n-1)%B.insp.length]||{}).sub:'')||(p.subs||[])[0]||'',title:it.title,body:it.body,first_comment:it.comments[0]||'',topics,mention:({title:'title',body:'post',comment:'comment',none:'none'})[place]||'natural',training:!!B.training,notes:'Written from a batch'+(extra.length?'\n\nOther comments the AI wrote for this post (use them later as replies):\n'+extra.map((c,i)=>(i+2)+'. '+c).join('\n'):'')});if(d)made++}}
  B.busy=false;B.paste='';q.view='drafts';q.df={st:'draft',kind:'all',q:''};q.msg='Made '+made+' draft'+(made==1?'':'s')+' from the pasted text'+(filled?' ('+filled+' written into the empty drafts you already had, so nothing is doubled)':'')+(over?' ('+over+' replaced the earlier draft for the same post, so nothing is doubled)':'')+(same?' ('+same+' were the same as before, nothing changed)':'')+(kept?' ('+kept+' left alone because that post is already in the brand tasks)':'')+(skip?' ('+skip+' skipped because they had no usable text)':'')+'. Read each one, edit if you like, then mark it ready for review.';fqDraw()}
 function gwBatchHtml(){
  const q=FQ(),B=GWB(),isC=B.kind==='comment',jobs=gwBJobs(),n=Math.max(1,parseInt(B.n)||1),num=(k,v,w,min)=>'<input type="number" min="'+(min||0)+'" style="width:'+(w||84)+'px" value="'+v+'" oninput="gwBset(\''+k+'\',this.value)">';
