@@ -852,6 +852,20 @@ html[data-theme=dark] .tsel input{accent-color:#ff8a9b}
 .imphow{margin:10px 0;padding:10px 12px;border:1px solid var(--ln,#D9E1E0);border-radius:12px}
 .imphow summary{cursor:pointer}
 .imphow select{min-width:200px}
+
+#wda{border:2px solid var(--accent,#FF5A1F)}
+.prog{height:8px;border-radius:6px;background:rgba(14,42,46,.1);overflow:hidden;margin:8px 0}
+.prog i{display:block;height:100%;background:var(--accent,#FF5A1F)}
+
+#wda{padding:22px 24px}
+#wda>.row b{font-size:20px}
+.wdadrop{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:6px;min-height:170px;margin-top:12px;padding:20px;border:2px dashed var(--accent,#FF5A1F);border-radius:16px;background:rgba(255,90,31,.04);cursor:pointer;text-align:center}
+.wdadrop b{font-size:20px}
+.wdadrop span{font-size:14px;opacity:.8;max-width:560px}
+.wdadrop.over{background:rgba(255,90,31,.12)}
+.wdadrop:focus-within{outline:2px solid var(--accent,#FF5A1F)}
+html[data-theme=dark] .wdadrop{border-color:#ff8a5c;background:rgba(255,106,51,.07)}
+html[data-theme=dark] .wdadrop.over{background:rgba(255,106,51,.18)}
 </style></head><body>
 <header><span class="logo" role="link" tabindex="0" title="Home" onclick="goHome()" onkeydown="if(event.key==='Enter')goHome()">Reddit Monitor</span><span id="who" class="s"></span><span style="flex:1"></span><button id="so" style="display:none" onclick="signOut()">Sign out</button><button id="cpw" onclick="pwChange()">Change password</button><button id="thm" type="button" onclick="thmToggle()" aria-label="Switch to dark mode"><span id="thm_i"></span><span class="thmtip" id="thm_t">Switch to dark mode</span></button></header>
 <nav id="nv"></nav><main id="app"></main>
@@ -1235,7 +1249,7 @@ async function onFile(inp){
    IMS={kind:'text',name:f.name,text}}
  }catch(e){$('imp').innerHTML='';return alert('That file could not be read: '+(e.message||e))}
  impRun()}
-function impRun(){if(!IMS)return;const S=IMS;IMP=vet(S.kind==='rows'?rowsToTasks(S.rows,S.map):parseText(S.text));impDraw()}
+function impRun(){if(!IMS)return;const S=IMS;S.ai=null;IMP=vet(S.kind==='rows'?rowsToTasks(S.rows,S.map):parseText(S.text));impDraw()}
 async function impCol(h,f){const S=IMS;S.map[h]=f;S.how[h]='you';await lrSave('col',hNorm(h),{f});toast('Learned: the column "'+h+'" is '+IF[f].toLowerCase()+'. It will be read this way next time.');impRun()}
 async function impLbl(k,f){await lrSave('label',k,{f:f||'none'});toast(f&&f!=='none'?'Learned: "'+k+':" means '+(IF[f==='link'?'thread':f]||f).toLowerCase()+'.':'Learned: "'+k+':" is part of the text.');impRun()}
 function impLink(i,v){const t=IMP[i];if(!t)return;v=String(v||'').trim();if(RTHREAD.test(v)){t.thread=norm(v.match(/https?:\/\/\S+/)?v.match(/https?:\/\/\S+/)[0]:v);t.err='';if(!t.sub)t.sub=info(t.thread).sub}impDraw()}
@@ -1253,7 +1267,8 @@ function impDraw(){const S=IMS;if(!S)return;const ok=IMP.filter(t=>!t.err);
   return '<tr><td>'+esc(t.label||(po?'New post':'Comments'))+'</td><td>'+(t.sub?'r/'+esc(t.sub):'-')+'</td><td>'+esc(clip(po?po.ptitle:(t.pieces[0]?t.pieces[0].body:''),90))+'</td><td>'+nc+'</td><td>'+chk+'</td></tr>'}).join('');
  $('imp').innerHTML='<div class="cb"><b>'+esc(S.name)+'</b>: found '+IMP.length+' task'+(IMP.length==1?'':'s')+', '+ok.length+' ready to import.'+how
   +(IMP.length?'<div class="scrollx"><table class="et"><tr><th>Task</th><th>Subreddit</th><th>Post title or first text</th><th>Comments</th><th>Check</th></tr>'+rows+'</table></div>':'<p class="s">Nothing was found yet. Open <b>How I read</b> above and tell me what the columns or labels mean.</p>')
-  +'<div class="row">'+(ok.length?'<button class="p" onclick="doImport()">Import '+ok.length+' task'+(ok.length==1?'':'s')+'</button>':'')+'<button onclick="IMS=null;IMP=[];$(\'imp\').innerHTML=\'\'">Cancel</button></div>'+(LR.local?'<p class="s">What I learn is kept in this browser until the database update is installed.</p>':'')+'</div>'}
+  +(S.ai?'<p class="s">Read with AI in '+S.ai.parts+' part'+(S.ai.parts==1?'':'s')+' (cost $'+S.ai.cost.toFixed(4)+')'+(S.ai.bad?'. '+S.ai.bad+' part'+(S.ai.bad==1?'':'s')+' could not be read, check nothing is missing':'')+'.</p>':'')
+  +'<div class="row">'+(ok.length?'<button class="p" onclick="doImport()">Import '+ok.length+' task'+(ok.length==1?'':'s')+'</button>':'')+(S.ai?'':'<button'+(ok.length&&ok.length===IMP.length?'':' class="p"')+' onclick="impAI()">Read it with AI instead (about $'+aiCost(impText()).toFixed(3)+')</button>')+'<button onclick="IMS=null;IMP=[];$(\'imp\').innerHTML=\'\'">Cancel</button></div>'+(LR.local?'<p class="s">What I learn is kept in this browser until the database update is installed.</p>':'')+'</div>'}
 async function doImport(){
  const ok=IMP.filter(t=>!t.err);$('imp').innerHTML='<p class="s">Importing...</p>';
  for(const t of ok){
@@ -1794,7 +1809,7 @@ function brandsList(){
 function brandsView(){
  const nA=ST.brands.filter(b=>b.archived_at).length,vb=[['active','Active',ST.brands.length-nA],['archived','Archived',nA],['trash','Trash',ST.trashB.length]].map(v=>'<button class="tb vb'+(ST.bv===v[0]?' on':'')+'" onclick="ST.bv=\''+v[0]+'\';draw()">'+v[1]+' ('+v[2]+')</button>').join('')+'<span class="sep"></span>';
  const fb=[['all','All'],['live','Live'],['draft','Draft']].map(f=>'<button class="tb'+(ST.bf===f[0]?' on':'')+'" onclick="ST.bf=\''+f[0]+'\';draw()">'+f[1]+'</button>').join('');
- return banner()+'<div class="row"><h1 style="margin:0;flex:1">Brands <span class="s">('+(ST.brands.length-nA)+')</span></h1>'+G('brand_add','<button class="p" onclick="newBrand()">+ New brand</button>')+'</div>'
+ return banner()+'<div class="row"><h1 style="margin:0;flex:1">Brands <span class="s">('+(ST.brands.length-nA)+')</span></h1>'+(isAdminU()?'<button onclick="wdaOpen()">Upload work done (all brands)</button>':'')+G('brand_add','<button class="p" onclick="newBrand()">+ New brand</button>')+'</div>'+wdaPanel()
  +(ST.brands.length?'<div class="row"><input id="bq" placeholder="Search brands or clients" value="'+esc(ST.bq)+'" style="flex:1;min-width:200px" oninput="ST.bq=this.value;$(\'bgl\').innerHTML=brandsList()">'+vb+fb+'<button class="tb'+(ST.bg?' on':'')+'" onclick="ST.bg=ST.bg?0:1;draw()">Group by client</button></div>'+(ST.bv!=='trash'&&bsCan()?'<div id="bsbar">'+bsBar()+'</div>':'')+(isAdminU()&&ST.bv!=='trash'?(()=>{if(!ST.dupAuto){ST.dupAuto=1;setTimeout(()=>dupRemove(true),400)}const n=dupFind().length;return n?'<div class="warn" style="margin:0 0 10px">'+n+' duplicate task'+(n==1?'':'s')+' found (the same text for the same post). <button class="sm" onclick="dupRemove()">Remove duplicates</button></div>':''})():'')+'<div id="bgl">'+brandsList()+'</div>'
  :'<div class="empty"><h2>Start with a brand</h2><p>Every piece of work belongs to a brand, so add the brand name first.</p>'+G('brand_add','<button class="p" onclick="newBrand()">Add your first brand</button>')+'</div>');
 }
@@ -2027,6 +2042,132 @@ async function selDo(k,what){const ids=selLive(k);if(!ids.length)return;if(needV
  if(what==='restore'){if(!(await updTasks(ids,{archived_at:null,trashed_at:null})))return;SEL[k].clear();await reload();toast('Restored '+N+' task'+pl);return}
  if(what==='trash'){if(!confirm('Move '+N+' task'+pl+' to Trash?\n\nYou can restore them for '+trashDays()+' days. Money earned from published items is kept.'))return;if(!(await updTasks(ids,{trashed_at:nowIso()})))return;SEL[k].clear();await reload();toast('Moved '+N+' task'+pl+' to Trash');return}
  if(what==='purge'){if(!confirm('Delete '+N+' task'+pl+' forever? This cannot be undone.'))return;for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('tasks').delete().in('id',ids.slice(i,i+100));if(error)return alert(error.message)}SEL[k].clear();await reload();toast('Deleted '+N+' task'+pl+' forever')}}
+
+/* ===== AI reader: any length, read in small pieces by ChatGPT through your AnyAPI key ===== */
+const AI_MAX=1380,AI_PRICE=0.0018;
+function aiChunks(t){const out=[];let cur='';const push=()=>{if(cur.trim())out.push(cur.trim());cur=''};
+ String(t||'').replace(/\r/g,'').split('\n').forEach(line=>{
+  if(line.length>AI_MAX){push();let x=line;while(x.length>AI_MAX){let k=x.lastIndexOf('. ',AI_MAX);if(k<AI_MAX/2)k=AI_MAX;out.push(x.slice(0,k+1).trim());x=x.slice(k+1)}cur=x;return}
+  const brk=!line.trim()||/^\s*(task|post|comment|reply|brand|client)\b/i.test(line);
+  if(cur.length+line.length+1>AI_MAX||(brk&&cur.length>AI_MAX*.7))push();cur+=line+'\n'});push();return out}
+const aiCost=t=>aiChunks(t).length*AI_PRICE;
+async function aiReadAll(text,mode,prog){const parts=aiChunks(text),rows=[];let cost=0,bad=0,done=0,stop='';
+ const one=async i=>{if(stop)return;try{const d=await apiCall({op:'airead',mode,text:parts[i]});cost+=Number(d.cost||0);if(d.ok===false){bad++;return}(d.rows||[]).forEach(r=>{r._part=i;rows.push(r)})}catch(e){if(e&&e.apiFatal)stop=e.message;else bad++}done++;prog&&prog(done,parts.length)};
+ for(let i=0;i<parts.length;i+=3)await Promise.all([i,i+1,i+2].filter(k=>k<parts.length).map(one));
+ rows.sort((a,b)=>a._part-b._part);return {rows,cost,bad,parts:parts.length,stop}}
+function aiToTasks(rows){const tasks=[],byTask={};let lastPost=null;
+ rows.forEach(r=>{const kind=/comment|reply/i.test(r.kind||'')?'comment':'post',sub=String(r.subreddit||'').replace(/^\/?r\//i,'').trim(),th=String(r.thread_link||''),tk=String(r.task||'').trim(),title=String(r.title||'').trim(),body=String(r.body||'').trim();
+  if(kind==='post'&&!title&&!body)return;if(kind==='comment'&&!body)return;
+  const thr=RTHREAD.test(th)?norm((th.match(/https?:\/\/\S+/)||[th])[0]):'';let t=tk&&byTask[tk];
+  if(t&&kind==='comment'&&thr&&t.thread&&t.thread!==thr)t=null;
+  if(kind==='post'&&t&&t.pieces.some(p=>p.kind==='post'))t=null;
+  if(!t&&kind==='comment'&&!thr&&!tk&&lastPost)t=lastPost;
+  if(!t){t={label:tk&&isNaN(tk)?tk:'',sub,thread:'',pieces:[],ai:true};tasks.push(t);if(tk)byTask[tk]=t}
+  if(!t.sub)t.sub=sub;
+  if(kind==='post'){t.pieces.unshift({kind:'post',ptitle:title,body,links:[]});lastPost=t}
+  else{if(thr&&!t.pieces.some(p=>p.kind==='post'))t.thread=thr;t.pieces.push({kind:'comment',body,links:[]})}});
+ return tasks}
+function impText(){const S=IMS;if(!S)return '';if(S.kind==='text')return S.text;
+ return S.rows.map((r,i)=>'Row '+(i+1)+': '+S.heads.filter(h=>String(r[h]==null?'':r[h]).trim()).map(h=>h+': '+String(r[h]).trim()).join(' | ')).join('\n')}
+async function impAI(){const S=IMS;if(!S)return;const t=impText(),n=aiChunks(t).length;if(!n)return alert('There is no text to read in this file.');
+ if(!confirm('Read this file with AI?\n\nIt is read in '+n+' small part'+(n==1?'':'s')+' by ChatGPT through your AnyAPI key, about $'+(n*AI_PRICE).toFixed(3)+' in total. You still check everything before it is imported.'))return;
+ const box=$('imp');const say=(a,b)=>{if(box)box.innerHTML='<div class="cb"><b>Reading with AI...</b><div class="prog"><i style="width:'+Math.round(a/b*100)+'%"></i></div><p class="s">Part '+a+' of '+b+'</p></div>'};say(0,n);
+ const R=await aiReadAll(t,'tasks',say);
+ if(R.stop){impDraw();return alert('Stopped: '+R.stop)}
+ const ts=vet(aiToTasks(R.rows));if(!ts.length){impDraw();return alert('The AI did not find any tasks in this file.'+(R.bad?' ('+R.bad+' part'+(R.bad==1?'':'s')+' could not be read)':''))}
+ IMP=ts;S.ai={cost:R.cost,bad:R.bad,parts:R.parts};impDraw()}
+
+/* ===== Upload work done for all brands (admin): find the exact task for each published link ===== */
+const WDA={on:false,items:[],res:null,msg:'',busy:'',raw:'',files:[],check:true,saveText:false,cost:0};
+function wdaOpen(){WDA.on=!WDA.on;draw()}
+const bNorm=x=>String(x||'').toLowerCase().replace(/[^a-z0-9]+/g,'');
+const wdaSt=t=>{t=String(t||'').toLowerCase();if(/\b(deleted|removed|taken down|gone|not live|banned|shadow ?banned|spam(med)?)\b/.test(t))return 'removed';if(/\b(live|still up|is up|active|approved|visible|published)\b/.test(t))return 'live';return ''};
+function wdaBrandOf(name){const n=bNorm(name);if(n.length<2)return null;const B=ST.brands.filter(b=>!b.archived_at);const AL=lrGet('brandalias',n);if(AL&&AL.rule&&ST.bmap[AL.rule.b])return ST.bmap[AL.rule.b];if(n.length<3)return null;return B.find(b=>bNorm(b.name)===n)||B.find(b=>bNorm(b.name).includes(n)||n.includes(bNorm(b.name)))||null}
+function wdaRows(rows){const out=[];
+ rows.forEach(r=>{const cells=Object.keys(r).map(k=>[String(k).toLowerCase(),String(r[k]==null?'':r[k]).trim()]);
+  const urls=[];cells.forEach(([k,v])=>{(v.match(RURL)||[]).forEach(u=>urls.push({k,u:rqClean(u)}))});if(!urls.length)return;
+  const L=lrGet('wdcol','published');const pubCol=urls.find(x=>(L&&x.k===L.rule.k)||/published|your link|live link|final link|link of|posted link|done link/.test(x.k)),comU=urls.find(x=>wdIsCom(x.u));
+  const pub=pubCol||comU||(urls.length===1?urls[0]:null);if(!pub)return;
+  const col=re=>{const c=cells.find(([k,v])=>re.test(k)&&v&&!/^https?:/i.test(v));return c?c[1]:''};
+  out.push({url:pub.u,text:col(/text to publish|comment text|^text$|body|^comment$|content|reply/),title:col(/post title|^title/),brand:col(/brand|client|company|project/),st:wdaSt(col(/status|state|result|live|deleted|removed/))})});
+ return out}
+function wdaText(t){const out=[];let brand='';const known=ST.brands.filter(b=>!b.archived_at).map(b=>[bNorm(b.name),b.name]);
+ String(t||'').replace(/\r/g,'').split(/\n\s*\n/).forEach(block=>{const lines=block.split('\n');let pending=[],lastItem=null;
+  lines.forEach(line=>{const bm=line.match(/^\s*(?:brand|client|company|project)\s*[:\-–]\s*(.+)$/i);if(bm){brand=bm[1].trim();return}
+   const ln=bNorm(line);if(ln&&known.some(k=>k[0]===ln)){brand=line.trim();return}
+   const us=(line.match(RURL)||[]).map(rqClean);const rest=line.replace(RURL,'').replace(/^\s*(?:[-*•]|\d+[.)])?\s*(?:published|posted|live|done|link|url|comment|post)?\s*(?:link|url)?\s*[:\-–]?\s*/i,'').trim();
+   if(us.length){const st_=wdaSt(line.replace(RURL,''));us.forEach(u=>{const it={url:u,text:'',title:'',brand,st:st_};const pre=pending.join(' ').trim();if(rest.length>15)it.text=rest;else if(pre){it.text=pre}pending=[];out.push(it);lastItem=it})}
+   else if(rest){const tm=line.match(/^\s*title\s*[:\-–]\s*(.+)$/i);if(tm){if(lastItem&&!lastItem.title)lastItem.title=tm[1].trim();else pending.push(tm[1].trim())}else if(lastItem&&!lastItem.st&&wdaSt(rest)&&rest.length<40)lastItem.st=wdaSt(rest);else if(lastItem&&!lastItem.text&&!pending.length)lastItem.text=rest.replace(/^\s*(?:text|comment|reply|body)\s*[:\-–]\s*/i,'');else pending.push(rest.replace(/^\s*(?:text|comment|reply|body)\s*[:\-–]\s*/i,''))}});
+ });return out}
+async function wdaFiles(inp){const fs=[...inp.files];try{inp.value=''}catch(e){}if(!fs.length)return;await lrLoad();WDA.busy='Reading '+fs.length+' file'+(fs.length==1?'':'s')+'...';wdaDraw();let items=[],raw='';
+ for(const f of fs){try{const n=f.name.toLowerCase(),buf=await f.arrayBuffer();
+  if(/\.(xlsx|xls|csv|ods)$/.test(n)){const wb=XLSX.read(buf,{type:'array'});wb.SheetNames.forEach(sn=>{const rows=XLSX.utils.sheet_to_json(wb.Sheets[sn],{defval:''});items=items.concat(wdaRows(rows));raw+=rows.map(r=>Object.keys(r).map(k=>k+': '+r[k]).join(' | ')).join('\n')+'\n\n'})}
+  else{let t='';if(/\.docx$/.test(n))t=await fqDocxText(buf);else if(/\.pdf$/.test(n))t=await fqPdfText(buf);else{t=new TextDecoder().decode(buf);if(/\.html?$/.test(n)){const d=new DOMParser().parseFromString(t,'text/html');d.querySelectorAll('a[href]').forEach(a=>{a.textContent=a.textContent+' '+a.getAttribute('href')});t=d.body?d.body.innerText||d.body.textContent:t}}items=items.concat(wdaText(t));raw+=t+'\n\n'}
+  WDA.files.push(f.name)}catch(e){WDA.msg='Could not read '+f.name+': '+(e.message||e)}}
+ wdaAdd(items,raw)}
+function wdaPaste(){const t=($('wda_paste')||{}).value||'';if(!t.trim())return;lrLoad().then(()=>{WDA.files.push('pasted text');wdaAdd(wdaText(t),t)})}
+function wdaAdd(items,raw){const by={};WDA.items.concat(items).forEach(it=>{const k=rqKey(it.url);const o=by[k];if(!o)by[k]=Object.assign({},it);else{if(String(it.text||'').length>String(o.text||'').length)o.text=it.text;if(!o.title&&it.title)o.title=it.title;if(!o.brand&&it.brand)o.brand=it.brand;if(!o.st&&it.st)o.st=it.st}});
+ WDA.items=Object.values(by);WDA.raw+=raw||'';WDA.busy='';WDA.msg=WDA.items.length?(/^AI read/.test(WDA.msg)?WDA.msg:''):'No Reddit links found yet. Try "Read with AI", or check the file has the links of what was published.';wdaMatch();wdaDraw()}
+const subOf=u=>((String(u).match(/reddit\.com\/r\/([^\/?#]+)/i)||[])[1]||'').toLowerCase();
+function wdaHint(it){const b=it.brand?wdaBrandOf(it.brand):null;if(b)return {b,why:'brand named in the file'};
+ const L=lrGet('subbrand',subOf(it.url));if(L&&L.rule){const best=Object.entries(L.rule).sort((a,b)=>b[1]-a[1])[0];const bb=best&&ST.bmap[best[0]];if(bb&&best[1]>=2)return {b:bb,why:'learned: r/'+subOf(it.url)+' is usually '+bb.name}}
+ return null}
+function wdaMatch(){if(!WDA.items.length){WDA.res=null;return}
+ const allP=ST.pieces.filter(p=>!p._arc),used=new Set(),res={m:[],u:[],dup:[],todo:[]};
+ const groups={};WDA.items.forEach(it=>{const h=wdaHint(it);it._hint=h?h.why:'';it._hb=h?h.b.id:'';const k=h?h.b.id:'';(groups[k]=groups[k]||[]).push(it)});
+ const run=(its,bid)=>{const ps=allP.filter(p=>(!bid||p.brand_id===bid)&&(p.url||!used.has(p.id)));const r=wdMatch(its,ps,ST.tasks);r.m.forEach(x=>used.add(x.p.id));return r};
+ for(const k of Object.keys(groups).sort((a,b)=>(b?1:0)-(a?1:0))){let r=run(groups[k],k);res.m.push(...r.m);res.dup.push(...r.dup);
+  if(k&&r.u.length){const r2=run(r.u,'');res.m.push(...r2.m);res.dup.push(...r2.dup);res.u.push(...r2.u)}else res.u.push(...r.u)}
+ res.m.forEach(x=>{x.b=ST.bmap[x.p.brand_id]||{};if(x.it._hb&&x.it._hb!==x.p.brand_id)x.it._hint=''});res.todo=allP.filter(p=>!p.url&&p.status==='todo'&&!used.has(p.id));WDA.res=res}
+function wdaHand(i,pid){const R=WDA.res;if(!R||!pid)return;const it=R.u[i],p=R.todo.find(x=>x.id===pid);if(!it||!p)return;if(it.brand&&bNorm(it.brand).length>=2)lrSave('brandalias',bNorm(it.brand),{b:p.brand_id,name:it.brand});R.u.splice(i,1);R.todo=R.todo.filter(x=>x.id!==pid);R.m.push({it,p,t:ST.tmap[p.task_id]||{},b:ST.bmap[p.brand_id]||{},how:'hand',sim:wdSim(it.text,p.body),on:true});wdaDraw()}
+function wdaPickB(i,bid){const R=WDA.res;if(!R||!R.u[i])return;R.u[i]._pb=bid;wdaDraw()}
+async function wdaAI(){const t=WDA.raw;if(!t.trim())return alert('Upload a file or paste text first.');const n=aiChunks(t).length;
+ if(!confirm('Read everything again with AI?\n\nIt is read in '+n+' small part'+(n==1?'':'s')+' by ChatGPT through your AnyAPI key, about $'+(n*AI_PRICE).toFixed(3)+'. It finds the links, the text written for each one and any brand names.'))return;
+ const R=await aiReadAll(t,'done',(a,b)=>{WDA.busy='Reading with AI: part '+a+' of '+b+'...';wdaDraw()});WDA.cost+=R.cost;
+ if(R.stop){WDA.busy='';wdaDraw();return alert('Stopped: '+R.stop)}
+ const items=R.rows.map(r=>{let L_=String(r.link||'').trim();if(L_&&!/^https?:/i.test(L_)&&/reddit\.com/i.test(L_))L_='https://'+L_.replace(/^\/+/,'');const u=(L_.match(RURL)||[])[0];return u?{url:rqClean(u),text:String(r.text||''),title:String(r.title||''),brand:String(r.brand||''),st:wdaSt(r.status)}:null}).filter(Boolean);
+ WDA.msg='AI read '+R.parts+' part'+(R.parts==1?'':'s')+' and found '+items.length+' link'+(items.length==1?'':'s')+' (cost $'+R.cost.toFixed(4)+')'+(R.bad?'. '+R.bad+' part'+(R.bad==1?'':'s')+' could not be read':'')+'.';
+ const keep=WDA.raw;WDA.raw='';wdaAdd(items,keep)}
+async function wdaApply(){const R=WDA.res;if(!R)return;const use=R.m.filter(x=>x.on);if(!use.length&&!(WDA.recheck&&R.dup.length))return alert('Nothing is ticked.');
+ if(!confirm('Fill in '+use.length+' published link'+(use.length==1?'':'s')+'?\n\nEach task is marked as published'+(WDA.check?' and checked on Reddit straight away (about $0.002 each)':'')+'.'))return;
+ let ok=0,bad=0;const done=[],CHK={};
+ for(let i=0;i<use.length;i++){const x=use[i];WDA.busy='Filling in '+(i+1)+' of '+use.length+'...';wdaDraw();const{error}=await sb.rpc('submit_link',{pid:x.p.id,u:x.it.url});if(error){bad++;continue}ok++;done.push(x);
+  if(WDA.saveText&&x.it.text&&x.sim<.98)await sb.from('pieces').update({body:x.it.text}).eq('id',x.p.id)}
+ /* learn: which communities belong to which brand */
+ const cnt={};done.forEach(x=>{const sb_=subOf(x.it.url);if(!sb_)return;(cnt[sb_]=cnt[sb_]||{})[x.p.brand_id]=((cnt[sb_]||{})[x.p.brand_id]||0)+1});
+ for(const k of Object.keys(cnt)){const L=lrGet('subbrand',k),r=Object.assign({},L&&L.rule||{});Object.entries(cnt[k]).forEach(([b,n])=>{r[b]=(r[b]||0)+n});await lrSave('subbrand',k,r)}
+ for(const x of done){const n=bNorm(x.it.brand);if(n.length>=2&&!lrGet('brandalias',n)&&bNorm((ST.bmap[x.p.brand_id]||{}).name)!==n)await lrSave('brandalias',n,{b:x.p.brand_id,name:x.it.brand})}
+ let live=0,del=0,unk=0;
+ if(WDA.check&&done.length){const ids=done.map(x=>x.p.id);for(let i=0;i<ids.length;i+=2){WDA.busy='Checking on Reddit: '+Math.min(i+2,ids.length)+' of '+ids.length+'...';wdaDraw();
+  try{const d=await apiCall({op:'checksave',pids:ids.slice(i,i+2)});(d.results||[]).forEach(x=>{CHK[x.id]=x.s;x.s==='live'?live++:x.s==='removed'?del++:unk++})}catch(e){if(e&&e.apiFatal){WDA.msg='Checking stopped: '+e.message;break}unk+=Math.min(2,ids.length-i)}}}
+ /* what the file said, used only where Reddit gave no answer (the scheduled checker still confirms it later) */
+ let fromFile=0;for(const x of done){const st=x.it.st;if(!st||CHK[x.p.id]==='live'||CHK[x.p.id]==='removed')continue;
+  const{data:pc}=await sb.from('pieces').select('hist').eq('id',x.p.id).maybeSingle();const h=((pc&&pc.hist)||[]).concat([{t:Date.now(),s:st,m:'the uploaded file says '+(st==='live'?'live':'deleted')}]).slice(-400);
+  const{error}=await sb.from('pieces').update({status:st,hist:h}).eq('id',x.p.id);if(!error)fromFile++}
+ /* links that were already filled in: check them again if asked */
+ let rc=0;if(WDA.recheck&&R.dup.length){const ids=R.dup.map(it=>{const p=ST.pieces.find(q=>q.url&&rqKey(q.url)===rqKey(it.url));return p&&p.id}).filter(Boolean);
+  for(let i=0;i<ids.length;i+=2){WDA.busy='Checking again on Reddit: '+Math.min(i+2,ids.length)+' of '+ids.length+'...';wdaDraw();try{const d=await apiCall({op:'checksave',pids:ids.slice(i,i+2)});rc+=(d.results||[]).length}catch(e){if(e&&e.apiFatal)break}}}
+ WDA.busy='';WDA.res=null;WDA.items=[];WDA.raw='';WDA.files=[];
+ WDA.msg=ok+' task'+(ok==1?'':'s')+' filled in and sent to tracking'+(WDA.check&&done.length?': '+live+' live, '+del+' deleted'+(unk?', '+unk+' still being confirmed':''):'')+'.'+(fromFile?' '+fromFile+' got the status written in your file because Reddit gave no answer yet (the checker confirms it).':'')+(rc?' '+rc+' already filled in were checked again.':'')+(bad?' '+bad+' could not be saved.':'')+' I remember which communities and brand names belong to which brand for next time.';
+ await load();draw();toast(ok+' filled in')}
+function wdaDraw(){const e=$('wda_box');if(e)e.innerHTML=wdaBody();else draw()}
+function wdaBody(){const R=WDA.res;let h='';
+ if(WDA.busy)return '<div class="hint" style="margin:10px 0">'+esc(WDA.busy)+'</div>';
+ if(WDA.msg)h+='<div class="hint" style="margin:10px 0">'+esc(WDA.msg)+'</div>';
+ if(WDA.files.length)h+='<p class="s">Read so far: '+WDA.files.map(esc).join(', ')+'. '+WDA.items.length+' published link'+(WDA.items.length==1?'':'s')+' found.'+(WDA.raw.trim()?' <button class="sm" onclick="wdaAI()">Read with AI for a better match (about $'+aiCost(WDA.raw).toFixed(3)+')</button>':'')+' <button class="sm" onclick="WDA.items=[];WDA.res=null;WDA.raw=\'\';WDA.files=[];WDA.msg=\'\';wdaDraw()">Start again</button></p>';
+ if(!R)return h;
+ const how={post:['Same post','ok'],text:['Wording matches','ok'],order:['Best guess. Check it','warn'],hand:['Matched by you','ok']},m=ST._wnum||{};
+ const tl=x=>{const t=x.t||{},mm=numbered(x.p.brand_id);return '<b>'+esc(x.b.name||'')+'</b> '+esc(tnum(t,mm)+' '+(t.sub?'r/'+t.sub:''))+'<div class="s">'+esc(clip((x.p.kind==='post'?x.p.ptitle:x.p.body)||'',80))+'</div>'};
+ h+='<div class="row" style="margin:10px 0 6px"><b>'+R.m.filter(x=>x.on).length+' of '+R.m.length+' will be filled in</b><span style="flex:1"></span><label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><input type="checkbox" '+(WDA.check?'checked':'')+' onchange="WDA.check=this.checked"><span class="s">Check them on Reddit straight away (Live or Deleted)</span></label><label style="flex-direction:row;align-items:center;gap:6px;font-weight:400"><input type="checkbox" '+(WDA.saveText?'checked':'')+' onchange="WDA.saveText=this.checked"><span class="s">Also save the wording they actually published</span></label></div>';
+ if(R.m.length)h+='<div class="scrollx"><table class="et"><tr><th></th><th>Published link</th><th>Brand and task</th><th>Why</th></tr>'+R.m.map((x,i)=>'<tr'+(x.on?'':' style="opacity:.6"')+'><td><input type="checkbox" '+(x.on?'checked':'')+' onchange="WDA.res.m['+i+'].on=this.checked;wdaDraw()" aria-label="Fill in"></td><td><a href="'+esc(x.it.url)+'" target="_blank" rel="noopener">'+esc(clip(x.it.url.replace(/^https?:\/\/(www\.)?reddit\.com/,''),46))+'</a>'+(x.it.text?'<div class="s">'+esc(clip(x.it.text,70))+'</div>':'')+(x.it.st?'<div><span class="chip '+(x.it.st==='live'?'live':'removed')+'">File says '+(x.it.st==='live'?'Live':'Deleted')+'</span></div>':'')+'</td><td>'+tl(x)+'</td><td><span class="chip '+how[x.how][1]+'">'+how[x.how][0]+'</span>'+(x.it._hint?'<div class="s">'+esc(x.it._hint)+'</div>':'')+'</td></tr>').join('')+'</table></div>';
+ if(R.u.length){const B=ST.brands.filter(b=>!b.archived_at&&R.todo.some(p=>p.brand_id===b.id));
+  h+='<details style="margin-top:10px" open><summary><b>'+R.u.length+' link'+(R.u.length==1?'':'s')+' matched no task</b>. Pick the brand and the task, or leave it.</summary><div class="scrollx"><table class="et">'+R.u.map((u,i)=>{const pb=u._pb||'',opts=pb?R.todo.filter(p=>p.brand_id===pb).map(p=>{const t=ST.tmap[p.task_id]||{},mm=numbered(pb);return '<option value="'+p.id+'">'+esc(clip(tnum(t,mm)+' '+(p.kind==='post'?'post: '+(p.ptitle||''):'comment: '+(p.body||'')),80))+'</option>'}).join(''):'';
+   return '<tr><td><a href="'+esc(u.url)+'" target="_blank" rel="noopener">'+esc(clip(u.url.replace(/^https?:\/\/(www\.)?reddit\.com/,''),50))+'</a>'+(u.text?'<div class="s">'+esc(clip(u.text,70))+'</div>':'')+'</td><td><select onchange="wdaPickB('+i+',this.value)"><option value="">Brand...</option>'+B.map(b=>'<option value="'+b.id+'"'+(pb===b.id?' selected':'')+'>'+esc(b.name)+'</option>').join('')+'</select>'+(pb?' <select onchange="wdaHand('+i+',this.value)"><option value="">Task...</option>'+opts+'</select>':'')+'</td></tr>'}).join('')+'</table></div></details>'}
+ if(R.dup.length)h+='<label style="flex-direction:row;align-items:center;gap:6px;font-weight:400;margin-top:8px"><input type="checkbox" '+(WDA.recheck?'checked':'')+' onchange="WDA.recheck=this.checked;wdaDraw()"><span class="s">'+R.dup.length+' link'+(R.dup.length==1?' is':'s are')+' already filled in. Check '+(R.dup.length==1?'it':'them')+' again on Reddit now (about $0.002 each)</span></label>';
+ if(R.u.length&&WDA.raw.trim())h+='<div class="hint" style="margin-top:10px"><b>'+R.u.length+' link'+(R.u.length==1?'':'s')+' still without a task.</b> <button class="sm p" onclick="wdaAI()">Read the files with AI to match them (about $'+aiCost(WDA.raw).toFixed(3)+')</button></div>';
+ h+='<div class="row" style="margin-top:12px">'+(R.m.length||(WDA.recheck&&R.dup.length)?'<button class="p" onclick="wdaApply()">'+(R.m.length?'Fill in '+R.m.filter(x=>x.on).length+' and update Live or Deleted':'Check again')+'</button>':'')+'</div>';return h}
+function wdaPanel(){if(!WDA.on||!isAdminU())return '';
+ return '<div class="cb" id="wda"><div class="row" style="margin:0"><b>Upload work done (all brands)</b><span style="flex:1"></span><button onclick="wdaOpen()">Close</button></div><p class="s">Upload what your team or posting tool sent back today, in any layout: Excel, CSV, Word, PDF or text, as many files as you like, or paste it below. I find each published Reddit link, work out which brand and exact task it belongs to (same post, same wording, brand names in the file, and what I learned before), fill the link in and check whether it is live. Anything I am unsure of is shown for you to pick.</p><label class="wdadrop" ondragover="event.preventDefault();this.classList.add(\'over\')" ondragleave="this.classList.remove(\'over\')" ondrop="event.preventDefault();this.classList.remove(\'over\');wdaFiles({files:event.dataTransfer.files,set value(v){}})"><b>Drop files here</b><span>or click to choose. As many as you like at once: Excel, CSV, Word, PDF, text, JSON or web pages. Long files are fine.</span><input type="file" multiple accept=".xlsx,.xls,.csv,.ods,.docx,.pdf,.txt,.md,.json,.html,.htm,.rtf,.log" hidden onchange="wdaFiles(this)"></label><textarea id="wda_paste" rows="8" style="width:100%;margin-top:10px" placeholder="Or paste messages, WhatsApp chats, reports or lists of links here (any length)"></textarea><div class="row" style="margin-top:6px"><button onclick="wdaPaste()">Read pasted text</button></div><div id="wda_box">'+wdaBody()+'</div></div>'}
 async function updTasks(ids,patch){if(needV6())return false;for(let i=0;i<ids.length;i+=100){const{error}=await sb.from('tasks').update(patch).in('id',ids.slice(i,i+100));if(error){alert(error.message);return false}}return true}
 async function setBrandDue(on){if(needV6())return;const v=on?$('bdue').value:'';if(on&&!v)return alert('Pick a date first.');const{error}=await sb.from('brands').update({due_on:v||null}).eq('id',ST.bid);if(error)return alert(error.message);await reload();toast(v?'Brand deadline saved':'Brand deadline cleared')}
 async function setRange(){const b=ST.bid,k=$('dk').value,a=+$('d1').value,z=+$('d2').value||a,d=$('dd').value;if(!a||!d)return alert('Fill in the first number and the deadline.');
@@ -3514,7 +3655,7 @@ async function trEmptyTasks(){const ids=(ST.trashT||[]).map(t=>t.id);if(!ids.len
 function rwHome(){const q=FQ();q.bid='';q.view='';q.counts=null;q.nb=null;q.conn=null;q.prof=null;q.drafts=null;q.perr='';q.derr='';q.prefilled='';try{localStorage.removeItem('rw_bid')}catch(e){}}
 const API=()=>ST.api||(ST.api={on:null,msg:'',pinging:false});
 const API_FATAL=['no_key','bad_key','no_credit','not_allowed','not_signed_in','no_function','net'];
-async function apiCall(body,acc){if(ST.tok&&body&&!body.tok)body=Object.assign({tok:ST.tok},body);const fnName=body&&(body.site==='google'||/^google[._-]/i.test(String(body.sku||'')))?'other-api':'reddit-api';let r;try{r=await sb.functions.invoke(fnName,{body})}catch(e){r={error:e}}
+async function apiCall(body,acc){if(ST.tok&&body&&!body.tok)body=Object.assign({tok:ST.tok},body);const fnName=body&&(body.op==='airead'||body.site==='google'||/^google[._-]/i.test(String(body.sku||'')))?'other-api':'reddit-api';let r;try{r=await sb.functions.invoke(fnName,{body})}catch(e){r={error:e}}
  let d=r.data;
  if(r.error){const c=r.error.context;let j=null;if(c&&typeof c.json==='function'){try{j=await c.json()}catch(x){}}
   if(j&&j.message)d=j;else{const nf=c&&c.status===404,x=new Error(nf?'The Reddit API is not set up yet (the reddit-api function is missing in Supabase).':'Could not reach the Reddit API function.');x.code=nf?'no_function':'net';x.apiFatal=1;throw x}}
